@@ -21,7 +21,7 @@ import (
 // result is never empty when markup was lost.
 //
 // A plain string comparison is not good enough. The sanitizer also rewrites
-// markup in place: it adds rel="nofollow" to every link and normalizes
+// markup in place: it adds rel="noopener" to links opening a new tab and normalizes
 // character entities and declaration spacing, so "output != input" holds for
 // almost every body and says nothing about content loss. Comparing element,
 // attribute and style-declaration multisets reports only what disappeared.

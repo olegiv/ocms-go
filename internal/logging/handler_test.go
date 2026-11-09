@@ -6,16 +6,23 @@ package logging
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"log/slog"
+	"maps"
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
+	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
@@ -371,24 +378,84 @@ func TestEventLogHandler_WarnRateLimitedByMessage(t *testing.T) {
 	}
 }
 
-func TestEscapeJSON(t *testing.T) {
-	testCases := []struct {
-		input    string
-		expected string
-	}{
-		{`hello`, `hello`},
-		{`hello "world"`, `hello \"world\"`},
-		{`path\to\file`, `path\\to\\file`},
-		{"line1\nline2", `line1\nline2`},
-		{"col1\tcol2", `col1\tcol2`},
-		{"return\rhere", `return\rhere`},
-	}
+func TestCSRFFailureFloodKeepsBoundedWarnings(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	t.Cleanup(cleanup)
+	logger := newTestHandler(t, discardHandler{}, db)
+	now := time.Now()
+	logger.limiter.now = func() time.Time { return now }
+	old := slog.Default()
+	slog.SetDefault(slog.New(logger))
+	t.Cleanup(func() { slog.SetDefault(old) })
 
-	for _, tc := range testCases {
-		result := escapeJSON(tc.input)
-		if result != tc.expected {
-			t.Errorf("escapeJSON(%q) = %q, want %q", tc.input, result, tc.expected)
+	next := middleware.CSRF(middleware.DefaultCSRFConfig(nil, false))(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	for i := range 5000 {
+		req := httptest.NewRequest(http.MethodPost, "https://cms.test/admin/%00"+strings.Repeat("%1b"+"x", 300), nil)
+		req.Header.Set("Sec-Fetch-Site", "cross-site")
+		req.Header.Set("Origin", fmt.Sprintf("https://origin-%d.test/%s", i, strings.Repeat("a", 2048)))
+		w := httptest.NewRecorder()
+		next.ServeHTTP(w, req)
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("cross-site request returned %d", w.Code)
 		}
+	}
+	events := fetchEvents(t, db, 2)
+	if len(events) != 1 || events[0].Level != model.EventLevelWarning {
+		t.Fatalf("flood recorded %d events in the first two results, want one warning", len(events))
+	}
+	var metadata map[string]string
+	if err := json.Unmarshal([]byte(events[0].Metadata), &metadata); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"method", "path", "origin", "sec_fetch_site"} {
+		value := metadata[key]
+		if value == "" || utf8.RuneCountInString(value) > 256 || strings.ContainsFunc(value, unicode.IsControl) {
+			t.Errorf("invalid logged %s field (length %d)", key, len(value))
+		}
+	}
+	allowed := httptest.NewRequest(http.MethodPost, "https://cms.test/admin/pages", nil)
+	allowed.Header.Set("Sec-Fetch-Site", "same-origin")
+	w := httptest.NewRecorder()
+	next.ServeHTTP(w, allowed)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("same-origin request returned %d", w.Code)
+	}
+}
+
+func TestEventMetadataCapsEscapedAttributesAndContextPath(t *testing.T) {
+	ctx := context.WithValue(t.Context(), middleware.ContextKeyRequestPath, "/"+strings.Repeat("界", 2000))
+	record := slog.NewRecord(time.Now(), slog.LevelError, "oversized metadata", 0)
+	record.AddAttrs(slog.String("code", "retained"), slog.String("oversized", strings.Repeat("a", 8192)))
+	for i := range 30 {
+		record.AddAttrs(slog.String(fmt.Sprintf("attr%d", i), strings.Repeat("\x00<", 1024)))
+	}
+	raw := (&EventLogHandler{}).extractMetadata(ctx, record)
+	var metadata map[string]string
+	if err := json.Unmarshal([]byte(raw), &metadata); err != nil || len(raw) > 4096 {
+		t.Fatalf("metadata: %d bytes, parse error %v", len(raw), err)
+	}
+	if metadata["code"] != "retained" || metadata["oversized"] == "" || len(metadata["oversized"]) >= 8192 {
+		t.Fatal("metadata lost normal fields or retained an unbounded field")
+	}
+	if path := metadata["path"]; path != "/"+strings.Repeat("界", 255) || strings.ContainsRune(path, utf8.RuneError) {
+		t.Fatal("context path was lost or cut through a UTF-8 character")
+	}
+}
+
+func TestEventMetadataEncodesControlCharacters(t *testing.T) {
+	ctx := context.WithValue(t.Context(), middleware.ContextKeyRequestPath, "/path\x00\u202e")
+	record := slog.NewRecord(time.Now(), slog.LevelWarn, "warning", 0)
+	record.AddAttrs(slog.String("category", "system"), slog.String("key\x01", "value\b\f\x1f"), slog.Int("count", 4))
+	var metadata map[string]string
+	raw := (&EventLogHandler{}).extractMetadata(ctx, record)
+	if err := json.Unmarshal([]byte(raw), &metadata); err != nil {
+		t.Fatalf("metadata is invalid JSON: %v", err)
+	}
+	want := map[string]string{"path": "/path", "key\x01": "value\b\f\x1f", "count": "4"}
+	if !maps.Equal(metadata, want) {
+		t.Fatalf("metadata = %q, want %q", metadata, want)
 	}
 }
 

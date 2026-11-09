@@ -26,6 +26,7 @@ func normalizeSortDirection(dir string) string {
 }
 
 type ListPagesSortedParams struct {
+	AIReview      bool           `json:"ai_review"`
 	Status        sql.NullString `json:"status"`
 	PageType      sql.NullString `json:"page_type"`
 	LanguageCode  sql.NullString `json:"language_code"`
@@ -50,7 +51,7 @@ SELECT
 	p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at,
 	p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords,
 	p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_code,
-	p.hide_featured_image, p.page_type, p.exclude_from_lists
+	p.hide_featured_image, p.page_type, p.exclude_from_lists, p.revision
 FROM pages p
 `
 
@@ -58,6 +59,9 @@ FROM pages p
 		query += "INNER JOIN page_categories pc ON pc.page_id = p.id\n"
 		clauses = append(clauses, "pc.category_id = ?")
 		args = append(args, arg.CategoryID.Int64)
+	}
+	if arg.AIReview {
+		clauses = append(clauses, "p.status='draft' AND p.scheduled_at IS NULL AND EXISTS(SELECT 1 FROM page_ai_access a WHERE a.page_id=p.id AND a.ai_editable=1)")
 	}
 	if arg.ScheduledOnly {
 		clauses = append(clauses, "p.scheduled_at IS NOT NULL", "p.status = 'draft'")
@@ -118,6 +122,7 @@ FROM pages p
 			&i.HideFeaturedImage,
 			&i.PageType,
 			&i.ExcludeFromLists,
+			&i.Revision,
 		); err != nil {
 			return nil, err
 		}
@@ -145,6 +150,9 @@ func (q *Queries) CountPagesSorted(ctx context.Context, arg ListPagesSortedParam
 		query += "INNER JOIN page_categories pc ON pc.page_id = p.id\n"
 		clauses = append(clauses, "pc.category_id = ?")
 		args = append(args, arg.CategoryID.Int64)
+	}
+	if arg.AIReview {
+		clauses = append(clauses, "p.status='draft' AND p.scheduled_at IS NULL AND EXISTS(SELECT 1 FROM page_ai_access a WHERE a.page_id=p.id AND a.ai_editable=1)")
 	}
 	if arg.ScheduledOnly {
 		clauses = append(clauses, "p.scheduled_at IS NOT NULL", "p.status = 'draft'")

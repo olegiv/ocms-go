@@ -15,9 +15,9 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/api/v2"
 	"github.com/olegiv/ocms-go/internal/cache"
-	"github.com/olegiv/ocms-go/internal/handler"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/pagewrite"
 	"github.com/olegiv/ocms-go/internal/security"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
@@ -67,8 +67,8 @@ func (s *Service) dispatchPageEvent(ctx context.Context, eventType string, page 
 
 // requireWritePerm returns a forbidden domain error if the actor can't write pages.
 func (s *Service) requireWritePerm(a v2.Actor) error {
-	if a.APIKey == nil {
-		return v2.NewError(v2.ErrUnauthorized, "API key required")
+	if a.APIKey == nil && a.ActingUserID() <= 0 {
+		return v2.NewError(v2.ErrUnauthorized, "Authenticated user required")
 	}
 	if !a.HasPermission(model.PermissionPagesWrite) {
 		return v2.NewError(v2.ErrForbidden, "pages:write permission required")
@@ -202,34 +202,24 @@ func validateRoutableLanguage(language store.Language) error {
 // it, or another page whose id is NOT exceptID already holds it. Pass 0 to
 // check against all pages.
 func (s *Service) ensureSlugAvailable(ctx context.Context, slug string, exceptID int64) error {
-	// Uniqueness is not the whole of availability. An exact application route
-	// such as /login answers before the page catch-all, and the language
-	// middleware strips a first path segment that matches an active language
-	// code before the frontend router runs, so a page written at either
-	// answers to nobody. An API client renaming a page to "eng" used to
-	// succeed and quietly lose the page.
-	conflict, err := handler.PageRouteConflict(ctx, s.queries, slug)
-	if err != nil {
-		return fmt.Errorf("checking page route conflicts: %w", err)
-	}
-	if conflict != "" {
-		return v2.NewValidationError(map[string]string{"slug": conflict}, "Validation failed")
-	}
+	return refusalError(pagewrite.SlugAvailable(ctx, s.queries, slug, exceptID), "slug", "Failed to check slug")
+}
 
-	existing, err := s.queries.GetPageBySlug(ctx, slug)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil
-		}
-		return fmt.Errorf("checking slug uniqueness: %w", err)
-	}
-	if existing.ID == exceptID {
+// refusalError maps a pagewrite check: a refusal the caller can fix is a 422
+// on field, with its fixed text; anything else is a storage fault, reported
+// as an internal error so its text never reaches the client and a retryable
+// fault is not mistaken for a taken slug.
+func refusalError(err error, field, msg string) error {
+	var refusal *pagewrite.Refusal
+	var size *pagewrite.FeaturedImageSizeError
+	switch {
+	case err == nil:
 		return nil
+	case errors.As(err, &refusal), errors.As(err, &size):
+		return v2.NewValidationError(map[string]string{field: err.Error()}, "Validation failed")
+	default:
+		return v2.NewInternalError(msg, err)
 	}
-	return v2.NewValidationError(
-		map[string]string{"slug": "Slug already exists"},
-		"Validation failed",
-	)
 }
 
 // parseScheduledAt parses an RFC3339 timestamp. Empty string returns sql.NullTime{}.
@@ -261,6 +251,7 @@ func boolToInt64(b bool) int64 {
 func dtoFromStore(p store.Page) Page {
 	dto := Page{
 		ID:                p.ID,
+		Revision:          p.Revision,
 		Title:             p.Title,
 		Slug:              p.Slug,
 		Body:              p.Body,
@@ -345,10 +336,10 @@ func (s *Service) invalidatePageCache(pageID int64) {
 // v1 `/api/v1/pages/*` event logging so admins keep seeing API-driven page
 // changes in /admin/events.
 func (s *Service) logPageAudit(ctx context.Context, a v2.Actor, message string, meta map[string]any) {
-	if s.events == nil || a.APIKey == nil {
+	if s.events == nil || a.ActingUserID() <= 0 {
 		return
 	}
-	userID := a.APIKey.CreatedBy
+	userID := a.ActingUserID()
 	_ = s.events.LogPageEvent(ctx, model.EventLevelInfo, message, &userID, "", "", meta)
 }
 
@@ -359,12 +350,22 @@ func pageNotFound(ref any) error {
 }
 
 // Create inserts a new page with its category and tag links.
-func (s *Service) Create(ctx context.Context, a v2.Actor, in CreatePageBody) (*Page, error) {
+func (s *Service) create(ctx context.Context, a v2.Actor, in CreatePageBody, work *pagewrite.Tx) (*Page, error) {
 	if err := s.requireWritePerm(a); err != nil {
 		return nil, err
 	}
-	if err := handler.ValidateSlugFormat(in.Slug); err != "" {
+	if err := pagewrite.ValidateSlugFormat(in.Slug); err != "" {
 		return nil, v2.NewValidationError(map[string]string{"slug": err}, "Validation failed")
+	}
+	in.Title = strings.TrimSpace(in.Title)
+	if err := validateTitle(in.Title); err != nil {
+		return nil, err
+	}
+	if err := validateEnums(in.Status, in.PageType); err != nil {
+		return nil, err
+	}
+	if err := refusalError(pagewrite.FeaturedImageSize(ctx, s.queries, util.NullInt64FromPtr(in.FeaturedImageID)), "featured_image_id", "Failed to check featured image"); err != nil {
+		return nil, err
 	}
 	summary, err := validateSummary(in.Summary)
 	if err != nil {
@@ -419,7 +420,7 @@ func (s *Service) Create(ctx context.Context, a v2.Actor, in CreatePageBody) (*P
 		Summary:           summary,
 		Status:            status,
 		PageType:          pageType,
-		AuthorID:          a.APIKey.CreatedBy,
+		AuthorID:          a.ActingUserID(),
 		LanguageCode:      langCode,
 		CreatedAt:         now,
 		UpdatedAt:         now,
@@ -441,12 +442,7 @@ func (s *Service) Create(ctx context.Context, a v2.Actor, in CreatePageBody) (*P
 		params.PublishedAt = sql.NullTime{Time: now, Valid: true}
 	}
 
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, v2.NewInternalError("Failed to start transaction", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-	txq := s.queries.WithTx(tx)
+	txq := work.Q
 
 	canCreateTags := a.HasPermission(model.PermissionTaxonomyWrite)
 	tagIDs, err := resolveTagIDs(ctx, txq, in.TagIDs, in.TagNames, langCode, canCreateTags)
@@ -458,23 +454,13 @@ func (s *Service) Create(ctx context.Context, a v2.Actor, in CreatePageBody) (*P
 	if err != nil {
 		return nil, v2.NewInternalError("Failed to create page", err)
 	}
-	if err := linkCategories(ctx, txq, page.ID, in.CategoryIDs); err != nil {
+	work.Created(page)
+	if err := linkCategories(ctx, work, page.ID, in.CategoryIDs); err != nil {
 		return nil, err
 	}
-	if err := linkTags(ctx, txq, page.ID, tagIDs); err != nil {
+	if err := linkTags(ctx, work, page.ID, tagIDs); err != nil {
 		return nil, err
 	}
-	if err := tx.Commit(); err != nil {
-		return nil, v2.NewInternalError("Failed to commit page", err)
-	}
-	s.invalidatePageCache(page.ID)
-	s.logPageAudit(ctx, a, "API: Page created", map[string]any{
-		"page_id": page.ID,
-		"slug":    page.Slug,
-		"title":   page.Title,
-		"status":  page.Status,
-	})
-	s.dispatchPageEvent(ctx, model.EventPageCreated, page)
 
 	dto := dtoFromStore(page)
 	s.populateIncludes(ctx, &dto, page.ID, true, ListFilter{IncludeCategories: true, IncludeTags: true})
@@ -482,7 +468,7 @@ func (s *Service) Create(ctx context.Context, a v2.Actor, in CreatePageBody) (*P
 }
 
 // Update applies a partial update to a page.
-func (s *Service) Update(ctx context.Context, a v2.Actor, id int64, in UpdatePageBody) (*Page, error) {
+func (s *Service) update(ctx context.Context, a v2.Actor, id int64, in UpdatePageBody, work *pagewrite.Tx, forceDraft bool) (*Page, error) {
 	if err := s.requireWritePerm(a); err != nil {
 		return nil, err
 	}
@@ -494,6 +480,9 @@ func (s *Service) Update(ctx context.Context, a v2.Actor, id int64, in UpdatePag
 		return nil, v2.NewInternalError("Failed to load page", err)
 	}
 
+	if _, trackErr := work.Track(ctx, id, in.BaseRevision, false); trackErr != nil {
+		return nil, writeError(trackErr)
+	}
 	params := store.UpdatePageParams{
 		ID:                existing.ID,
 		Title:             existing.Title,
@@ -536,12 +525,7 @@ func (s *Service) Update(ctx context.Context, a v2.Actor, id int64, in UpdatePag
 		}
 	}
 
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, v2.NewInternalError("Failed to start transaction", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-	txq := s.queries.WithTx(tx)
+	txq := work.Q
 
 	hasTagChange := in.TagIDs != nil || in.TagNames != nil
 	var newTagIDs []int64
@@ -561,6 +545,12 @@ func (s *Service) Update(ctx context.Context, a v2.Actor, id int64, in UpdatePag
 		}
 	}
 
+	if forceDraft {
+		params.Status = model.PageStatusDraft
+		params.PublishedAt = sql.NullTime{}
+		params.ScheduledAt = sql.NullTime{}
+	}
+
 	page, err := txq.UpdatePage(ctx, params)
 	if err != nil {
 		return nil, v2.NewInternalError("Failed to update page", err)
@@ -569,7 +559,7 @@ func (s *Service) Update(ctx context.Context, a v2.Actor, id int64, in UpdatePag
 		if err := txq.ClearPageCategories(ctx, page.ID); err != nil {
 			return nil, v2.NewInternalError("Failed to clear categories", err)
 		}
-		if err := linkCategories(ctx, txq, page.ID, *in.CategoryIDs); err != nil {
+		if err := linkCategories(ctx, work, page.ID, *in.CategoryIDs); err != nil {
 			return nil, err
 		}
 	}
@@ -577,21 +567,10 @@ func (s *Service) Update(ctx context.Context, a v2.Actor, id int64, in UpdatePag
 		if err := txq.ClearPageTags(ctx, page.ID); err != nil {
 			return nil, v2.NewInternalError("Failed to clear tags", err)
 		}
-		if err := linkTags(ctx, txq, page.ID, newTagIDs); err != nil {
+		if err := linkTags(ctx, work, page.ID, newTagIDs); err != nil {
 			return nil, err
 		}
 	}
-	if err := tx.Commit(); err != nil {
-		return nil, v2.NewInternalError("Failed to commit page update", err)
-	}
-	s.invalidatePageCache(page.ID)
-	s.logPageAudit(ctx, a, "API: Page updated", map[string]any{
-		"page_id": page.ID,
-		"slug":    page.Slug,
-		"title":   page.Title,
-		"status":  page.Status,
-	})
-	s.dispatchPageEvent(ctx, model.EventPageUpdated, page)
 
 	dto := dtoFromStore(page)
 	s.populateIncludes(ctx, &dto, page.ID, true, ListFilter{IncludeCategories: true, IncludeTags: true})
@@ -601,10 +580,13 @@ func (s *Service) Update(ctx context.Context, a v2.Actor, id int64, in UpdatePag
 // applyUpdate copies validated fields from UpdatePageBody onto the UpdatePageParams.
 func (s *Service) applyUpdate(ctx context.Context, a v2.Actor, in *UpdatePageBody, params *store.UpdatePageParams, existing store.Page) error {
 	if in.Title != nil {
-		params.Title = *in.Title
+		params.Title = strings.TrimSpace(*in.Title)
+		if err := validateTitle(params.Title); err != nil {
+			return err
+		}
 	}
 	if in.Slug != nil {
-		if msg := handler.ValidateSlugFormat(*in.Slug); msg != "" {
+		if msg := pagewrite.ValidateSlugFormat(*in.Slug); msg != "" {
 			return v2.NewValidationError(map[string]string{"slug": msg}, "Validation failed")
 		}
 		// An unchanged slug stays valid even when a later release reserved it,
@@ -652,8 +634,14 @@ func (s *Service) applyUpdate(ctx context.Context, a v2.Actor, in *UpdatePageBod
 		}
 		params.PageType = *in.PageType
 	}
-	if in.FeaturedImageID != nil {
+	if in.FeaturedImageID != nil && (!existing.FeaturedImageID.Valid || *in.FeaturedImageID != existing.FeaturedImageID.Int64) {
 		params.FeaturedImageID = util.NullInt64FromPtr(in.FeaturedImageID)
+		if err := refusalError(pagewrite.FeaturedImageSize(ctx, s.queries, params.FeaturedImageID), "featured_image_id", "Failed to check featured image"); err != nil {
+			return err
+		}
+	}
+	if in.ClearFeaturedImage {
+		params.FeaturedImageID = sql.NullInt64{}
 	}
 	if in.OGImageID != nil {
 		params.OgImageID = util.NullInt64FromPtr(in.OGImageID)
@@ -717,27 +705,19 @@ func (s *Service) Delete(ctx context.Context, a v2.Actor, id int64) error {
 		}
 		return v2.NewInternalError("Failed to load page", err)
 	}
-	tx, err := s.db.BeginTx(ctx, nil)
+	work, err := pagewrite.InTx(ctx, s.db, a.Principal(a.Transport), func(work *pagewrite.Tx) error {
+		if authorizeErr := s.authorizeWrite(ctx, work.Q, a, WriteOptions{}); authorizeErr != nil {
+			return authorizeErr
+		}
+		return work.Delete(ctx, id)
+	})
 	if err != nil {
-		return v2.NewInternalError("Failed to start transaction", err)
+		return err
 	}
-	defer func() { _ = tx.Rollback() }()
-	txq := s.queries.WithTx(tx)
-	if err := txq.ClearPageCategories(ctx, page.ID); err != nil {
-		return v2.NewInternalError("Failed to clear categories", err)
+	for changedID := range work.Pages {
+		s.invalidatePageCache(changedID)
 	}
-	if err := txq.ClearPageTags(ctx, page.ID); err != nil {
-		return v2.NewInternalError("Failed to clear tags", err)
-	}
-	if err := txq.DeletePageVersions(ctx, page.ID); err != nil {
-		return v2.NewInternalError("Failed to delete page versions", err)
-	}
-	if err := txq.DeletePage(ctx, page.ID); err != nil {
-		return v2.NewInternalError("Failed to delete page", err)
-	}
-	if err := tx.Commit(); err != nil {
-		return v2.NewInternalError("Failed to commit delete", err)
-	}
+
 	s.invalidatePageCache(page.ID)
 	s.logPageAudit(ctx, a, "API: Page deleted", map[string]any{
 		"page_id": page.ID,
@@ -807,7 +787,18 @@ func (s *Service) List(ctx context.Context, a v2.Actor, f ListFilter) (*ListResu
 	var rows []store.Page
 	var total int64
 	var err error
+	if f.LanguageCode != "" {
+		if _, languageErr := s.resolveLanguageCode(ctx, &f.LanguageCode); languageErr != nil {
+			return nil, languageErr
+		}
+	}
 	switch {
+	case f.LanguageCode != "":
+		rows, err = s.queries.ListPagesInLanguage(ctx, store.ListPagesInLanguageParams{LanguageCode: f.LanguageCode, Status: status, CategoryID: f.CategoryID, TagID: f.TagID, ResultLimit: limit, ResultOffset: offset})
+		if err == nil {
+			total, err = s.queries.CountPagesInLanguage(ctx, store.CountPagesInLanguageParams{LanguageCode: f.LanguageCode, Status: status, CategoryID: f.CategoryID, TagID: f.TagID})
+		}
+
 	case f.CategoryID > 0:
 		rows, total, err = s.listByCategory(ctx, publishedOnly, f.CategoryID, limit, offset)
 	case f.TagID > 0:

@@ -30,12 +30,12 @@ fi
 # In CI use the immutable lockfile install so package-lock.json is never
 # mutated (a mutation would falsely fail the release "verify generated
 # sources" step); local dev keeps the convenient npm install.
-if [ "${CI:-}" = "true" ] && [ -f package-lock.json ]; then
-    npm ci --silent
+if [ "${CI:-}" = "true" ]; then
+    npm ci --ignore-scripts --silent
 else
-    npm install --silent
+    npm install --ignore-scripts --silent
 fi
-npm run copy-deps --silent
+npm --ignore-scripts run copy-deps --silent
 echo "  -> $JS_DIR/htmx.min.js"
 echo "  -> $JS_DIR/alpine.min.js"
 
@@ -76,16 +76,9 @@ if [ -n "$OUTDATED" ] && [ "$OUTDATED" != "{}" ]; then
     echo ""
 fi
 
-# Check if sass is installed
-if ! command -v sass &> /dev/null; then
-    echo "Error: sass (dart-sass) is not installed."
-    echo "Install it with: brew install sass/sass/sass (macOS) or npm install -g sass"
-    exit 1
-fi
-
 # Compile SCSS
 echo "Compiling SCSS..."
-sass "$SCSS_DIR/main.scss" "$DIST_DIR/main.css" --style=compressed --no-source-map
+./node_modules/.bin/sass "$SCSS_DIR/main.scss" "$DIST_DIR/main.css" --style=compressed --no-source-map
 echo "  -> $DIST_DIR/main.css"
 
 # Generate templ Go code
@@ -105,7 +98,7 @@ CSS_OUTPUT="$DIST_DIR/admin-tw.css"
 if [ -f "$CSS_INPUT" ]; then
     echo "Compiling Tailwind CSS..."
     cd "$PROJECT_DIR"
-    npx @tailwindcss/cli -i "$CSS_INPUT" -o "$CSS_OUTPUT" --minify
+    ./node_modules/.bin/tailwindcss -i "$CSS_INPUT" -o "$CSS_OUTPUT" --minify
     echo "  -> $CSS_OUTPUT"
 fi
 

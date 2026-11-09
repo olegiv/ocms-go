@@ -120,6 +120,9 @@ func TestThemeStaticFileServable(t *testing.T) {
 		"file":      {func() (fs.FileInfo, error) { return lookup("static/css/theme.css") }, true, http.StatusOK, ""},
 		"directory": {func() (fs.FileInfo, error) { return lookup("static/css") }, false, http.StatusNotFound, ""},
 		"missing":   {func() (fs.FileInfo, error) { return lookup("static/css/none.css") }, false, http.StatusNotFound, ""},
+		"missing file information": {func() (fs.FileInfo, error) {
+			return nil, nil
+		}, false, http.StatusNotFound, ""},
 		"not a directory": {func() (fs.FileInfo, error) {
 			return nil, &fs.PathError{Op: "stat", Path: "theme.css/x", Err: syscall.ENOTDIR}
 		}, false, http.StatusNotFound, ""},

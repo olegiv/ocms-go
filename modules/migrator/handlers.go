@@ -19,6 +19,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/pagewrite"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
@@ -423,6 +424,10 @@ func (m *Module) runImportJob(ctx context.Context, run jobRun) {
 	case JobFailed:
 		m.ctx.Logger.Error("import failed", "source", run.SourceName, "job_id", run.ID, "error", err)
 	case JobPartial:
+		if result == nil {
+			m.finalizeJob(ctx, run, JobFailed, nil, errors.New("partial import returned no result"))
+			return
+		}
 		m.ctx.Logger.Warn("import completed with errors",
 			"source", run.SourceName, "job_id", run.ID,
 			"errors", len(result.Errors), "imported", result.TotalImported())
@@ -760,7 +765,7 @@ func (m *Module) handleDeleteImported(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		hasCleanupPending := errors.As(err, &cleanupPending)
-		hasRowsPending := errors.As(err, &rowsPending)
+		hasRowsPending := errors.As(err, &rowsPending) && rowsPending != nil
 		if hasCleanupPending || hasRowsPending {
 			if hasRowsPending {
 				m.ctx.Logger.Warn("some imported database rows remain tracked for retry",
@@ -1087,15 +1092,7 @@ func importedEntityRouteCandidates(
 // its files can be deleted after the transaction commits rather than during it.
 // It may be nil.
 func (m *Module) deleters(collectMediaUUID func(uuid string)) []entityDeleter {
-	deletePage := func(ctx context.Context, q *store.Queries, id int64) error {
-		if err := q.ClearPageTags(ctx, id); err != nil {
-			return err
-		}
-		if err := q.ClearPageCategories(ctx, id); err != nil {
-			return err
-		}
-		return q.DeletePage(ctx, id)
-	}
+	deletePage := pagewrite.DeleteFromQueries
 
 	// The UUID is queued only after the row is gone. Queuing it up front meant a
 	// failed DeleteMedia kept the media row — correctly, and retryably — while
@@ -1112,12 +1109,10 @@ func (m *Module) deleters(collectMediaUUID func(uuid string)) []entityDeleter {
 			}
 			return fmt.Errorf("failed to read media %d before deleting it: %w", id, err)
 		}
-		if err := q.DeleteMediaVariants(ctx, id); err != nil {
-			m.ctx.Logger.Warn("failed to delete media variants", "id", id, "error", err)
-		}
-		if err := q.DeleteMedia(ctx, id); err != nil {
+		if err := pagewrite.DeleteMediaFromQueries(ctx, q, id); err != nil {
 			return err
 		}
+
 		if collectMediaUUID != nil {
 			collectMediaUUID(media.Uuid)
 		}
@@ -1216,18 +1211,16 @@ func (m *Module) deleters(collectMediaUUID func(uuid string)) []entityDeleter {
 		{entityType: types.EntityRedirect, del: func(ctx context.Context, q *store.Queries, id int64) error {
 			return q.DeleteRedirect(ctx, id)
 		}},
-		{entityType: types.EntityAlias, del: func(ctx context.Context, q *store.Queries, id int64) error {
-			return q.DeletePageAlias(ctx, id)
-		}},
+		{entityType: types.EntityAlias, del: pagewrite.DeleteAliasFromQueries},
 		{entityType: types.EntityPost, del: deletePage, beforeDelete: detachMenuItems},
 		{entityType: types.EntityPage, del: deletePage, beforeDelete: detachMenuItems},
 		{entityType: types.EntityTag, del: func(ctx context.Context, q *store.Queries, id int64) error {
-			return q.DeleteTag(ctx, id)
+			return pagewrite.DeleteTermFromQueries(ctx, q, "tag", id)
 		}, beforeDelete: keepIfReferenced(func(ctx context.Context, q *store.Queries, id int64) (int64, error) {
 			return q.CountPagesForTag(ctx, id)
 		})},
 		{entityType: types.EntityCategory, del: func(ctx context.Context, q *store.Queries, id int64) error {
-			return q.DeleteCategory(ctx, id)
+			return pagewrite.DeleteTermFromQueries(ctx, q, "category", id)
 		}, beforeDelete: func(ctx context.Context, q *store.Queries, id int64) (bool, error) {
 			refs, err := q.CountPagesByCategory(ctx, id)
 			if err != nil || refs > 0 {
@@ -1283,13 +1276,7 @@ func (m *Module) deleters(collectMediaUUID func(uuid string)) []entityDeleter {
 			// ordinary way to reach this: the second reuses the account the
 			// first created, and deleting the first import then hit a foreign
 			// key error that was logged and otherwise ignored.
-			return q.CountUserOwnedContent(ctx, store.CountUserOwnedContentParams{
-				AuthorID:    id,
-				ChangedBy:   id,
-				UploadedBy:  id,
-				CreatedBy:   id,
-				CreatedBy_2: id,
-			})
+			return q.CountUserOwnedContent(ctx, id)
 		})},
 	}
 }

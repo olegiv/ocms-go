@@ -535,7 +535,7 @@ templ formsFieldBuilder(pc *PageContext, data FormFormViewData) {
 				</div>
 			</template>
 			<div id="fields-list" class="fields-list" x-sort="handleSort" x-sort:config="{ handle: '.field-item-handle' }">
-				<template x-for="field in fields" :key="`${field.id}-${sortIteration}`">
+				<template x-for="field in fields" :key="field.id + '-' + sortIteration">
 					<div class="field-item" x-sort:item="field.id">
 						<div class="field-item-handle" x-sort:handle>
 							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -571,7 +571,10 @@ templ formsFieldBuilder(pc *PageContext, data FormFormViewData) {
 			<div class="modal-overlay" x-show="showModal" @click.self="closeModal()" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;">
 				<div class="modal" @click.stop style="background:white;border-radius:8px;max-width:500px;width:100%;max-height:90vh;overflow-y:auto;">
 					<div class="modal-header" style="padding:1rem;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center;">
-						<h3 class="modal-title" x-text={ fmt.Sprintf("editingField?.id ? '%s' : '%s'", pc.T("forms.edit_field"), pc.T("forms.add_field")) }></h3>
+						<h3 class="modal-title">
+							<span x-show="editingField && editingField.id">{ pc.T("forms.edit_field") }</span>
+							<span x-show="!editingField || !editingField.id">{ pc.T("forms.add_field") }</span>
+						</h3>
 						<button type="button" class="modal-close" @click="closeModal()" aria-label={ pc.T("btn.close") }>&times;</button>
 					</div>
 					<div class="modal-body" style="padding:1rem;">
@@ -738,6 +741,8 @@ templ formsTranslationsPanel(pc *PageContext, data FormFormViewData) {
 
 templ formsFieldBuilderScript(pc *PageContext, data FormFormViewData) {
 	<script nonce={ templ.GetNonce(ctx) }>
+	document.addEventListener('alpine:init', () => Alpine.data('formFieldBuilder', formFieldBuilder));
+
 	function formFieldBuilder() {
 		return {
 			formId: 0,

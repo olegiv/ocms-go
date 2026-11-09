@@ -7,7 +7,7 @@ Start the oCMS development server with asset compilation.
 Steps:
 1. Check if OCMS_SESSION_SECRET is set in environment
 2. If not set, prompt user to set it (minimum 32 bytes required)
-3. Run `make dev` to compile assets and start server
+3. Run `OCMS_ENV=development make dev` to compile assets and start server
 4. Wait for server to start (check for "Server listening on..." message)
 5. Report server status and URL (default: http://localhost:8080)
 6. Provide useful URLs:

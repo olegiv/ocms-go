@@ -6,19 +6,25 @@ package middleware
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"maps"
 	"net/http"
 	"runtime/debug"
+	"strconv"
 	"sync"
 	"time"
 
 	chimw "github.com/go-chi/chi/v5/middleware"
+
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // Timeout wraps an http.Handler and applies a request timeout. If the
 // handler has not started its response when the timeout expires, Timeout
-// answers 503 Service Unavailable.
+// answers 503 Service Unavailable. It aborts an incomplete response already
+// in progress so net/http does not signal that the partial body is complete.
+// It logs its own deadline when the parent request is still active.
 //
 // The handler runs in a goroutine of its own, beyond the reach of any
 // recovering middleware in front of Timeout, so Timeout recovers its panics
@@ -33,62 +39,65 @@ func Timeout(timeout time.Duration) func(http.Handler) http.Handler {
 			ctx, cancel := context.WithTimeout(r.Context(), timeout)
 			defer cancel()
 
-			// Channel to signal completion
 			done := make(chan struct{})
-
-			tw := newTimeoutWriter(w)
+			tw := newTimeoutWriter(ctx, w)
 
 			go func() {
 				defer close(done)
-				defer recoverHandlerPanic(tw, r)
+				defer finishTimeoutHandler(tw, r)
 				next.ServeHTTP(tw, r.WithContext(ctx))
 			}()
 
 			select {
 			case <-done:
-				// Handler completed normally, or panicked and was recovered.
-				// An abort is passed on so net/http drops the connection.
-				if tw.aborted() {
-					panic(http.ErrAbortHandler)
-				}
-				return
 			case <-ctx.Done():
-				// Timeout occurred
-				tw.mu.Lock()
-				defer tw.mu.Unlock()
-				tw.timedOut = true
-				if !tw.wroteHeader {
-					w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-					w.WriteHeader(http.StatusServiceUnavailable)
-					_, _ = w.Write([]byte("Request timeout"))
-				}
 			}
+			// A handler can return as soon as its context expires. Use the
+			// recorded outcome, independent of which channel woke us.
+			tw.mu.Lock()
+			defer tw.mu.Unlock()
+			if tw.finished && !tw.abort {
+				return
+			}
+			if r.Context().Err() == nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				if !tw.abort && tw.responseComplete(r.Method) {
+					return
+				}
+				slog.WarnContext(r.Context(), "request timed out",
+					"method", util.BoundedLogField(r.Method), "path", util.BoundedLogField(r.URL.Path),
+					"request_id", util.BoundedLogField(chimw.GetReqID(r.Context())), "response_started", tw.wroteHeader, "timeout", timeout)
+			}
+			if tw.wroteHeader || tw.abort {
+				panic(http.ErrAbortHandler)
+			}
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte("Request timeout"))
 		})
 	}
 }
 
-// recoverHandlerPanic recovers a panic of the handler Timeout runs. It logs
-// the panic with its stack and, unless the request has timed out, settles
-// the response: a 500 without the headers the handler set if no response was
-// started, or else an abort, so net/http drops the connection rather than
-// end the partial response as if it were complete. http.ErrAbortHandler,
-// which aborts a response on purpose, is not logged: Timeout passes it on if
-// the handler aborted before the timeout, and ignores it after.
-func recoverHandlerPanic(tw *timeoutWriter, r *http.Request) {
+// finishTimeoutHandler records completion before the deadline and recovers
+// panics in the handler goroutine. Before the deadline a panic produces a
+// clean 500 or an abort if the response started. An explicit abort is passed
+// through without a panic log.
+func finishTimeoutHandler(tw *timeoutWriter, r *http.Request) {
 	p := recover()
-	if p == nil {
-		return
-	}
 	err, _ := p.(error)
 	abort := errors.Is(err, http.ErrAbortHandler)
-	if !abort {
-		slog.Error("panic serving request", "panic", p, "method", r.Method, "path", r.URL.Path,
-			"request_id", chimw.GetReqID(r.Context()), "stack", string(debug.Stack()))
+	if p != nil && !abort {
+		slog.Error("panic serving request", "panic", util.BoundedLogField(fmt.Sprint(p)),
+			"method", util.BoundedLogField(r.Method), "path", util.BoundedLogField(r.URL.Path),
+			"request_id", util.BoundedLogField(chimw.GetReqID(r.Context())), "stack", string(debug.Stack()))
 	}
 	tw.mu.Lock()
 	defer tw.mu.Unlock()
+	if tw.ctx.Err() != nil {
+		return
+	}
+	tw.finished = true
 	switch {
-	case tw.timedOut:
+	case p == nil:
 	case abort || tw.wroteHeader:
 		tw.abort = true
 	default:
@@ -101,22 +110,24 @@ func recoverHandlerPanic(tw *timeoutWriter, r *http.Request) {
 
 // timeoutWriter is the http.ResponseWriter of the handler Timeout runs. The
 // handler's headers go to a map of its own, copied to the underlying writer
-// when the response starts. Once the request has timed out, the handler's
-// WriteHeader, Write and Flush calls are dropped: Timeout has returned by
-// then, after answering 503 if no response was started.
+// when the response starts. When the request context expires, subsequent
+// WriteHeader, Write and Flush calls are dropped.
 type timeoutWriter struct {
 	http.ResponseWriter
+	ctx         context.Context
 	header      http.Header
 	mu          sync.Mutex
 	wroteHeader bool
-	timedOut    bool
+	status      int
+	remaining   int64 // -1 when the body length is unknown
+	finished    bool
 	abort       bool
 }
 
 // newTimeoutWriter returns a timeoutWriter for w, starting from the headers
 // set on w so far.
-func newTimeoutWriter(w http.ResponseWriter) *timeoutWriter {
-	return &timeoutWriter{ResponseWriter: w, header: w.Header().Clone()}
+func newTimeoutWriter(ctx context.Context, w http.ResponseWriter) *timeoutWriter {
+	return &timeoutWriter{ResponseWriter: w, ctx: ctx, header: w.Header().Clone()}
 }
 
 // Header returns the handler's header map.
@@ -124,29 +135,39 @@ func (tw *timeoutWriter) Header() http.Header {
 	return tw.header
 }
 
-// aborted reports whether the handler's response is to be aborted.
-func (tw *timeoutWriter) aborted() bool {
-	tw.mu.Lock()
-	defer tw.mu.Unlock()
-	return tw.abort
-}
-
 // startResponse copies the handler's headers to the underlying writer and
 // writes the status code. tw.mu must be held.
 func (tw *timeoutWriter) startResponse(code int) {
 	tw.wroteHeader = true
+	tw.status = code
+	tw.remaining = -1
+	if lengths := tw.header.Values("Content-Length"); len(lengths) == 1 &&
+		tw.header.Get("Transfer-Encoding") == "" && tw.header.Get("Trailer") == "" {
+		if length, err := strconv.ParseInt(lengths[0], 10, 64); err == nil && length >= 0 {
+			tw.remaining = length
+		}
+	}
 	dst := tw.ResponseWriter.Header()
 	clear(dst)
 	maps.Copy(dst, tw.header.Clone())
 	tw.ResponseWriter.WriteHeader(code)
 }
 
+// responseComplete is called under mu. A body with unknown length still
+// needs the handler to return before we can safely end its response.
+func (tw *timeoutWriter) responseComplete(method string) bool {
+	return tw.status >= 200 && (method == http.MethodHead ||
+		tw.status == http.StatusNoContent || tw.status == http.StatusNotModified || tw.remaining == 0)
+}
+
 func (tw *timeoutWriter) FlushError() error {
-	tw.WriteHeader(http.StatusOK)
 	tw.mu.Lock()
 	defer tw.mu.Unlock()
-	if tw.timedOut {
+	if tw.ctx.Err() != nil {
 		return http.ErrHandlerTimeout
+	}
+	if !tw.wroteHeader {
+		tw.startResponse(http.StatusOK)
 	}
 	return http.NewResponseController(tw.ResponseWriter).Flush()
 }
@@ -154,7 +175,7 @@ func (tw *timeoutWriter) FlushError() error {
 func (tw *timeoutWriter) WriteHeader(code int) {
 	tw.mu.Lock()
 	defer tw.mu.Unlock()
-	if !tw.wroteHeader && !tw.timedOut {
+	if !tw.wroteHeader && tw.ctx.Err() == nil {
 		tw.startResponse(code)
 	}
 }
@@ -162,7 +183,7 @@ func (tw *timeoutWriter) WriteHeader(code int) {
 func (tw *timeoutWriter) Write(b []byte) (int, error) {
 	tw.mu.Lock()
 	defer tw.mu.Unlock()
-	if tw.timedOut {
+	if tw.ctx.Err() != nil {
 		return 0, http.ErrHandlerTimeout
 	}
 	if !tw.wroteHeader {
@@ -172,5 +193,13 @@ func (tw *timeoutWriter) Write(b []byte) (int, error) {
 		}
 		tw.startResponse(http.StatusOK)
 	}
-	return tw.ResponseWriter.Write(b)
+	n, err := tw.ResponseWriter.Write(b)
+	if tw.remaining >= 0 {
+		if err != nil || n != len(b) || int64(n) > tw.remaining || tw.ctx.Err() != nil {
+			tw.remaining = -1
+		} else {
+			tw.remaining -= int64(n)
+		}
+	}
+	return n, err
 }

@@ -3188,6 +3188,11 @@
             "translation": "Change your own two-factor authentication on your account security page."
         },
         {
+            "id": "users.delete_owns_content",
+            "message": "This user still owns pages, media or other content and cannot be deleted.",
+            "translation": "This user still owns pages, media or other content and cannot be deleted."
+        },
+        {
             "id": "widgets.title",
             "message": "Widgets",
             "translation": "Widgets"
@@ -7651,6 +7656,1186 @@
             "id": "frontend.reads",
             "message": "reads",
             "translation": "reads"
+        },
+        {
+            "id": "oauth.continue",
+            "message": "Continue to the app",
+            "translation": "Continue to the app"
+        },
+        {
+            "id": "oauth.consent_title",
+            "message": "Connect an AI app",
+            "translation": "Connect an AI app"
+        },
+        {
+            "id": "oauth.consent_description",
+            "message": "Review access to your oCMS account. Publishing is never granted.",
+            "translation": "Review access to your oCMS account. Publishing is never granted."
+        },
+        {
+            "id": "oauth.client_id",
+            "message": "Registered client ID",
+            "translation": "Registered client ID"
+        },
+        {
+            "id": "oauth.client_host",
+            "message": "Client metadata host",
+            "translation": "Client metadata host"
+        },
+        {
+            "id": "oauth.redirect_host",
+            "message": "Return address host",
+            "translation": "Return address host"
+        },
+        {
+            "id": "oauth.permissions",
+            "message": "Requested permissions",
+            "translation": "Requested permissions"
+        },
+        {
+            "id": "oauth.registered_name_note",
+            "message": "The app name is supplied by its registration. Check the client ID and return address.",
+            "translation": "The app name is supplied by its registration. Check the client ID and return address."
+        },
+        {
+            "id": "oauth.allow",
+            "message": "Allow access",
+            "translation": "Allow access"
+        },
+        {
+            "id": "oauth.deny",
+            "message": "Deny",
+            "translation": "Deny"
+        },
+        {
+            "id": "oauth.connections",
+            "message": "Connected AI apps",
+            "translation": "Connected AI apps"
+        },
+        {
+            "id": "oauth.no_connections",
+            "message": "No active AI app connections.",
+            "translation": "No active AI app connections."
+        },
+        {
+            "id": "oauth.revoke",
+            "message": "Revoke access",
+            "translation": "Revoke access"
+        },
+        {
+            "id": "oauth.connection_not_found",
+            "message": "That connection was not found or is no longer active.",
+            "translation": "That connection was not found or is no longer active."
+        },
+        {
+            "id": "oauth.scope.mcp:access",
+            "message": "Read published site content",
+            "translation": "Read published site content"
+        },
+        {
+            "id": "oauth.scope.mcp:drafts",
+            "message": "Create and edit your own AI drafts",
+            "translation": "Create and edit your own AI drafts"
+        },
+        {
+            "id": "oauth.scope.pages:read",
+            "message": "Read unpublished pages when the site permits it",
+            "translation": "Read unpublished pages when the site permits it"
+        },
+        {
+            "id": "api_keys.perm_mcp_drafts",
+            "message": "AI-editable drafts; cannot publish or delete",
+            "translation": "AI-editable drafts; cannot publish or delete"
+        },
+        {
+            "id": "oauth.local_registration",
+            "message": "Registered on this site; no client metadata host",
+            "translation": "Registered on this site; no client metadata host"
+        },
+        {
+            "id": "pages.revision_conflict",
+            "message": "This page changed after you opened it. Your edits are preserved. Review the latest version, or confirm saving your edits over the revision shown here.",
+            "translation": "This page changed after you opened it. Your edits are preserved. Review the latest version, or confirm saving your edits over the revision shown here."
+        },
+        {
+            "id": "pages.view_latest",
+            "message": "View latest",
+            "translation": "View latest"
+        },
+        {
+            "id": "pages.confirm_overwrite",
+            "message": "Confirm overwrite",
+            "translation": "Confirm overwrite"
+        },
+        {
+            "id": "pages.allow_ai_edits",
+            "message": "Allow AI edits",
+            "translation": "Allow AI edits"
+        },
+        {
+            "id": "versions.legacy",
+            "message": "Legacy version: only title and body were recorded",
+            "translation": "Legacy version: only title and body were recorded"
+        },
+        {
+            "id": "pages.error_changed_meanwhile",
+            "message": "The page changed after you opened it. Reload it and try again.",
+            "translation": "The page changed after you opened it. Reload it and try again."
+        },
+        {
+            "id": "pages.error_publication_checks",
+            "message": "This AI draft did not pass the publication checks. Fix the reported issues, then try again.",
+            "translation": "This AI draft did not pass the publication checks. Fix the reported issues, then try again."
+        },
+        {
+            "id": "pages.error_site_url_required",
+            "message": "Set the site URL in Site configuration before publishing AI drafts.",
+            "translation": "Set the site URL in Site configuration before publishing AI drafts."
+        },
+        {
+            "id": "pages.error_editor_required",
+            "message": "Your account no longer has editor access.",
+            "translation": "Your account no longer has editor access."
+        },
+        {
+            "id": "pages.error_translation_exists",
+            "message": "This page already has a translation in that language.",
+            "translation": "This page already has a translation in that language."
+        },
+        {
+            "id": "pages.error_version_not_restored",
+            "message": "The version was not restored.",
+            "translation": "The version was not restored."
+        },
+        {
+            "id": "pages.restore_missing_language",
+            "message": "The language (%s) from this version is unavailable. Choose another version.",
+            "translation": "The language (%s) from this version is unavailable. Choose another version."
+        },
+        {
+            "id": "pages.restore_missing_featured_image",
+            "message": "The featured image (ID %s) from this version is missing. Choose another version.",
+            "translation": "The featured image (ID %s) from this version is missing. Choose another version."
+        },
+        {
+            "id": "pages.restore_missing_og_image",
+            "message": "The Open Graph image (ID %s) from this version is missing. Choose another version.",
+            "translation": "The Open Graph image (ID %s) from this version is missing. Choose another version."
+        },
+        {
+            "id": "pages.restore_missing_tag",
+            "message": "The tag (ID %s) from this version is missing. Choose another version.",
+            "translation": "The tag (ID %s) from this version is missing. Choose another version."
+        },
+        {
+            "id": "pages.restore_missing_category",
+            "message": "The category (ID %s) from this version is missing. Choose another version.",
+            "translation": "The category (ID %s) from this version is missing. Choose another version."
+        },
+        {
+            "id": "pages.error_translation_not_created",
+            "message": "The translation was not created.",
+            "translation": "The translation was not created."
+        },
+        {
+            "id": "pages.edit_recovery_title",
+            "message": "Page save interrupted",
+            "translation": "Page save interrupted"
+        },
+        {
+            "id": "pages.edit_recovery_retry",
+            "message": "The editor hit a temporary error. Retry with your submitted edits below.",
+            "translation": "The editor hit a temporary error. Retry with your submitted edits below."
+        },
+        {
+            "id": "pages.edit_recovery_missing",
+            "message": "The page is unavailable. You can copy your submitted text below.",
+            "translation": "The page is unavailable. You can copy your submitted text below."
+        },
+        {
+            "id": "pages.edit_recovery_button",
+            "message": "Retry with these edits",
+            "translation": "Retry with these edits"
+        },
+        {
+            "id": "pages.conflict_missing_tag",
+            "message": "Tag %d is unavailable. Remove it or select a replacement.",
+            "translation": "Tag %d is unavailable. Remove it or select a replacement."
+        },
+        {
+            "id": "pages.invalid_taxonomy_selection",
+            "message": "Choose valid tags and categories.",
+            "translation": "Choose valid tags and categories."
+        },
+        {
+            "id": "pages.save_missing_category",
+            "message": "Category %d is unavailable. Remove it or select a replacement.",
+            "translation": "Category %d is unavailable. Remove it or select a replacement."
+        },
+        {
+            "id": "pages.error_manage_ai_access",
+            "message": "Only the owner or an administrator can change AI access.",
+            "translation": "Only the owner or an administrator can change AI access."
+        },
+        {
+            "id": "pages.revision_conflict_title",
+            "message": "Page changed",
+            "translation": "Page changed"
+        },
+        {
+            "id": "draft.issues.invalid_input.message",
+            "message": "Input does not match the draft contract.",
+            "translation": "Input does not match the draft contract."
+        },
+        {
+            "id": "draft.issues.invalid_input.hint",
+            "message": "Use the create or update schema and check field types, required values and nullability.",
+            "translation": "Use the create or update schema and check field types, required values and nullability."
+        },
+        {
+            "id": "draft.issues.title_length.message",
+            "message": "The title must contain 1–255 characters.",
+            "translation": "The title must contain 1–255 characters."
+        },
+        {
+            "id": "draft.issues.title_length.hint",
+            "message": "Trim the title and keep it within the character limit.",
+            "translation": "Trim the title and keep it within the character limit."
+        },
+        {
+            "id": "draft.issues.summary_length.message",
+            "message": "The summary exceeds 500 characters.",
+            "translation": "The summary exceeds 500 characters."
+        },
+        {
+            "id": "draft.issues.summary_length.hint",
+            "message": "Shorten the summary to at most 500 characters.",
+            "translation": "Shorten the summary to at most 500 characters."
+        },
+        {
+            "id": "draft.issues.meta_title_length.message",
+            "message": "The SEO title exceeds 60 characters.",
+            "translation": "The SEO title exceeds 60 characters."
+        },
+        {
+            "id": "draft.issues.meta_title_length.hint",
+            "message": "Consider a shorter SEO title; the submitted value is retained.",
+            "translation": "Consider a shorter SEO title; the submitted value is retained."
+        },
+        {
+            "id": "draft.issues.meta_description_trimmed.message",
+            "message": "The SEO description was shortened to 160 characters or fewer.",
+            "translation": "The SEO description was shortened to 160 characters or fewer."
+        },
+        {
+            "id": "draft.issues.meta_description_trimmed.hint",
+            "message": "Review the description shortened at a word boundary.",
+            "translation": "Review the description shortened at a word boundary."
+        },
+        {
+            "id": "draft.issues.slug_invalid.message",
+            "message": "The slug has an invalid format.",
+            "translation": "The slug has an invalid format."
+        },
+        {
+            "id": "draft.issues.slug_invalid.hint",
+            "message": "Use lowercase Latin letters, digits and single hyphens, up to 255 characters.",
+            "translation": "Use lowercase Latin letters, digits and single hyphens, up to 255 characters."
+        },
+        {
+            "id": "draft.issues.slug_taken.message",
+            "message": "The slug conflicts with an existing page, alias or route.",
+            "translation": "The slug conflicts with an existing page, alias or route."
+        },
+        {
+            "id": "draft.issues.slug_taken.hint",
+            "message": "Choose another slug or omit it when creating a draft to derive an available one.",
+            "translation": "Choose another slug or omit it when creating a draft to derive an available one."
+        },
+        {
+            "id": "draft.issues.tags_limit.message",
+            "message": "More than ten distinct tags were supplied.",
+            "translation": "More than ten distinct tags were supplied."
+        },
+        {
+            "id": "draft.issues.tags_limit.hint",
+            "message": "Keep at most ten existing tag slugs after deduplication.",
+            "translation": "Keep at most ten existing tag slugs after deduplication."
+        },
+        {
+            "id": "draft.issues.unknown_tag.message",
+            "message": "A tag is unavailable in the selected language.",
+            "translation": "A tag is unavailable in the selected language."
+        },
+        {
+            "id": "draft.issues.unknown_tag.hint",
+            "message": "Choose an existing tag offered for this language.",
+            "translation": "Choose an existing tag offered for this language."
+        },
+        {
+            "id": "draft.issues.tag_creation_not_allowed.message",
+            "message": "Creating tags through draft authoring is not allowed.",
+            "translation": "Creating tags through draft authoring is not allowed."
+        },
+        {
+            "id": "draft.issues.tag_creation_not_allowed.hint",
+            "message": "Use existing tag slugs from the authoring context.",
+            "translation": "Use existing tag slugs from the authoring context."
+        },
+        {
+            "id": "draft.issues.category_not_found.message",
+            "message": "The category is unavailable in the selected language.",
+            "translation": "The category is unavailable in the selected language."
+        },
+        {
+            "id": "draft.issues.category_not_found.hint",
+            "message": "Choose an existing category offered for this language, or clear it.",
+            "translation": "Choose an existing category offered for this language, or clear it."
+        },
+        {
+            "id": "draft.issues.image_not_found.message",
+            "message": "The featured image is unavailable or is not a supported image.",
+            "translation": "The featured image is unavailable or is not a supported image."
+        },
+        {
+            "id": "draft.issues.image_not_found.hint",
+            "message": "Choose an existing JPEG, PNG, GIF or WebP image from the media library.",
+            "translation": "Choose an existing JPEG, PNG, GIF or WebP image from the media library."
+        },
+        {
+            "id": "draft.issues.image_too_small.message",
+            "message": "The featured image is smaller than 1200×800 pixels.",
+            "translation": "The featured image is smaller than 1200×800 pixels."
+        },
+        {
+            "id": "draft.issues.image_too_small.hint",
+            "message": "Choose an existing image meeting the featured-image minimum dimensions.",
+            "translation": "Choose an existing image meeting the featured-image minimum dimensions."
+        },
+        {
+            "id": "draft.issues.media_ref_not_found.message",
+            "message": "An inline image does not resolve to supported existing media.",
+            "translation": "An inline image does not resolve to supported existing media."
+        },
+        {
+            "id": "draft.issues.media_ref_not_found.hint",
+            "message": "Use a canonical media:ID reference to an existing image.",
+            "translation": "Use a canonical media:ID reference to an existing image."
+        },
+        {
+            "id": "draft.issues.language_inactive.message",
+            "message": "The language is unavailable, inactive or cannot be routed.",
+            "translation": "The language is unavailable, inactive or cannot be routed."
+        },
+        {
+            "id": "draft.issues.language_inactive.hint",
+            "message": "Choose an active language offered by this site.",
+            "translation": "Choose an active language offered by this site."
+        },
+        {
+            "id": "draft.issues.reference_unresolved.message",
+            "message": "A site reference could not be resolved.",
+            "translation": "A site reference could not be resolved."
+        },
+        {
+            "id": "draft.issues.reference_unresolved.hint",
+            "message": "Reread the authoring context and choose an existing site reference.",
+            "translation": "Reread the authoring context and choose an existing site reference."
+        },
+        {
+            "id": "draft.issues.reference_not_visible.message",
+            "message": "A site reference is unavailable to this account.",
+            "translation": "A site reference is unavailable to this account."
+        },
+        {
+            "id": "draft.issues.reference_not_visible.hint",
+            "message": "Use only references visible under the current connection's permissions.",
+            "translation": "Use only references visible under the current connection's permissions."
+        },
+        {
+            "id": "draft.issues.external_link.message",
+            "message": "The draft includes an external link for editorial review.",
+            "translation": "The draft includes an external link for editorial review."
+        },
+        {
+            "id": "draft.issues.external_link.hint",
+            "message": "Review the external-links list and the applied keep, nofollow or strip policy.",
+            "translation": "Review the external-links list and the applied keep, nofollow or strip policy."
+        },
+        {
+            "id": "draft.issues.internal_link_broken.message",
+            "message": "An internal link does not resolve to visible site content.",
+            "translation": "An internal link does not resolve to visible site content."
+        },
+        {
+            "id": "draft.issues.internal_link_broken.hint",
+            "message": "Choose a valid internal link from the authoring context.",
+            "translation": "Choose a valid internal link from the authoring context."
+        },
+        {
+            "id": "draft.issues.link_not_allowed.message",
+            "message": "A link uses an unsupported or unsafe URL.",
+            "translation": "A link uses an unsupported or unsafe URL."
+        },
+        {
+            "id": "draft.issues.link_not_allowed.hint",
+            "message": "Use an internal link, HTTP, HTTPS or mailto URL without embedded credentials.",
+            "translation": "Use an internal link, HTTP, HTTPS or mailto URL without embedded credentials."
+        },
+        {
+            "id": "draft.issues.raw_html_not_allowed.message",
+            "message": "Raw HTML is not accepted in Markdown drafts.",
+            "translation": "Raw HTML is not accepted in Markdown drafts."
+        },
+        {
+            "id": "draft.issues.raw_html_not_allowed.hint",
+            "message": "Use Markdown syntax; put HTML examples inside fenced code blocks.",
+            "translation": "Use Markdown syntax; put HTML examples inside fenced code blocks."
+        },
+        {
+            "id": "draft.issues.overlap_with_example.message",
+            "message": "The draft overlaps substantially with an example page.",
+            "translation": "The draft overlaps substantially with an example page."
+        },
+        {
+            "id": "draft.issues.overlap_with_example.hint",
+            "message": "Review and rewrite passages that copy an example rather than use it for style.",
+            "translation": "Review and rewrite passages that copy an example rather than use it for style."
+        },
+        {
+            "id": "draft.issues.forbidden_field.message",
+            "message": "The request contains a field this operation cannot change.",
+            "translation": "The request contains a field this operation cannot change."
+        },
+        {
+            "id": "draft.issues.forbidden_field.hint",
+            "message": "Remove lifecycle, ownership, language, page-type or verified fields from updates.",
+            "translation": "Remove lifecycle, ownership, language, page-type or verified fields from updates."
+        },
+        {
+            "id": "draft.issues.revision_required.message",
+            "message": "A base revision is required.",
+            "translation": "A base revision is required."
+        },
+        {
+            "id": "draft.issues.revision_required.hint",
+            "message": "Read the current draft and submit its revision with the update.",
+            "translation": "Read the current draft and submit its revision with the update."
+        },
+        {
+            "id": "draft.issues.revision_conflict.message",
+            "message": "The page changed after it was read.",
+            "translation": "The page changed after it was read."
+        },
+        {
+            "id": "draft.issues.revision_conflict.hint",
+            "message": "Reread the draft and merge the changes before submitting a new update.",
+            "translation": "Reread the draft and merge the changes before submitting a new update."
+        },
+        {
+            "id": "draft.issues.idempotency_key_reused.message",
+            "message": "This request ID was already used for different input.",
+            "translation": "This request ID was already used for different input."
+        },
+        {
+            "id": "draft.issues.idempotency_key_reused.hint",
+            "message": "Reuse an ID only for an unchanged retry; use a new UUID for a new operation.",
+            "translation": "Reuse an ID only for an unchanged retry; use a new UUID for a new operation."
+        },
+        {
+            "id": "draft.issues.request_expired.message",
+            "message": "The original result is expired or its page was deleted.",
+            "translation": "The original result is expired or its page was deleted."
+        },
+        {
+            "id": "draft.issues.request_expired.hint",
+            "message": "Inspect current drafts before starting a new operation with a new request ID.",
+            "translation": "Inspect current drafts before starting a new operation with a new request ID."
+        },
+        {
+            "id": "draft.issues.not_ai_editable.message",
+            "message": "The draft is not available for AI edits.",
+            "translation": "The draft is not available for AI edits."
+        },
+        {
+            "id": "draft.issues.not_ai_editable.hint",
+            "message": "The owner must enable AI edits on a plain draft accessible to this account.",
+            "translation": "The owner must enable AI edits on a plain draft accessible to this account."
+        },
+        {
+            "id": "draft.issues.source_revision_conflict.message",
+            "message": "The translation source changed after it was read.",
+            "translation": "The translation source changed after it was read."
+        },
+        {
+            "id": "draft.issues.source_revision_conflict.hint",
+            "message": "Reread the source and regenerate the translation from its current revision.",
+            "translation": "Reread the source and regenerate the translation from its current revision."
+        },
+        {
+            "id": "draft.issues.translation_exists.message",
+            "message": "This translation group already contains the target language.",
+            "translation": "This translation group already contains the target language."
+        },
+        {
+            "id": "draft.issues.translation_exists.hint",
+            "message": "Read the translation status before creating another translation.",
+            "translation": "Read the translation status before creating another translation."
+        },
+        {
+            "id": "draft.issues.body_too_large.message",
+            "message": "The Markdown or resulting HTML exceeds 200,000 bytes.",
+            "translation": "The Markdown or resulting HTML exceeds 200,000 bytes."
+        },
+        {
+            "id": "draft.issues.body_too_large.hint",
+            "message": "Shorten the body and retry the same logical operation only with a new request ID.",
+            "translation": "Shorten the body and retry the same logical operation only with a new request ID."
+        },
+        {
+            "id": "draft.issues.too_many_links.message",
+            "message": "The body links to more than 500 distinct destinations.",
+            "translation": "The body links to more than 500 distinct destinations."
+        },
+        {
+            "id": "draft.issues.too_many_links.hint",
+            "message": "Keep at most 500 distinct link targets; repeated links to the same URL count once.",
+            "translation": "Keep at most 500 distinct link targets; repeated links to the same URL count once."
+        },
+        {
+            "id": "draft.issues.html_conversion_lossy.message",
+            "message": "The stored rich HTML cannot be represented completely as Markdown.",
+            "translation": "The stored rich HTML cannot be represented completely as Markdown."
+        },
+        {
+            "id": "draft.issues.html_conversion_lossy.hint",
+            "message": "Review the stored HTML before explicitly replacing its body; metadata-only updates preserve it.",
+            "translation": "Review the stored HTML before explicitly replacing its body; metadata-only updates preserve it."
+        },
+        {
+            "id": "draft.issues.media_conversion_lossy.message",
+            "message": "An existing image could not be converted to a media:ID reference.",
+            "translation": "An existing image could not be converted to a media:ID reference."
+        },
+        {
+            "id": "draft.issues.media_conversion_lossy.hint",
+            "message": "Choose matching media from the library before replacing this body.",
+            "translation": "Choose matching media from the library before replacing this body."
+        },
+        {
+            "id": "nav.editorial",
+            "message": "Editorial guidance",
+            "translation": "Editorial guidance"
+        },
+        {
+            "id": "editorial.title",
+            "message": "Editorial guidance",
+            "translation": "Editorial guidance"
+        },
+        {
+            "id": "editorial.description",
+            "message": "Set the style and article presets your connected AI apps receive.",
+            "translation": "Set the style and article presets your connected AI apps receive."
+        },
+        {
+            "id": "editorial.language",
+            "message": "Guidance language",
+            "translation": "Guidance language"
+        },
+        {
+            "id": "editorial.default",
+            "message": "Site default",
+            "translation": "Site default"
+        },
+        {
+            "id": "editorial.guide",
+            "message": "Style guide",
+            "translation": "Style guide"
+        },
+        {
+            "id": "editorial.guide_help",
+            "message": "Use plain text or Markdown. Describe audience, tone, structure and claims that need review. Maximum 8,000 characters.",
+            "translation": "Use plain text or Markdown. Describe audience, tone, structure and claims that need review. Maximum 8,000 characters."
+        },
+        {
+            "id": "editorial.guide_body",
+            "message": "Writing guidance",
+            "translation": "Writing guidance"
+        },
+        {
+            "id": "editorial.inherited",
+            "message": "This language uses the site default. Saving creates an override.",
+            "translation": "This language uses the site default. Saving creates an override."
+        },
+        {
+            "id": "editorial.reset_help",
+            "message": "Leave the guide empty and save to use the site default again.",
+            "translation": "Leave the guide empty and save to use the site default again."
+        },
+        {
+            "id": "editorial.save_guide",
+            "message": "Save style guide",
+            "translation": "Save style guide"
+        },
+        {
+            "id": "editorial.presets",
+            "message": "Article presets",
+            "translation": "Article presets"
+        },
+        {
+            "id": "editorial.preset_help",
+            "message": "Choose a preset to edit its outline and authoring instructions. These settings guide drafting; publication remains a human action.",
+            "translation": "Choose a preset to edit its outline and authoring instructions. These settings guide drafting; publication remains a human action."
+        },
+        {
+            "id": "editorial.preset_name",
+            "message": "Preset name",
+            "translation": "Preset name"
+        },
+        {
+            "id": "editorial.preset_instructions",
+            "message": "Outline and instructions",
+            "translation": "Outline and instructions"
+        },
+        {
+            "id": "editorial.reset_preset_help",
+            "message": "Clear both fields and save to restore this language’s default preset.",
+            "translation": "Clear both fields and save to restore this language’s default preset."
+        },
+        {
+            "id": "editorial.save_preset",
+            "message": "Save preset",
+            "translation": "Save preset"
+        },
+        {
+            "id": "editorial.saved",
+            "message": "Editorial guidance saved.",
+            "translation": "Editorial guidance saved."
+        },
+        {
+            "id": "editorial.invalid",
+            "message": "Check the language and preset. A default guide needs 1–8,000 characters; a preset needs a name (1–100) and instructions (1–4,000).",
+            "translation": "Check the language and preset. A default guide needs 1–8,000 characters; a preset needs a name (1–100) and instructions (1–4,000)."
+        },
+        {
+            "id": "review.title",
+            "message": "Editorial review",
+            "translation": "Editorial review"
+        },
+        {
+            "id": "review.verified",
+            "message": "Verified",
+            "translation": "Verified"
+        },
+        {
+            "id": "review.validated",
+            "message": "Validated by oCMS",
+            "translation": "Validated by oCMS"
+        },
+        {
+            "id": "review.reported",
+            "message": "Reported by the agent",
+            "translation": "Reported by the agent"
+        },
+        {
+            "id": "review.revision",
+            "message": "Revision %d",
+            "translation": "Revision %d"
+        },
+        {
+            "id": "review.baseline",
+            "message": "Baseline snapshot: the original author and validation were not recorded.",
+            "translation": "Baseline snapshot: the original author and validation were not recorded."
+        },
+        {
+            "id": "review.account",
+            "message": "Recorded account",
+            "translation": "Recorded account"
+        },
+        {
+            "id": "review.source",
+            "message": "Source and transport",
+            "translation": "Source and transport"
+        },
+        {
+            "id": "review.registered_app",
+            "message": "Registered app name",
+            "translation": "Registered app name"
+        },
+        {
+            "id": "review.client_id",
+            "message": "Registered client ID",
+            "translation": "Registered client ID"
+        },
+        {
+            "id": "review.grant_id",
+            "message": "OAuth grant ID",
+            "translation": "OAuth grant ID"
+        },
+        {
+            "id": "review.key_id",
+            "message": "API key ID",
+            "translation": "API key ID"
+        },
+        {
+            "id": "review.registration_note",
+            "message": "Registration details identify an app registration, not a verified vendor.",
+            "translation": "Registration details identify an app registration, not a verified vendor."
+        },
+        {
+            "id": "review.validation_note",
+            "message": "These checks establish structure and reference visibility, not factual accuracy.",
+            "translation": "These checks establish structure and reference visibility, not factual accuracy."
+        },
+        {
+            "id": "review.reference",
+            "message": "Page %d, revision %d",
+            "translation": "Page %d, revision %d"
+        },
+        {
+            "id": "review.no_validation",
+            "message": "No validation was recorded for this revision.",
+            "translation": "No validation was recorded for this revision."
+        },
+        {
+            "id": "review.prompt_contract",
+            "message": "Guidance version",
+            "translation": "Guidance version"
+        },
+        {
+            "id": "review.reported_note",
+            "message": "The following information was supplied by the agent and is unverified.",
+            "translation": "The following information was supplied by the agent and is unverified."
+        },
+        {
+            "id": "review.model",
+            "message": "Agent-reported model",
+            "translation": "Agent-reported model"
+        },
+        {
+            "id": "review.client_report",
+            "message": "Client-reported name/version",
+            "translation": "Client-reported name/version"
+        },
+        {
+            "id": "review.reported_source",
+            "message": "Agent-reported source",
+            "translation": "Agent-reported source"
+        },
+        {
+            "id": "review.acknowledgment_note",
+            "message": "Checking a claim records your review; it does not verify the claim as fact.",
+            "translation": "Checking a claim records your review; it does not verify the claim as fact."
+        },
+        {
+            "id": "review.checked_by",
+            "message": "Reviewed by",
+            "translation": "Reviewed by"
+        },
+        {
+            "id": "review.save_check",
+            "message": "Save review",
+            "translation": "Save review"
+        },
+        {
+            "id": "review.publish_notice",
+            "message": "%d unchecked claims. Claims and warning/info issues do not block publication; review this revision before publishing.",
+            "translation": "%d unchecked claims. Claims and warning/info issues do not block publication; review this revision before publishing."
+        },
+        {
+            "id": "review.translations",
+            "message": "Translation review",
+            "translation": "Translation review"
+        },
+        {
+            "id": "review.translation_source",
+            "message": "Source to review",
+            "translation": "Source to review"
+        },
+        {
+            "id": "review.translation_note",
+            "message": "Save any text edits first, then compare the saved translation with the linked source revision. This action records your review in a new revision without changing the text or publishing it. Earlier reviews remain in history.",
+            "translation": "Save any text edits first, then compare the saved translation with the linked source revision. This action records your review in a new revision without changing the text or publishing it. Earlier reviews remain in history."
+        },
+        {
+            "id": "review.translation_acknowledge",
+            "message": "I reviewed this translation against the source revision shown above and confirm that it preserves its meaning.",
+            "translation": "I reviewed this translation against the source revision shown above and confirm that it preserves its meaning."
+        },
+        {
+            "id": "review.translation_save",
+            "message": "Mark translation reviewed",
+            "translation": "Mark translation reviewed"
+        },
+        {
+            "id": "review.translation_saved",
+            "message": "Translation review saved for the selected source revision.",
+            "translation": "Translation review saved for the selected source revision."
+        },
+        {
+            "id": "review.translation_conflict",
+            "message": "The translation, source revision or translation group changed, or this draft cannot be reviewed. Reload both pages and review them again.",
+            "translation": "The translation, source revision or translation group changed, or this draft cannot be reviewed. Reload both pages and review them again."
+        },
+        {
+            "id": "review.translation_failed",
+            "message": "Could not confirm the translation review. Reload the page before trying again.",
+            "translation": "Could not confirm the translation review. Reload the page before trying again."
+        },
+        {
+            "id": "review.translation_reviewed_revision",
+            "message": "Translation revision reviewed: %d",
+            "translation": "Translation revision reviewed: %d"
+        },
+        {
+            "id": "review.ai_draft",
+            "message": "AI draft",
+            "translation": "AI draft"
+        },
+        {
+            "id": "review.stale",
+            "message": "Stale",
+            "translation": "Stale"
+        },
+        {
+            "id": "review.current",
+            "message": "Current",
+            "translation": "Current"
+        },
+        {
+            "id": "review.not_tracked",
+            "message": "Source basis not recorded",
+            "translation": "Source basis not recorded"
+        },
+        {
+            "id": "review.missing",
+            "message": "Missing",
+            "translation": "Missing"
+        },
+        {
+            "id": "review.unavailable",
+            "message": "Unavailable",
+            "translation": "Unavailable"
+        },
+        {
+            "id": "review.awaiting",
+            "message": "AI drafts awaiting review",
+            "translation": "AI drafts awaiting review"
+        },
+        {
+            "id": "review.unchecked",
+            "message": "%d unchecked claims",
+            "translation": "%d unchecked claims"
+        },
+        {
+            "id": "review.check_conflict",
+            "message": "The reviewed revision changed or this claim is unavailable. Reload the page.",
+            "translation": "The reviewed revision changed or this claim is unavailable. Reload the page."
+        },
+        {
+            "id": "review.compare",
+            "message": "Review and compare",
+            "translation": "Review and compare"
+        },
+        {
+            "id": "review.compare_note",
+            "message": "Compared with the preceding recorded version. Legacy versions contain only title and body.",
+            "translation": "Compared with the preceding recorded version. Legacy versions contain only title and body."
+        },
+        {
+            "id": "review.no_changes",
+            "message": "No recorded text or assignment changes.",
+            "translation": "No recorded text or assignment changes."
+        },
+        {
+            "id": "review.before",
+            "message": "Previous recorded version",
+            "translation": "Previous recorded version"
+        },
+        {
+            "id": "review.after",
+            "message": "Selected version",
+            "translation": "Selected version"
+        },
+        {
+            "id": "review.not_recorded",
+            "message": "Not recorded",
+            "translation": "Not recorded"
+        },
+        {
+            "id": "review.diff_truncated",
+            "message": "This comparison is shortened. Open the recorded preview to review the full content.",
+            "translation": "This comparison is shortened. Open the recorded preview to review the full content."
+        },
+        {
+            "id": "preview.title",
+            "message": "Revision previews and sharing",
+            "translation": "Revision previews and sharing"
+        },
+        {
+            "id": "preview.open_revision",
+            "message": "Preview this revision",
+            "translation": "Preview this revision"
+        },
+        {
+            "id": "preview.open_complete_link",
+            "message": "Open the complete share link to view this revision.",
+            "translation": "Open the complete share link to view this revision."
+        },
+        {
+            "id": "preview.javascript_required",
+            "message": "JavaScript is required to open a shared preview. Enable it and reopen the original link.",
+            "translation": "JavaScript is required to open a shared preview. Enable it and reopen the original link."
+        },
+        {
+            "id": "preview.share_warning",
+            "message": "Anyone with a share link can read the selected revision until expiry or revocation.",
+            "translation": "Anyone with a share link can read the selected revision until expiry or revocation."
+        },
+        {
+            "id": "preview.acknowledge",
+            "message": "I understand that anyone holding this link can read this revision.",
+            "translation": "I understand that anyone holding this link can read this revision."
+        },
+        {
+            "id": "preview.create_share",
+            "message": "Create share link",
+            "translation": "Create share link"
+        },
+        {
+            "id": "preview.revoke",
+            "message": "Revoke link",
+            "translation": "Revoke link"
+        },
+        {
+            "id": "preview.expires",
+            "message": "Expires",
+            "translation": "Expires"
+        },
+        {
+            "id": "preview.created",
+            "message": "Share link created",
+            "translation": "Share link created"
+        },
+        {
+            "id": "preview.only_once",
+            "message": "Copy this URL now. oCMS stores only its hash and cannot show it again.",
+            "translation": "Copy this URL now. oCMS stores only its hash and cannot show it again."
+        },
+        {
+            "id": "preview.share_url",
+            "message": "Share URL",
+            "translation": "Share URL"
+        },
+        {
+            "id": "preview.active_limit",
+            "message": "You have reached the limit of %d active preview links. Revoke a link or wait for one to expire.",
+            "translation": "You have reached the limit of %d active preview links. Revoke a link or wait for one to expire."
+        },
+        {
+            "id": "preview.rate_limit",
+            "message": "You have reached the limit of %d preview links per hour. Try again in %d seconds. Revoking links does not reset this limit.",
+            "translation": "You have reached the limit of %d preview links per hour. Try again in %d seconds. Revoking links does not reset this limit."
+        },
+        {
+            "id": "preview.revoked",
+            "message": "The share link was revoked.",
+            "translation": "The share link was revoked."
+        },
+        {
+            "id": "preview.revoke_missing",
+            "message": "That share link was already revoked or no longer exists.",
+            "translation": "That share link was already revoked or no longer exists."
+        },
+        {
+            "id": "preview.revoke_failed",
+            "message": "The share link was not revoked. Try again shortly.",
+            "translation": "The share link was not revoked. Try again shortly."
+        },
+        {
+            "id": "preview.temporarily_unavailable",
+            "message": "The preview is temporarily unavailable. Try again shortly.",
+            "translation": "The preview is temporarily unavailable. Try again shortly."
+        },
+        {
+            "id": "review.check_failed",
+            "message": "The check could not be saved. Try again.",
+            "translation": "The check could not be saved. Try again."
+        },
+        {
+            "id": "preview.site_url_required",
+            "message": "Set a valid HTTPS site URL in Site configuration before sharing previews. HTTP is allowed only for localhost or loopback addresses.",
+            "translation": "Set a valid HTTPS site URL in Site configuration before sharing previews. HTTP is allowed only for localhost or loopback addresses."
+        },
+        {
+            "id": "preview.unavailable",
+            "message": "Cannot share this revision. Reload the editor and check that the draft is eligible for sharing.",
+            "translation": "Cannot share this revision. Reload the editor and check that the draft is eligible for sharing."
+        },
+        {
+            "id": "preview.render_error",
+            "message": "The theme could not render the recorded revision. Preview is unavailable.",
+            "translation": "The theme could not render the recorded revision. Preview is unavailable."
+        },
+        {
+            "id": "preview.banner",
+            "message": "Preview · page %d · revision %d",
+            "translation": "Preview · page %d · revision %d"
+        },
+        {
+            "id": "preview.placeholder",
+            "message": "External media and interactive content are omitted in previews.",
+            "translation": "External media and interactive content are omitted in previews."
+        },
+        {
+            "id": "review.field.title",
+            "message": "Title",
+            "translation": "Title"
+        },
+        {
+            "id": "review.field.summary",
+            "message": "Summary",
+            "translation": "Summary"
+        },
+        {
+            "id": "review.field.body",
+            "message": "Body text",
+            "translation": "Body text"
+        },
+        {
+            "id": "review.field.meta_title",
+            "message": "SEO title",
+            "translation": "SEO title"
+        },
+        {
+            "id": "review.field.meta_description",
+            "message": "SEO description",
+            "translation": "SEO description"
+        },
+        {
+            "id": "review.field.meta_keywords",
+            "message": "SEO keywords",
+            "translation": "SEO keywords"
+        },
+        {
+            "id": "review.field.slug",
+            "message": "URL slug",
+            "translation": "URL slug"
+        },
+        {
+            "id": "review.field.language_code",
+            "message": "Language",
+            "translation": "Language"
+        },
+        {
+            "id": "review.field.featured_image_id",
+            "message": "Featured image",
+            "translation": "Featured image"
+        },
+        {
+            "id": "review.field.category_ids",
+            "message": "Categories",
+            "translation": "Categories"
+        },
+        {
+            "id": "review.field.tag_ids",
+            "message": "Tags",
+            "translation": "Tags"
+        },
+        {
+            "id": "review.system",
+            "message": "System action; no acting account was recorded.",
+            "translation": "System action; no acting account was recorded."
+        },
+        {
+            "id": "connected.title",
+            "message": "Connected apps",
+            "translation": "Connected apps"
+        },
+        {
+            "id": "connected.description",
+            "message": "Review apps and MCP API keys. Revoking access does not delete drafts.",
+            "translation": "Review apps and MCP API keys. Revoking access does not delete drafts."
+        },
+        {
+            "id": "connected.policy_note",
+            "message": "Access also depends on current site policies, account permissions and API-key restrictions.",
+            "translation": "Access also depends on current site policies, account permissions and API-key restrictions."
+        },
+        {
+            "id": "connected.oauth",
+            "message": "OAuth connections",
+            "translation": "OAuth connections"
+        },
+        {
+            "id": "connected.keys",
+            "message": "MCP API keys",
+            "translation": "MCP API keys"
+        },
+        {
+            "id": "connected.metadata_note",
+            "message": "App names and client hosts are registered metadata, not verified vendor identities.",
+            "translation": "App names and client hosts are registered metadata, not verified vendor identities."
+        },
+        {
+            "id": "connected.key_note",
+            "message": "API keys are not bound to a client host. Only keys with MCP access are listed.",
+            "translation": "API keys are not bound to a client host. Only keys with MCP access are listed."
+        },
+        {
+            "id": "connected.empty",
+            "message": "No connections on this page.",
+            "translation": "No connections on this page."
+        },
+        {
+            "id": "connected.owner",
+            "message": "Account",
+            "translation": "Account"
+        },
+        {
+            "id": "connected.created",
+            "message": "Created",
+            "translation": "Created"
+        },
+        {
+            "id": "connected.not_recorded",
+            "message": "Not recorded",
+            "translation": "Not recorded"
+        },
+        {
+            "id": "connected.never_used",
+            "message": "Never used",
+            "translation": "Never used"
+        },
+        {
+            "id": "connected.no_expiry",
+            "message": "No stored expiry",
+            "translation": "No stored expiry"
+        },
+        {
+            "id": "connected.revoke",
+            "message": "Revoke access",
+            "translation": "Revoke access"
+        },
+        {
+            "id": "connected.status_active",
+            "message": "Active",
+            "translation": "Active"
+        },
+        {
+            "id": "connected.status_revoked",
+            "message": "Revoked",
+            "translation": "Revoked"
+        },
+        {
+            "id": "connected.status_expired",
+            "message": "Expired",
+            "translation": "Expired"
+        },
+        {
+            "id": "connected.status_unavailable",
+            "message": "Unavailable under current account or server policy",
+            "translation": "Unavailable under current account or server policy"
         }
     ]
 }

@@ -33,6 +33,8 @@
     <span class="form-hint">{{T .AdminLang "categories.select_hint"}}</span>
 </div>
 <script nonce="{{.CSPNonce}}">
+document.addEventListener('alpine:init', () => Alpine.data('categorySelector', categorySelector));
+
 function categorySelector() {
     return {
         selectedCategories: [],

@@ -89,7 +89,32 @@ func TestCSPReportBoundsInput(t *testing.T) {
 	if strings.ContainsAny(field, "\n\x1b") {
 		t.Errorf("control characters survived: %q", field)
 	}
-	if n := len([]rune(field)); n != maxCSPReportField {
-		t.Errorf("field length %d, want %d", n, maxCSPReportField)
+	if n := len([]rune(field)); n != 256 {
+		t.Errorf("field length %d, want 256", n)
+	}
+}
+
+// TestCSPReportDropsURLQueries checks that URL-valued report fields are
+// logged without their query and fragment. A violation on the OAuth consent
+// page otherwise wrote its state and PKCE challenge to the log (2026-11-03
+// audit A-2).
+//
+// Bug state: log document-uri, blocked-uri or source-file with
+// cspReportField and this fails.
+func TestCSPReportDropsURLQueries(t *testing.T) {
+	logs := captureLogs(t)
+	const page = "https://cms.test/oauth/authorize?client_id=x&state=SECRET-STATE&code_challenge=SECRET-CHALLENGE#SECRET-FRAGMENT"
+	report := `{"csp-report":{"document-uri":"` + page + `","blocked-uri":"` + page + `","source-file":"` + page + `","effective-directive":"script-src-elem"}}`
+	if rr := postCSPReport(report); rr.Code != http.StatusNoContent {
+		t.Fatalf("report: status %d, want 204", rr.Code)
+	}
+	out := logs.String()
+	if strings.Contains(out, "SECRET") {
+		t.Fatalf("URL query or fragment reached the log:\n%s", out)
+	}
+	for _, want := range []string{"document=https://cms.test/oauth/authorize", "blocked=https://cms.test/oauth/authorize", "source=https://cms.test/oauth/authorize"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("log lacks %q:\n%s", want, out)
+		}
 	}
 }

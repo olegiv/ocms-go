@@ -35,9 +35,6 @@ jobs:
         node-version: '24'
         cache: 'npm'
 
-    - name: Install Dart Sass
-      run: npm install -g sass@1.105.1
-
     - name: Build assets
       run: make assets
 
@@ -50,9 +47,19 @@ jobs:
     - name: Check out the shared Claude tooling
       run: git submodule update --init .claude/shared
 
+    - name: Ensure production-copy test tools are installed
+      run: |
+        if ! command -v sqlite3 || ! command -v rsync; then
+          sudo apt-get update
+          sudo apt-get install -y sqlite3 rsync
+        fi
+
     - name: Test
-      run: go test -v ./...
+      run: |
+        google-chrome --version
+        ./scripts/test-gate.sh
       env:
+        OCMS_TEST_BROWSER: "1"
         OCMS_SESSION_SECRET: test-secret-key-32-bytes-long!!!
         OCMS_REQUIRE_SHARED_TOOLING: "1"
 

@@ -16,13 +16,19 @@ Optional argument: a version override like `0.21.0` or `v0.21.0`, passed as
 value is used as the release version, while the content, commit, push, and tag
 gates still apply.
 
-**Validate `$ARGUMENTS` before using it anywhere.** If it is non-empty it MUST
-match the regex `^v?[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$` exactly
-(optional leading `v`, then `MAJOR.MINOR.PATCH`, optional `-prerelease`). If it
-does not match, abort immediately and ask the user for a valid version. Never
-pass an unvalidated argument to `git`, `gh`, or the tag name: a value beginning
-with `-` (for example `--delete`) could be parsed as a flag, and anything else
-outside the pattern could name an unintended ref.
+**Validate a non-empty `$ARGUMENTS` before the preconditions below.** Use this
+same check for the version selected in Step 3. Bind the exact input to the
+shell variable `input` as data, using shell argument quoting. Run the release
+workflow's validator from the repository root.
+
+```bash
+scripts/release-version.sh "v${input#v}"
+```
+
+Enter a stable `MAJOR.MINOR.PATCH` version, with an optional leading `v`.
+If validation fails, stop immediately and ask for a valid version. Use the
+validator's output as `X.Y.Z` for the changelog and prefix it with `v` for
+the tag. Pass only the validated version to downstream commands.
 
 ## Hard preconditions - abort if any fails
 
@@ -92,8 +98,8 @@ Offer 2-3 version options based on the draft:
 - Patch bump if the draft is only fixes, security, or small behavior changes.
 
 Present the options and let the user pick, override with a version string, or
-cancel. A typed version must pass the same regex as `$ARGUMENTS`. Never skip
-this step unless the user passed a valid version argument.
+cancel. Run the version check above on the selection before proposing a title.
+Skip this step only when the user passed a valid version argument.
 
 ## Step 4 - infer release title
 

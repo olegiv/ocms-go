@@ -21,6 +21,7 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // LoginProtection provides combined IP rate limiting and account lockout
@@ -124,7 +125,7 @@ func NewLoginProtection(db *sql.DB, cfg LoginProtectionConfig) *LoginProtection 
 // CheckIPRateLimit checks if the IP is rate limited.
 // Returns true if the request should be allowed.
 func (lp *LoginProtection) CheckIPRateLimit(ip string) bool {
-	return lp.ipLimiters.get(ip).Allow()
+	return lp.ipLimiters.get(ipRateLimitKey(ip)).Allow()
 }
 
 // accountLockoutMultiplier scales the per-(email, IP) threshold up to the
@@ -215,7 +216,7 @@ func (lp *LoginProtection) scopeLocked(scope lockoutScope, email string) (bool, 
 	rec, err := store.New(lp.db).GetLoginProtection(context.Background(), scope.key)
 	if err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
-			slog.Error("login_protection: get", "error", err, "email", email, "scope", scope.name)
+			slog.Error("login_protection: get", "error", err, "email", util.BoundedLogField(email), "scope", scope.name)
 		}
 		return false, 0
 	}
@@ -259,7 +260,7 @@ func (lp *LoginProtection) recordScopeFailure(scope lockoutScope, email, ip stri
 	ctx := context.Background()
 	q := store.New(lp.db)
 	now := time.Now()
-	logAttrs := []any{"email", email, "ip", ip, "scope", scope.name}
+	logAttrs := []any{"email", util.BoundedLogField(email), "ip", util.BoundedLogField(ip), "scope", scope.name}
 
 	rec, err := q.GetLoginProtection(ctx, scope.key)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -364,10 +365,10 @@ func (lp *LoginProtection) RecordSuccessfulLogin(email, ip string) {
 	// the other's counter in place, so every scope is attempted.
 	for _, scope := range lp.lockoutScopes(email, ip) {
 		if err := store.New(lp.db).DeleteLoginProtection(context.Background(), scope.key); err != nil {
-			slog.Error("login_protection: delete", "error", err, "email", email, "scope", scope.name)
+			slog.Error("login_protection: delete", "error", err, "email", util.BoundedLogField(email), "scope", scope.name)
 		}
 	}
-	slog.Debug("login attempts cleared", "email", email, "ip", ip)
+	slog.Debug("login attempts cleared", "email", util.BoundedLogField(email), "ip", util.BoundedLogField(ip))
 }
 
 // GetRemainingAttempts returns the number of remaining attempts before the
@@ -381,7 +382,7 @@ func (lp *LoginProtection) GetRemainingAttempts(email, ip string) int {
 		rec, err := store.New(lp.db).GetLoginProtection(context.Background(), scope.key)
 		if err != nil {
 			if !errors.Is(err, sql.ErrNoRows) {
-				slog.Error("login_protection: get remaining", "error", err, "email", email, "scope", scope.name)
+				slog.Error("login_protection: get remaining", "error", err, "email", util.BoundedLogField(email), "scope", scope.name)
 			}
 			continue
 		}
@@ -431,7 +432,7 @@ func (lp *LoginProtection) Middleware() func(http.Handler) http.Handler {
 			ip := GetClientIP(r)
 
 			if !lp.CheckIPRateLimit(ip) {
-				slog.Warn("login rate limit exceeded", "ip", ip)
+				slog.Warn("login rate limit exceeded", "ip", util.BoundedLogField(ip))
 				lang := GetAdminLang(r)
 				http.Error(w, i18n.T(lang, "auth.rate_limit"), http.StatusTooManyRequests)
 				return
@@ -499,8 +500,8 @@ func GetClientIP(r *http.Request) string {
 	// Check X-Forwarded-For header (can contain multiple IPs).
 	// Use the first untrusted entry from the right side of the chain.
 	// If header is present but unusable, fail closed to remote peer IP.
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		if ip, ok := firstUntrustedXFFIP(xff); ok {
+	if xff := r.Header.Values("X-Forwarded-For"); len(xff) != 0 {
+		if ip, ok := firstUntrustedXFFIP(strings.Join(xff, ",")); ok {
 			return ip.String()
 		}
 		return remoteIPString
@@ -516,24 +517,31 @@ func GetClientIP(r *http.Request) string {
 
 func firstUntrustedXFFIP(xff string) (netip.Addr, bool) {
 	parts := strings.Split(xff, ",")
-	ips := make([]netip.Addr, 0, len(parts))
-	for _, part := range parts {
-		if ip, ok := parseIP(part); ok {
-			ips = append(ips, ip)
+	for i := len(parts) - 1; i >= 0; i-- {
+		part := strings.TrimSpace(parts[i])
+		address := part
+		if len(part) > 2 && part[0] == '[' && part[len(part)-1] == ']' {
+			address = part[1 : len(part)-1]
+		}
+		ip, err := netip.ParseAddr(address)
+		if err != nil {
+			endpoint, portErr := netip.ParseAddrPort(part)
+			if portErr != nil {
+				return netip.Addr{}, false
+			}
+			ip = endpoint.Addr()
+		}
+		// An interface zone is local to the forwarding host.
+		if ip.Zone() != "" {
+			return netip.Addr{}, false
+		}
+		ip = ip.Unmap()
+		// The leftmost address is the fallback when every hop is trusted.
+		if i == 0 || !isTrustedProxy(ip) {
+			return ip, true
 		}
 	}
-	if len(ips) == 0 {
-		return netip.Addr{}, false
-	}
-
-	for i := len(ips) - 1; i >= 0; i-- {
-		if !isTrustedProxy(ips[i]) {
-			return ips[i], true
-		}
-	}
-
-	// All entries are trusted proxies; fall back to the left-most address.
-	return ips[0], true
+	return netip.Addr{}, false
 }
 
 // ConfigureTrustedProxies updates trusted proxy ranges from a comma-separated

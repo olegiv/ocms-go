@@ -155,7 +155,7 @@ func TestGetEncyclopediaTermsGroupsByEntry(t *testing.T) {
 		t.Fatalf("GetEncyclopediaTerms() error = %v", err)
 	}
 	if len(terms[1]) != 2 {
-		t.Errorf("entry 1 has %d terms, want 2", len(terms[1]))
+		t.Fatalf("entry 1 has %d terms, want 2", len(terms[1]))
 	}
 	if len(terms[2]) != 1 {
 		t.Errorf("entry 2 has %d terms, want 1", len(terms[2]))
@@ -341,6 +341,9 @@ func TestNullColumnsDegradeToEmptyValues(t *testing.T) {
 	stories, err := reader.GetStories(context.Background())
 	if err != nil {
 		t.Fatalf("GetStories() error = %v", err)
+	}
+	if len(stories) != 1 {
+		t.Fatalf("got %d stories, want the seeded NULL-column row", len(stories))
 	}
 	story := &stories[0]
 	if got := assembleStoryBody(story); got != "" {

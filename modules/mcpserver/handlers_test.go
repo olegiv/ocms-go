@@ -5,13 +5,11 @@ package mcpserver
 
 import (
 	"context"
-	"database/sql"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
@@ -74,7 +72,7 @@ func TestHandleSaveSettingsAppliesAndAudits(t *testing.T) {
 		t.Fatalf("status = %d, want 303", rec.Code)
 	}
 
-	want := Settings{AllowDrafts: true, Instructions: "Focus on recent posts."}
+	want := Settings{AllowDrafts: true, Instructions: "Focus on recent posts.", ExternalLinks: "keep"}
 	if got := env.module.currentSettings(); got != want {
 		t.Errorf("active settings = %+v, want %+v", got, want)
 	}
@@ -111,11 +109,7 @@ func TestDashboardData(t *testing.T) {
 	env := newTestEnv(t)
 	rawKeys := []string{
 		env.createKey(model.PermissionMCPAccess, model.PermissionPagesRead),
-		env.createKey(model.PermissionPagesRead), // a REST-only key must not be listed
-		env.createKeyWith(func(p *store.CreateAPIKeyParams) {
-			p.Name = "Old agent"
-			p.ExpiresAt = sql.NullTime{Time: time.Now().Add(-time.Hour), Valid: true}
-		}, model.PermissionMCPAccess),
+		env.createKey(model.PermissionPagesRead),
 	}
 
 	data := env.module.dashboardData(context.Background())
@@ -124,18 +118,6 @@ func TestDashboardData(t *testing.T) {
 	}
 	if len(data.Tools) != len(toolCatalog()) {
 		t.Errorf("tools = %d, want %d", len(data.Tools), len(toolCatalog()))
-	}
-	if len(data.Keys) != 2 {
-		t.Fatalf("keys = %d, want the 2 holding mcp:access", len(data.Keys))
-	}
-	expired := 0
-	for _, key := range data.Keys {
-		if key.Expired {
-			expired++
-		}
-	}
-	if expired != 1 {
-		t.Errorf("expired keys = %d, want 1", expired)
 	}
 	if !strings.Contains(data.ClaudeCodeCommand, keyPlaceholder) || !strings.Contains(data.ClientConfigJSON, keyPlaceholder) {
 		t.Errorf("snippets must use the key placeholder:\n%s\n%s", data.ClaudeCodeCommand, data.ClientConfigJSON)
@@ -162,7 +144,6 @@ func TestDashboardData(t *testing.T) {
 
 func TestDashboardPageRenders(t *testing.T) {
 	env := newTestEnv(t)
-	env.createKey(model.PermissionMCPAccess)
 	data := env.module.dashboardData(context.Background())
 
 	var sb strings.Builder
@@ -177,7 +158,6 @@ func TestDashboardPageRenders(t *testing.T) {
 		"get_site_info",
 		"search_pages",
 		"claude mcp add --transport http ocms",
-		"Agent key",
 	} {
 		if !strings.Contains(html, want) {
 			t.Errorf("rendered page missing %q", want)

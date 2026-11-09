@@ -90,7 +90,7 @@ func (q *Queries) GetAliasesForPage(ctx context.Context, pageID int64) ([]PageAl
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []PageAlias{}
 	for rows.Next() {
 		var i PageAlias
@@ -114,7 +114,7 @@ func (q *Queries) GetAliasesForPage(ctx context.Context, pageID int64) ([]PageAl
 }
 
 const getPageByAlias = `-- name: GetPageByAlias :one
-SELECT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_code, p.hide_featured_image, p.page_type, p.exclude_from_lists, p.summary, p.video_url, p.video_title FROM pages p
+SELECT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_code, p.hide_featured_image, p.page_type, p.exclude_from_lists, p.summary, p.video_url, p.video_title, p.revision FROM pages p
 INNER JOIN page_aliases pa ON pa.page_id = p.id
 WHERE pa.alias = ?
 `
@@ -148,12 +148,13 @@ func (q *Queries) GetPageByAlias(ctx context.Context, alias string) (Page, error
 		&i.Summary,
 		&i.VideoUrl,
 		&i.VideoTitle,
+		&i.Revision,
 	)
 	return i, err
 }
 
 const getPublishedPageByAlias = `-- name: GetPublishedPageByAlias :one
-SELECT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_code, p.hide_featured_image, p.page_type, p.exclude_from_lists, p.summary, p.video_url, p.video_title FROM pages p
+SELECT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_code, p.hide_featured_image, p.page_type, p.exclude_from_lists, p.summary, p.video_url, p.video_title, p.revision FROM pages p
 INNER JOIN page_aliases pa ON pa.page_id = p.id
 WHERE pa.alias = ? AND p.status = 'published'
 `
@@ -187,6 +188,7 @@ func (q *Queries) GetPublishedPageByAlias(ctx context.Context, alias string) (Pa
 		&i.Summary,
 		&i.VideoUrl,
 		&i.VideoTitle,
+		&i.Revision,
 	)
 	return i, err
 }

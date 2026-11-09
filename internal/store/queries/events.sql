@@ -76,5 +76,24 @@ SELECT COUNT(*) FROM events WHERE category = ?;
 -- name: CountEventsByLevelAndCategory :one
 SELECT COUNT(*) FROM events WHERE level = ? AND category = ?;
 
--- name: DeleteOldEvents :exec
-DELETE FROM events WHERE created_at < ?;
+-- name: DeleteExpiredEvents :execrows
+DELETE FROM events
+WHERE id IN (
+    SELECT expired.id FROM events AS expired
+    CROSS JOIN (SELECT CAST(sqlc.arg(messages) AS TEXT) AS messages) AS producer_filter
+    WHERE expired.category = sqlc.arg(category) AND expired.created_at < CAST(sqlc.arg(cutoff) AS TEXT)
+      AND (producer_filter.messages = 'null'
+           OR expired.message IN (SELECT value FROM json_each(producer_filter.messages)))
+    ORDER BY expired.created_at, expired.id
+    LIMIT sqlc.arg(batch_limit)
+);
+
+-- name: CountExpiredEvents :one
+SELECT COUNT(*) FROM (
+    SELECT expired.id FROM events AS expired
+    CROSS JOIN (SELECT CAST(sqlc.arg(messages) AS TEXT) AS messages) AS producer_filter
+    WHERE expired.category = sqlc.arg(category) AND expired.created_at < CAST(sqlc.arg(cutoff) AS TEXT)
+      AND (producer_filter.messages = 'null'
+           OR expired.message IN (SELECT value FROM json_each(producer_filter.messages)))
+    LIMIT sqlc.arg(count_limit)
+);

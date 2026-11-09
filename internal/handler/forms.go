@@ -26,6 +26,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/olegiv/ocms-go/internal/cache"
+	"github.com/olegiv/ocms-go/internal/contentpath"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
@@ -43,6 +44,7 @@ import (
 // FormsHandler handles form management routes.
 type FormsHandler struct {
 	db              *sql.DB
+	eventService    *service.EventService
 	queries         *store.Queries
 	renderer        *render.Renderer
 	sessionManager  *scs.SessionManager
@@ -86,6 +88,7 @@ var sensitiveFormFieldTokens = []string{
 func NewFormsHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager, hr *module.HookRegistry, tm *theme.Manager, cm *cache.Manager, ms *service.MenuService, fh *FrontendHandler) *FormsHandler {
 	return &FormsHandler{
 		db:              db,
+		eventService:    service.NewEventService(db),
 		queries:         store.New(db),
 		renderer:        renderer,
 		sessionManager:  sm,
@@ -130,12 +133,7 @@ func (h *FormsHandler) dispatchFormEvent(ctx context.Context, form store.Form, s
 		SubmittedAt:  time.Now(),
 	}
 
-	if err := h.dispatcher.DispatchEvent(ctx, model.EventFormSubmitted, eventData); err != nil {
-		slog.Error("failed to dispatch webhook event",
-			"error", err,
-			"event_type", model.EventFormSubmitted,
-			"form_id", form.ID)
-	}
+	webhook.DispatchEvent(ctx, h.dispatcher, model.EventFormSubmitted, eventData)
 }
 
 func redactFormEventData(data map[string]string) map[string]string {
@@ -428,55 +426,14 @@ func (h *FormsHandler) verifyCaptcha(ctx context.Context, r *http.Request, lang 
 // getActiveFormBySlug retrieves a form by slug and checks if it's active.
 // Returns nil if form not found or inactive (response already sent).
 func (h *FormsHandler) getActiveFormBySlug(w http.ResponseWriter, r *http.Request, slug string) *store.Form {
-	var routeLanguage store.Language
-	var err error
-	prefix := middleware.GetLanguagePrefix(r)
-	if prefix != "" {
-		routeLanguage, err = h.queries.GetLanguageByCode(r.Context(), prefix)
-	} else {
-		routeLanguage, err = h.queries.GetDefaultLanguage(r.Context())
-	}
+	form, err := contentpath.PublicForm(r.Context(), h.queries, slug, middleware.GetLanguagePrefix(r))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			h.publicFormNotFound(w, r)
 		} else {
-			slog.Error("failed to resolve public form route language", "error", err, "slug", slug)
+			slog.Error("failed to resolve public form", "error", err, "slug", util.BoundedLogField(slug))
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		}
-		return nil
-	}
-	if !routeLanguage.IsActive || !util.IsValidLangCode(routeLanguage.Code) ||
-		util.IsReservedLanguageCode(routeLanguage.Code) {
-		h.publicFormNotFound(w, r)
-		return nil
-	}
-
-	form, err := h.queries.GetFormBySlugAndLanguage(r.Context(), store.GetFormBySlugAndLanguageParams{
-		Slug: slug, LanguageCode: routeLanguage.Code,
-	})
-	if errors.Is(err, sql.ErrNoRows) && prefix == "" {
-		// Old data and third-party callers may have inserted an empty code before
-		// language_code became mandatory in the admin flow. It belongs only to
-		// the default, unprefixed namespace; never let it claim a prefix.
-		form, err = h.queries.GetFormBySlugAndLanguage(r.Context(), store.GetFormBySlugAndLanguageParams{
-			Slug: slug, LanguageCode: "",
-		})
-		if err == nil {
-			form.LanguageCode = routeLanguage.Code
-		}
-	}
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			h.publicFormNotFound(w, r)
-		} else {
-			slog.Error("failed to get form", "error", err, "slug", slug)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
-		return nil
-	}
-
-	if !form.IsActive {
-		h.publicFormNotFound(w, r)
 		return nil
 	}
 	return &form
@@ -1158,7 +1115,7 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Form payload too large", http.StatusRequestEntityTooLarge)
 			return
 		}
-		slog.Error("failed to parse form", "error", err)
+		slog.Warn("failed to parse form", "error", util.BoundedLogField(err.Error()))
 		http.Error(w, "Invalid form data", http.StatusBadRequest)
 		return
 	}
@@ -1168,17 +1125,15 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	if honeypot != "" {
 		clientIP := middleware.GetClientIP(r)
 		// Bot detected, silently pretend success
-		slog.Info("honeypot triggered", "form_slug", slug, "ip", clientIP)
-		_ = service.NewEventService(h.db).LogSecurityEvent(
+		slog.Info("honeypot triggered", "form_slug", util.BoundedLogField(slug), "ip", clientIP)
+		_ = h.eventService.LogAnonymousSecurityEvent(
 			r.Context(),
-			model.EventLevelWarning,
 			"Public form honeypot triggered",
-			nil,
 			clientIP,
 			middleware.GetRequestURL(r),
 			map[string]any{
 				"form_id":   form.ID,
-				"form_slug": slug,
+				"form_slug": util.BoundedLogField(slug),
 			},
 		)
 		// Fire hook for modules (e.g., Sentinel auto-ban)
@@ -1201,14 +1156,14 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		if !hasCaptchaField(fields) {
 			slog.Warn("form submission blocked: captcha required but field not configured",
 				"form_id", form.ID,
-				"form_slug", slug)
+				"form_slug", util.BoundedLogField(slug))
 			http.Error(w, "Form submission is temporarily unavailable", http.StatusServiceUnavailable)
 			return
 		}
 		if h.hookRegistry == nil || !h.hookRegistry.HasHandlers(hcaptcha.HookFormCaptchaVerify) {
 			slog.Warn("form submission blocked: captcha required but verifier unavailable",
 				"form_id", form.ID,
-				"form_slug", slug)
+				"form_slug", util.BoundedLogField(slug))
 			http.Error(w, "Form submission is temporarily unavailable", http.StatusServiceUnavailable)
 			return
 		}
@@ -1239,20 +1194,18 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		if len(value) > maxPublicFormFieldValueBytes {
 			slog.Warn("form submission blocked: field value too large",
 				"form_id", form.ID,
-				"form_slug", slug,
-				"field_name", field.Name,
+				"form_slug", util.BoundedLogField(slug),
+				"field_name", util.BoundedLogField(field.Name),
 				"field_value_len", len(value))
-			_ = service.NewEventService(h.db).LogSecurityEvent(
+			_ = h.eventService.LogAnonymousSecurityEvent(
 				r.Context(),
-				model.EventLevelWarning,
 				"Public form submission blocked: field value too large",
-				nil,
 				middleware.GetClientIP(r),
 				middleware.GetRequestURL(r),
 				map[string]any{
 					"form_id":         form.ID,
-					"form_slug":       slug,
-					"field_name":      field.Name,
+					"form_slug":       util.BoundedLogField(slug),
+					"field_name":      util.BoundedLogField(field.Name),
 					"field_value_len": len(value),
 				},
 			)
@@ -1263,18 +1216,16 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		if totalValueBytes > maxPublicFormSubmissionDataBytes {
 			slog.Warn("form submission blocked: total field payload too large",
 				"form_id", form.ID,
-				"form_slug", slug,
+				"form_slug", util.BoundedLogField(slug),
 				"total_value_bytes", totalValueBytes)
-			_ = service.NewEventService(h.db).LogSecurityEvent(
+			_ = h.eventService.LogAnonymousSecurityEvent(
 				r.Context(),
-				model.EventLevelWarning,
 				"Public form submission blocked: payload too large",
-				nil,
 				middleware.GetClientIP(r),
 				middleware.GetRequestURL(r),
 				map[string]any{
 					"form_id":           form.ID,
-					"form_slug":         slug,
+					"form_slug":         util.BoundedLogField(slug),
 					"total_value_bytes": totalValueBytes,
 				},
 			)
@@ -1348,18 +1299,16 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	if len(dataJSON) > maxPublicFormSubmissionDataBytes {
 		slog.Warn("form submission blocked: serialized payload too large",
 			"form_id", form.ID,
-			"form_slug", slug,
+			"form_slug", util.BoundedLogField(slug),
 			"data_json_bytes", len(dataJSON))
-		_ = service.NewEventService(h.db).LogSecurityEvent(
+		_ = h.eventService.LogAnonymousSecurityEvent(
 			r.Context(),
-			model.EventLevelWarning,
 			"Public form submission blocked: serialized payload too large",
-			nil,
 			middleware.GetClientIP(r),
 			middleware.GetRequestURL(r),
 			map[string]any{
 				"form_id":         form.ID,
-				"form_slug":       slug,
+				"form_slug":       util.BoundedLogField(slug),
 				"data_json_bytes": len(dataJSON),
 			},
 		)
@@ -1383,7 +1332,7 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("form submission saved", "form_id", form.ID, "form_slug", slug)
+	slog.Info("form submission saved", "form_id", form.ID, "form_slug", util.BoundedLogField(slug))
 
 	// Dispatch form.submitted webhook event
 	h.dispatchFormEvent(r.Context(), *form, submission.ID, values)

@@ -5,10 +5,10 @@
 # oCMS Multi-Instance Deployment Script
 # Deploys a new binary and restarts all registered oCMS instances.
 #
-# Usage: sudo ./deploy-multi.sh <path-to-new-binary>
+# Usage: sudo ./deploy-multi.sh <path-to-new-binary> <trusted-sha256>
 #
 # Example:
-#   sudo ./deploy-multi.sh /tmp/ocms
+#   sudo ./deploy-multi.sh /tmp/ocms <trusted-sha256>
 
 set -e
 
@@ -30,6 +30,7 @@ OCMSCTL="/opt/ocms/bin/ocmsctl"
 SITES_CONF="/etc/ocms/sites.conf"
 HEALTH_RETRIES=10
 HEALTH_INTERVAL=2
+MAX_BINARY_BYTES=$((256 * 1024 * 1024))
 
 # --- Functions ---
 
@@ -53,8 +54,9 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 NEW_BINARY="${1:-}"
-if [ -z "$NEW_BINARY" ]; then
-    echo "Usage: sudo $0 <path-to-new-binary>"
+EXPECTED_SHA256="${2:-}"
+if [[ $# -ne 2 || ! "$EXPECTED_SHA256" =~ ^[[:xdigit:]]{64}$ ]]; then
+    echo "Usage: sudo $0 <path-to-new-binary> <trusted-sha256>"
     exit 1
 fi
 
@@ -63,10 +65,12 @@ if [ ! -f "$NEW_BINARY" ]; then
     exit 1
 fi
 
-if ! file "$NEW_BINARY" | grep -q "executable\|ELF"; then
-    echo_error "$NEW_BINARY is not a valid executable"
-    exit 1
-fi
+for deploy_path in "$BINARY_PATH" "$BACKUP_PATH" "${BINARY_PATH}.new"; do
+    if [ "$NEW_BINARY" -ef "$deploy_path" ]; then
+        echo_error "New binary must be separate from $deploy_path"
+        exit 1
+    fi
+done
 
 if [ ! -f "$SITES_CONF" ]; then
     echo_error "No sites registered: $SITES_CONF"
@@ -90,8 +94,32 @@ if [ ${#SITE_IDS[@]} -eq 0 ]; then
     exit 1
 fi
 
+# Verify only a private copy. The caller may replace the upload while this
+# process runs, and the installed bytes must be the ones we checked.
+stage_dir=$(mktemp -d "$(dirname -- "$BINARY_PATH")/.ocms-deploy.XXXXXXXX")
+trap 'rm -rf -- "$stage_dir"' EXIT
+STAGED_BINARY="$stage_dir/ocms"
+# The upload can be swapped after the regular-file check above. Open it
+# without following symlinks or blocking on a FIFO, and bound the copy.
+dd if="$NEW_BINARY" of="$STAGED_BINARY" bs=64K \
+    iflag=nonblock,nofollow,count_bytes count="$((MAX_BINARY_BYTES + 1))" status=none
+binary_bytes=$(wc -c < "$STAGED_BINARY")
+if [ "$binary_bytes" -gt "$MAX_BINARY_BYTES" ]; then
+    echo_error "New binary exceeds the 256 MiB deployment limit"
+    exit 1
+fi
+actual_sha256=$(sha256sum < "$STAGED_BINARY")
+if [[ "${actual_sha256%% *}" != "$(printf '%s' "$EXPECTED_SHA256" | tr '[:upper:]' '[:lower:]')" ]]; then
+    echo_error "New binary does not match the trusted SHA-256"
+    exit 1
+fi
+if ! file "$STAGED_BINARY" | grep -q "executable\|ELF"; then
+    echo_error "New binary is not a valid executable"
+    exit 1
+fi
+
 echo_info "Deploying new binary to ${#SITE_IDS[@]} site(s)"
-echo_info "  Binary: $NEW_BINARY ($(ls -lh "$NEW_BINARY" | awk '{print $5}'))"
+echo_info "  Binary: $NEW_BINARY ($binary_bytes bytes)"
 echo ""
 
 # --- Backup current binary ---
@@ -107,9 +135,8 @@ echo_info "Installing new binary..."
 # Copy beside the old binary and rename over it: the rename leaves the running
 # binary alone, so this happens before any site stops, and a failed install
 # stops nothing.
-cp "$NEW_BINARY" "${BINARY_PATH}.new"
-chmod 755 "${BINARY_PATH}.new"
-mv -f "${BINARY_PATH}.new" "$BINARY_PATH"
+chmod 755 "$STAGED_BINARY"
+mv -f -- "$STAGED_BINARY" "$BINARY_PATH"
 
 # --- Stop all instances ---
 
@@ -179,5 +206,4 @@ if [ ${#FAILED_SITES[@]} -gt 0 ]; then
     exit 1
 else
     echo_info "All ${#SITE_IDS[@]} site(s) deployed successfully!"
-    rm -f "$NEW_BINARY"
 fi

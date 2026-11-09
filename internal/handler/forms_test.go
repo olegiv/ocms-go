@@ -7,18 +7,23 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
+	"errors"
 	"html/template"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/webhook"
 )
 
 func TestNewFormsHandler(t *testing.T) {
@@ -30,6 +35,67 @@ func TestNewFormsHandler(t *testing.T) {
 	}
 	if h.queries == nil {
 		t.Error("queries should not be nil")
+	}
+}
+
+func TestFormSubmissionLogsStoppedWebhook(t *testing.T) {
+	db, sm := testHandlerSetup(t)
+	queries := store.New(db)
+	ctx, now := t.Context(), time.Now()
+	form, err := queries.CreateForm(ctx, store.CreateFormParams{
+		Name: "Contact", Slug: "contact", Title: "Contact", IsActive: true, CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, fieldErr := queries.CreateFormField(ctx, store.CreateFormFieldParams{
+		FormID: form.ID, Type: "text", Name: "message", Label: "Message", CreatedAt: now, UpdatedAt: now,
+	}); fieldErr != nil {
+		t.Fatal(fieldErr)
+	}
+	tm := loadedFrontendThemeManager(t, "default")
+	menu := service.NewMenuService(db, nil)
+	frontend := NewFrontendHandler(db, tm, nil, slog.Default(), menu, nil)
+	h := NewFormsHandler(db, nil, sm, nil, tm, nil, menu, frontend)
+	logs := captureLogs(t)
+	h.SetDispatcher(webhook.NewDispatcher(db, slog.Default(), webhook.DefaultConfig()))
+	req := httptest.NewRequest(http.MethodPost, "/forms/contact", strings.NewReader("message=private-fixture-message"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = requestWithURLParams(req, map[string]string{"slug": "contact"})
+	w := httptest.NewRecorder()
+	h.Submit(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("submission status = %d, want 200", w.Code)
+	}
+	submissions, err := queries.GetFormSubmissions(ctx, store.GetFormSubmissionsParams{FormID: form.ID, Limit: 10})
+	if err != nil || len(submissions) != 1 {
+		t.Fatalf("saved %d submissions, want one: %v", len(submissions), err)
+	}
+	logged := logs.String()
+	requireSingleDroppedWebhookLog(t, logged, "form.submitted",
+		"form_id="+strconv.FormatInt(form.ID, 10),
+		"submission_id="+strconv.FormatInt(submissions[0].ID, 10),
+		"entity_id="+strconv.FormatInt(submissions[0].ID, 10))
+	if strings.Contains(logged, "private-fixture-message") {
+		t.Error("dispatch error logged the submission payload")
+	}
+}
+
+func requireSingleDroppedWebhookLog(t *testing.T, logs, event string, attrs ...string) {
+	t.Helper()
+	var matches []string
+	for line := range strings.Lines(logs) {
+		if strings.Contains(line, "level=ERROR") && strings.Contains(line, "event_type="+event) {
+			matches = append(matches, strings.TrimSpace(line))
+		}
+	}
+	if len(matches) != 1 {
+		t.Fatalf("got %d error records for %s, want 1:\n%s", len(matches), event, strings.Join(matches, "\n"))
+	}
+	for _, attr := range append(attrs, `msg="webhook event dropped"`, `error="webhook dispatcher is stopped"`) {
+		if !strings.Contains(matches[0], attr) {
+			t.Errorf("missing %q in dispatch error:\n%s", attr, matches[0])
+		}
 	}
 }
 
@@ -195,6 +261,39 @@ func TestFormsHandlerSubmit_RejectsOversizedPayload(t *testing.T) {
 	}
 }
 
+func TestMalformedPublicFormBodyLogsBoundedWarning(t *testing.T) {
+	db, sm := testHandlerSetup(t)
+	now := time.Now()
+	if _, err := store.New(db).CreateForm(t.Context(), store.CreateFormParams{
+		Name: "Contact", Slug: "contact", Title: "Contact", IsActive: true, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var logs bytes.Buffer
+	old := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(old) })
+	h := NewFormsHandler(db, nil, sm, nil, nil, nil, nil, nil)
+	// A malformed HTTP trailer can make Read return request text in its error.
+	body := iotest.ErrReader(errors.New("malformed trailer\x00" + strings.Repeat("界", 3000)))
+	r := httptest.NewRequest(http.MethodPost, "/forms/contact", body)
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r = requestWithURLParams(r, map[string]string{"slug": "contact"})
+	w := httptest.NewRecorder()
+	h.Submit(w, r)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("malformed form status = %d, want 400", w.Code)
+	}
+	var entry map[string]string
+	if err := json.NewDecoder(&logs).Decode(&entry); err != nil {
+		t.Fatal(err)
+	}
+	if err := entry["error"]; entry["level"] != "WARN" || !strings.HasPrefix(err, "malformed trailer") ||
+		strings.ContainsRune(err, '\x00') || len([]rune(err)) > 256 {
+		t.Fatalf("malformed form log level=%q, error length=%d", entry["level"], len(err))
+	}
+}
+
 func TestFormsHandlerSubmit_RequireCaptchaPolicy_NoCaptchaField(t *testing.T) {
 	db, sm := testHandlerSetup(t)
 	queries := store.New(db)
@@ -267,15 +366,20 @@ func TestFormsHandlerSubmit_RejectsOversizedFieldValue(t *testing.T) {
 	h := NewFormsHandler(db, nil, sm, nil, nil, nil, nil, nil)
 
 	payload := "message=" + strings.Repeat("a", maxPublicFormFieldValueBytes+1)
-	req := httptest.NewRequest(http.MethodPost, "/forms/contact-form", strings.NewReader(payload))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req = requestWithURLParams(req, map[string]string{"slug": "contact-form"})
-	w := httptest.NewRecorder()
-
-	h.Submit(w, req)
-
-	if w.Code != http.StatusRequestEntityTooLarge {
-		t.Errorf("status = %d; want %d", w.Code, http.StatusRequestEntityTooLarge)
+	for _, addr := range []string{"192.0.2.1:80", "192.0.2.1:81", "192.0.2.2:80"} {
+		req := httptest.NewRequest(http.MethodPost, "/forms/contact-form", strings.NewReader(payload))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.RemoteAddr = addr
+		req = requestWithURLParams(req, map[string]string{"slug": "contact-form"})
+		w := httptest.NewRecorder()
+		h.Submit(w, req)
+		if w.Code != http.StatusRequestEntityTooLarge {
+			t.Errorf("status = %d; want %d", w.Code, http.StatusRequestEntityTooLarge)
+		}
+	}
+	var events int
+	if err := db.QueryRow("SELECT COUNT(*) FROM events WHERE message = 'Public form submission blocked: field value too large'").Scan(&events); err != nil || events != 2 {
+		t.Fatalf("expected one event per source, got %d, err=%v", events, err)
 	}
 
 	count, err := queries.CountFormSubmissions(context.Background(), form.ID)

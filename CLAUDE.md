@@ -1,11 +1,11 @@
 ## Build and Development Commands
 
 ```bash
-# Run development server (requires OCMS_SESSION_SECRET env var)
-OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!! make dev
+# Run the local development server
+OCMS_ENV=development OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!! make dev
 
 # Run without rebuilding assets
-make run
+OCMS_ENV=development OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!! make run
 
 # Build production binary
 make build
@@ -27,10 +27,10 @@ npm update                # Update htmx, alpine.js in package.json
 make assets               # Reinstall and copy to static/dist/js
 
 # Codex-compatible workflow commands
-make commit-prepare       # Proxy to Claude /commit-prepare
-make commit-do            # Proxy to Claude /commit-do
+make commit-prepare       # Test the staged tree, then draft from its diff
+make commit-do            # Approve the prepared commit in a terminal
 make code-quality         # Proxy to Claude /code-quality
-make security-audit       # Proxy to Claude /security-audit
+make security-audit       # Run a report-only Claude audit
 make commit-prepare-local # Test gate, then draft a commit message locally
 make commit-do-local      # Commit staged files after the test gate
 make code-quality-local   # Run local quality checks shell script
@@ -38,7 +38,7 @@ make security-audit-local # Run local security audit shell script
 # Codex note: /code-quality, /security-audit, /commit-prepare, and /commit-do
 # are not registered UI slash commands and may show "No commands". Use make
 # targets or ask in chat: "run code-quality", "run security-audit", etc.
-# Run Claude slash command from CLI (non-interactive, scoped tool allowlist):
+# Run the guarded workflow launchers from a terminal:
 ./scripts/codex/proxy-claude-command.sh /commit-prepare
 ./scripts/codex/proxy-claude-command.sh /commit-do
 ./scripts/codex/proxy-claude-command.sh /code-quality
@@ -52,6 +52,21 @@ make migrate-create      # Create new migration
 # Remove an account's second factor (lost authenticator, no other admin)
 go run ./cmd/ocms mfa-reset [-db ./data/ocms.db] admin@example.com
 ```
+
+## Development MFA for Coding Agents
+
+Codex and Claude Code use the same local `bin/ocms-dev-auth` helper. Build with
+`make build-dev-authenticator` and follow `docs/dev-authenticator.md`. The seed
+is stored in the macOS login Keychain; codes are handed privately to the browser
+controller through temporary files and removed after use. Check `status` first;
+missing enrollment means setup is pending, not a reason to ask repeatedly for
+manual codes. Never print seeds/codes or extract the owner's existing MFA seed.
+
+The dedicated staging account `ocms-agent@example.test` (Editor, user ID 2) is
+enrolled and its generated-code browser login passed. Its password and recovery
+codes are retained in the same login Keychain; the shared document describes the
+service names and record binding. Use it for resumed acceptance. Keep required
+MFA, normal scope consent and the owner's current authenticator intact.
 
 ## Go Toolchain Requirements
 
@@ -195,14 +210,28 @@ Summary (grouped by concern; source of truth: `internal/config/config.go`):
 | `OCMS_ENV_FILE` | No | `./.env` | Env file to read instead of `./.env` (site instance mode); missing, unreadable or unparsable fails startup and `ocms migrate` (a missing `./.env` is ignored). Read in `cmd/ocms` (`loadEnvFile`), not `config.go` |
 | `OCMS_SERVER_HOST` | No | `localhost` | Server bind host |
 | `OCMS_SERVER_PORT` | No | `8080` | Server port |
-| `OCMS_ENV` | No | `development` | Set to `production` for prod |
+| `OCMS_ENV` | No | `production` | Unset or empty uses production. Set `development` explicitly for local runs. Staging and production apply the secure defaults marked "in prod" below (`Config.IsProductionLike`). Unknown values fail startup |
 | `OCMS_LOG_LEVEL` | No | `info` | Log level: `debug`, `info`, `warn`, `error` |
 | `OCMS_ERROR_LOG_PATH` | No | - | Path for separate error log file (errors also go to stdout) |
+| `OCMS_EVENT_CLEANUP_ENABLED` | No | `true` | Register automatic and manual Event Log cleanup |
+| `OCMS_EVENT_DIAGNOSTIC_RETENTION_DAYS` | No | `90` | Retain recognized diagnostics for 0–36500 days (0 keeps them indefinitely) |
+| `OCMS_EVENT_AUDIT_RETENTION_DAYS` | No | `0` | Retain classified security and audit records for 0–36500 days (0 keeps them indefinitely) |
 | `OCMS_CUSTOM_DIR` | No | `./custom` | Directory for custom themes (custom modules are compiled in) |
 | `OCMS_UPLOADS_DIR` | No | `./uploads` | Directory for uploaded media files |
 | `OCMS_ACTIVE_THEME` | No | `default` | Active theme (overrides DB/admin setting) |
 | `OCMS_SITE_URL` | No | - | Full site URL written into site config on startup (overrides DB/admin setting); sitemap and agent-discovery docs 503 until set. Scheme and host only (`https://example.com`) — a path, query, fragment, credentials or an out-of-range port fails startup |
+| `OCMS_OAUTH_ENABLED` | No | `false` | Enable the MCP OAuth server; requires canonical OCMS_SITE_URL (HTTPS outside development loopback) |
+| `OCMS_OAUTH_CIMD_ALLOWED_HOSTS` | No | `claude.ai,chatgpt.com` | Exact HTTPS client metadata host allowlist (bare lowercase hostnames; unset uses the default, set empty allows no live discovery: pre-registered clients and DCR only) |
+| `OCMS_OAUTH_PRE_REGISTERED_CLIENTS` | No | Empty | JSON array of owner-reviewed public client metadata; at most 20 documents / 64 KiB |
+| `OCMS_OAUTH_ALLOW_DCR` | No | `false` | Allow bounded public-client dynamic registration |
+| `OCMS_OAUTH_DCR_INITIAL_ACCESS_TOKEN` | No | Empty | Require a separate Bearer credential for new dynamic client registrations. Generate with `openssl rand -hex 32` |
+| `OCMS_OAUTH_ACCESS_TTL` | No | `3600` | OAuth access lifetime in seconds (60–86400) |
+| `OCMS_OAUTH_REFRESH_TTL_DAYS` | No | `30` | Absolute rotating refresh-family lifetime (1–90 days) |
+| `OCMS_PREVIEW_LINK_TTL_HOURS` | No | `24` | Preview share-link lifetime in hours (1–24), capped by the issuing credential's expiry |
+| `OCMS_AI_DISABLED` | No | `false` | Disable draft authoring while retaining normal reads |
 | `OCMS_DO_SEED` | No | `false` | Enable database seeding (admin user, config, menus) |
+| `OCMS_SEED_ADMIN_PASSWORD` | No | - | Password for the seeded admin instead of the documented default (min 12 characters) |
+| `OCMS_REQUIRE_SEED_ADMIN_PASSWORD` | No | `false` | Refuse to seed without `OCMS_SEED_ADMIN_PASSWORD` (Fly staging bootstrap) |
 | `OCMS_DEMO_MODE` | No | `false` | Enable demo content seeding (demo users, pages, media) |
 
 ### Cache
@@ -279,7 +308,7 @@ Summary (grouped by concern; source of truth: `internal/config/config.go`):
 
 ## Default Credentials
 
-When `OCMS_DO_SEED=true`, seeds admin user: `admin@example.com` / `changeme1234`
+Local bootstrap requires explicit `OCMS_ENV=development`. With `OCMS_DO_SEED=true`, it seeds `admin@example.com` / `changeme1234` unless a seed password is configured. Outside development, seeding requires explicit demo mode.
 
 When `OCMS_DEMO_MODE=true`, also seeds demo users: `demo@example.com` (admin; its password is rotated to a random value on every startup and shown in the informer bar, and the default admin's password is rotated too while it is still `changeme1234`) and `editor@example.com` / `demo1234demo` (editor)
 
@@ -339,12 +368,32 @@ Only `AuthHandler.grantSession` may put `SessionKeyUserID` into a session (`Test
 The spec is derived from Go types via [huma v2](https://huma.rocks/); domain services live under `internal/api/v2/{pages,media,taxonomy}` and MUST NOT import anything from the legacy v1 package (which no longer exists).
 
 ### MCP Server (opt-in module `mcp`, `modules/mcpserver`)
-- `POST /api/mcp` - Streamable HTTP MCP endpoint (stateless, JSON responses); API key with `mcp:access` required; read-only tools
+- `POST /api/mcp` uses stateless Streamable HTTP with JSON responses.
+  API keys and optional OAuth access tokens need `mcp:access`. Enabling draft
+  authoring adds owned draft creation, updates, translation and explicit
+  share-link tools for credentials with `mcp:drafts`.
 - `/admin/mcp` - Endpoint, client snippets, drafts policy, agent instructions, tool catalog (admin only)
 
-Tools are thin adapters over the v2 domain services; their input/output schemas come from the same huma struct tags. `modules/mcpserver/catalog.go` is the single source of truth: every REST v2 operation needs a tool or an entry in `restOperationsNotExposed` (`TestEveryRESTOperationHasMCPDecision`), and every tool must stay read-only (`TestEveryRegisteredToolIsReadOnly`).
+Tools are thin adapters over the v2 domain services; their input/output schemas come from the same huma struct tags. `modules/mcpserver/catalog.go` is the single source of truth: every REST v2 operation needs a tool or an entry in `restOperationsNotExposed` (`TestEveryRESTOperationHasMCPDecision`). The catalog classifies read/create/update/share operations (`TestEveryRegisteredToolHasTheExpectedMutationClass`). R1.5 adds gated owned draft tools over `internal/ai/authoring`, retained idempotency, CAS and translation fingerprints; no tool publishes or deletes. `internal/oauth` owns the opt-in code/refresh server, hashed SQLite storage, bounded CIMD, fresh-login consent and grant revocation. Claude Desktop, claude.ai and ChatGPT web passed full GUI OAuth flows on `f66bd7b4d5fa` (2026-10-31) and fresh reads on `c885da9071eb` (2026-11-01). Both CLI OAuth lifecycles and bearer modes passed on `c885da9071eb`; test keys were deactivated afterward. External public IPv6/TLS and forwarding-spoof resistance also passed from an independent probe on 2026-11-01, closing R1.1. See `docs/oauth.md` and the current R1.1 matrix in `.claude/docs/PHASE5.md`. R1.2 adds the local shared page-write boundary, complete revisions/provenance, editor CAS/AI consent and retained idempotency. See `docs/page-writes.md` for the contract and writer inventory. R1.3 adds `internal/ai/draft` for strict presence/null schemas, validation issues, Markdown/media conversion and link policy; see `docs/draft-contract.md`. R1.4 adds shared `internal/contentpath` routing, `internal/ai/grounding`/`prompts`, core editorial guidance and MCP context/resource/prompt parity; see `docs/authoring-context.md`. R1.5 exposes the draft operations and removes the retired compatibility probe; see `docs/draft-authoring.md`. R1.6 adds editorial review, claim acknowledgments, revision comparisons, isolated recorded previews and explicit expiring share links; see `docs/editorial-review.md`. R1.6 is deployed on staging: tested Claude/ChatGPT web draft/review flows passed on `ff4de3b1368c`, and fresh fragment/POST sharing checks passed on `31c55f8c9f67` (2026-11-02), including anonymous pinned rendering, revocation/expiry and Fly proxy-log inspection. Proxy error URL fields were empty; browser traces provide the direct proof that share bearers stay out of request targets. See the R1.6 transport rollout record in `.claude/docs/PHASE5.md`. R1.7 client acceptance and remaining release gates are recorded below.
+
+See [R1.7 release acceptance](docs/launch/r17-acceptance.md) for the latest
+verified MCP staging rollout and the build-specific client results.
+Native-initiated Desktop reconnect passed on `ba044434`. The owner reviewed
+and published the staging demo with both translations Current. The final
+walkthrough is complete.
+`internal/connectedapps` provides safe, paginated
+OAuth/MCP-key metadata and transaction-checked owner/admin revocation through
+`/account/connected-apps` and `/admin/mcp`. `internal/oauth/retention.go` and
+`core:oauth_cleanup` drain retired families in bounded atomic batches, retaining
+every token/spent-refresh hash of active families. API-key permission parsing
+rejects malformed/non-string arrays. See `docs/connected-apps.md`, the bundled
+`docs/skills/ocms-author/SKILL.md` and the R1.7 phase notes for verification and
+remaining release gates. Release 1 still awaits owner sign-off on the release
+version, integration and tag. Git writes, deployments and production
+publication require their own approvals.
 
 ### Health Check Routes
+
 - `GET /health` - Overall health status (200 OK / 503 Service Unavailable)
 - `GET /health/live` - Liveness probe (always returns `{"status":"alive"}`)
 - `GET /health/ready` - Readiness probe (checks database connectivity)
@@ -372,7 +421,7 @@ curl -H "Authorization: Bearer YOUR_API_KEY" http://localhost:8080/health
 **CRITICAL**: After ANY code change (no exceptions - includes refactoring, renaming, style fixes, test changes, etc.), you MUST:
 
 1. **Rebuild assets**: Run `make assets` to install JS deps and compile SCSS
-2. **Restart the server**: Run `make dev` or restart any running server
+2. **Run the server**: Use `OCMS_ENV=development make dev` for local testing
 3. **Test the application with HTTP requests**:
    - Verify homepage loads: `curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/`
    - Verify admin dashboard loads: `curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/admin/`
@@ -385,7 +434,7 @@ curl -H "Authorization: Bearer YOUR_API_KEY" http://localhost:8080/health
 Example testing workflow:
 ```bash
 # Start server in background
-OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!! go run ./cmd/ocms &
+OCMS_ENV=development OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!! go run ./cmd/ocms &
 
 # Wait for server to start
 sleep 3
@@ -413,9 +462,13 @@ Never tell the user to "restart the server and test" - always run the tests your
 
 It runs at these points, and a failing test blocks each:
 
-1. **`/commit-prepare`** (and `scripts/codex/commit-prepare.sh`), before a commit message is drafted
-2. **`scripts/codex/commit-do.sh`** (`make commit-do-local`), on the staged tree before it commits (gitignored files in the working tree are tested too, though not committed)
+1. **`/commit-prepare`** (and `scripts/codex/commit-prepare.sh`), on the exact candidate tree in a fresh snapshot before a commit message is drafted. The launcher uses the staged tree or the individual files named after `--`.
+2. **`scripts/codex/commit-do.sh`** (`make commit-do` and `make commit-do-local`), in a fresh snapshot of the prepared staged tree. The terminal prompt requires an explicit `YES` for that message and tree before Git runs the commit hooks.
 3. **`git push`**, through the `pre-push` hook (`.githooks/pre-push`), on exactly the commit being pushed. The hook refuses to push a ref that is not `HEAD`, or a tree with uncommitted or untracked files, because it tests the working tree.
+
+The local snapshot helper rebuilds assets with `CI=true` and checks out the
+recorded `.claude/shared` revision. It requires the build tools and versioned
+Go dependencies. Use a trusted checkout for these commands.
 
 Install the hook once per clone:
 
@@ -692,7 +745,7 @@ Additional documentation is available in the `docs/` directory:
 - `docs/custom-modules.md` - Custom module creation, self-registration pattern, and module interface
 - `docs/custom-themes.md` - Custom theme creation, template structure, settings, translations, and testing
 - `docs/agent-ready.md` - Agent-Ready discovery (Link header, Markdown-for-Agents, `/.well-known/*` surfaces)
-- `docs/mcp-module.md` - MCP Server module: `/api/mcp` endpoint for AI agents, read-only tools, `mcp:access`, drafts policy, limits
+- `docs/mcp-module.md` - MCP Server module: `/api/mcp` context and gated draft tools, scope/policy, limits
 
 Security audit documents are available in the `.audit/` directory (gitignored).
 
@@ -780,15 +833,17 @@ Module system specialist. Creates and manages modules with lifecycle hooks and i
 **Invoke:** `@module-developer`
 
 ### security-auditor
-Security vulnerability scanner and auditor. Identifies security issues and ensures best practices.
+Read-only security reviewer. Analyzes source, configuration and existing scan reports, then returns findings and proposed remediation.
 
 **Usage examples:**
-- "Scan for vulnerabilities"
-- "Check for security issues in dependencies"
+- "Review these vulnerability scan results"
+- "Assess the dependency findings in this report"
 - "Review CSRF protection"
 - "Audit API authentication"
 
-**Invoke:** `@security-auditor` or use the `/security-audit` command
+**Invoke:** `@security-auditor` for a review of source and existing evidence.
+The caller saves any separate section reports. Use `make security-audit-local`
+in a terminal for fresh dependency scan logs.
 
 ### code-quality-auditor
 Code quality scanner for Go applications. Detects duplicate code, unhandled errors, constant comparisons, empty slice literals, package name collisions, and high-risk DOM-XSS sink flows (`innerHTML`, redirect sinks).
@@ -818,7 +873,7 @@ Admin Dashboard UX developer. Creates and modifies admin UI components using tem
 Quick commands for common development tasks:
 
 ### /test
-Run all Go tests with verbose output and coverage reporting. Sets the required `OCMS_SESSION_SECRET` environment variable automatically.
+Run all Go tests uncached with verbose output, coverage reporting and a development session secret.
 
 ### /build
 Build the production binary. Compiles SCSS assets and creates the `bin/ocms` binary.
@@ -836,13 +891,14 @@ Start the development server with asset compilation. Runs `make dev` and reports
 Test REST API endpoints with actual HTTP requests. Starts server, runs curl tests, and reports results.
 
 ### /security-audit
-Perform a comprehensive security audit and store reports in `.audit/`.
+Hand off to `make security-audit` in a terminal. The launcher saves the
+combined Markdown report under `.audit/run-*/report.md`.
 
 ### /code-quality
 Scan the project for code quality issues including unhandled errors, duplicate code, constant comparisons, empty slice literals, package name collisions, CSP template safety, and high-risk DOM-XSS sink flows (`innerHTML`, redirect sinks).
 
 ### /commit-prepare
-Review changes and prepare a commit message. Runs `/code-quality` first and asks for confirmation if issues are found before proceeding with the commit message.
+Test the exact candidate tree before preparing a draft. Use `quality` or `q` to include quality checks. `/commit-do` hands off approval of the tested tree and message to the terminal helper.
 
 ### /templui-add
 Add templUI components to the project. Handles CLI installation, `.templui.json` initialization, component download, Tailwind CSS source scanning, and post-install steps (`templ generate`, `go mod tidy`, `make assets`).
@@ -885,7 +941,7 @@ Deploy the application to Fly.io. Supports `--reset` (reset database), `--logs` 
 
 /api-test
 
-@security-auditor Scan for vulnerabilities and create an audit report
+@security-auditor Review the authentication code and return your findings
 
 /security-audit
 

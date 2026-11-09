@@ -65,6 +65,9 @@ func (m *Module) getCurrentSalt() string {
 	m.settingsMu.RUnlock()
 
 	// Need to rotate salt
+	m.settingsWriteMu.Lock()
+	defer m.settingsWriteMu.Unlock()
+
 	m.settingsMu.Lock()
 	defer m.settingsMu.Unlock()
 

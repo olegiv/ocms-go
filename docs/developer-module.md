@@ -38,7 +38,7 @@ for _, mod := range modules {
 
 The module is limited to the `development` environment: in any other
 environment it is inserted as inactive on first registration, and it refuses
-to initialize when `OCMS_ENV` is `production`.
+to initialize outside development, including when `OCMS_ENV` is unset or empty.
 
 ## Admin Interface
 

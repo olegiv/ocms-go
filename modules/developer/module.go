@@ -52,8 +52,8 @@ func (m *Module) AllowedEnvs() []string {
 // The developer module is blocked in production environments for security.
 func (m *Module) Init(ctx *module.Context) error {
 	// Security: Developer module must never run in production
-	if ctx.Config.Env == "production" {
-		return fmt.Errorf("developer module cannot be enabled in production environment")
+	if ctx.Config.IsProductionLike() {
+		return fmt.Errorf("developer module cannot be enabled outside development (OCMS_ENV=%s)", ctx.Config.Env)
 	}
 
 	m.ctx = ctx

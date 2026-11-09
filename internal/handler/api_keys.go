@@ -4,6 +4,7 @@
 package handler
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -44,6 +45,7 @@ var apiKeysSortableFields = map[string]SortConfig{
 
 // APIKeysHandler handles API key management routes.
 type APIKeysHandler struct {
+	db                 *sql.DB
 	queries            *store.Queries
 	renderer           *render.Renderer
 	sessionManager     *scs.SessionManager
@@ -56,6 +58,7 @@ type APIKeysHandler struct {
 // NewAPIKeysHandler creates a new APIKeysHandler.
 func NewAPIKeysHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager) *APIKeysHandler {
 	return &APIKeysHandler{
+		db:             db,
 		queries:        store.New(db),
 		renderer:       renderer,
 		sessionManager: sm,
@@ -347,30 +350,20 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Convert permissions to JSON
 	permissionsJSON := model.PermissionsToJSON(input.Permissions)
 
-	// Update API key
-	now := time.Now()
-	_, err := h.queries.UpdateAPIKey(r.Context(), store.UpdateAPIKeyParams{
+	// The transaction lives in updateAPIKey, so it is finished before any
+	// flash or redirect below: the session commit that answering triggers
+	// needs the SQLite write lock the transaction holds.
+	if err := h.updateAPIKey(r.Context(), store.UpdateAPIKeyParams{
 		Name:        input.Name,
 		Permissions: permissionsJSON,
 		ExpiresAt:   input.ExpiresAt,
 		IsActive:    isActive,
-		UpdatedAt:   now,
+		UpdatedAt:   time.Now(),
 		ID:          id,
-	})
-	if err != nil {
-		slog.Error("failed to update API key", "error", err)
+	}, input.SourceCIDRs); err != nil {
+		slog.Error("failed to update API key", "error", err, "key_id", id)
 		flashError(w, r, h.renderer, redirectAdminAPIKeysSlash+idStr, "Error updating API key")
 		return
-	}
-
-	if err := h.queries.ReplaceAPIKeySourceCIDRs(r.Context(), id, input.SourceCIDRs); err != nil {
-		if isMissingAPIKeySourceCIDRTable(err) {
-			slog.Warn("api key source CIDR table missing; skipping per-key source allowlist", "key_id", id)
-		} else {
-			slog.Error("failed to update API key source CIDRs", "error", err, "key_id", id)
-			flashError(w, r, h.renderer, redirectAdminAPIKeysSlash+idStr, "Error updating API key")
-			return
-		}
 	}
 
 	slog.Info("API key updated", "key_id", id, "updated_by", middleware.GetUserID(r))
@@ -382,17 +375,44 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 	flashSuccess(w, r, h.renderer, redirectAdminAPIKeys, "API key updated successfully")
 }
 
+// updateAPIKey commits a key's metadata and its source policy together. In
+// particular, a newly enabled permission must not become visible under the
+// previous policy. The transaction is committed or rolled back when it
+// returns, so callers may answer the request right after: an open write
+// transaction would make the session commit of that answer wait for the lock.
+func (h *APIKeysHandler) updateAPIKey(ctx context.Context, params store.UpdateAPIKeyParams, sourceCIDRs []string) error {
+	tx, err := h.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin API key update: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	queries := h.queries.WithTx(tx)
+	if _, err = queries.UpdateAPIKey(ctx, params); err != nil {
+		return fmt.Errorf("update API key: %w", err)
+	}
+	if err = queries.ReplaceAPIKeySourceCIDRs(ctx, params.ID, sourceCIDRs); err != nil {
+		if !isMissingAPIKeySourceCIDRTable(err) {
+			return fmt.Errorf("update API key source CIDRs: %w", err)
+		}
+		slog.Warn("api key source CIDR table missing; skipping per-key source allowlist", "key_id", params.ID)
+	}
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("commit API key update: %w", err)
+	}
+	return nil
+}
+
 // Delete handles DELETE /admin/api-keys/{id} - deletes (deactivates) an API key.
 func (h *APIKeysHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	// Block in demo mode
 	if middleware.IsDemoMode() {
-		h.sendDeleteError(w, middleware.DemoModeMessageDetailed(middleware.RestrictionAPIKeys))
+		writeDeleteError(w, middleware.DemoModeMessageDetailed(middleware.RestrictionAPIKeys))
 		return
 	}
 
 	id, _, ok := parseAPIKeyID(r)
 	if !ok {
-		h.sendDeleteError(w, "Invalid API key ID")
+		writeDeleteError(w, "Invalid API key ID")
 		return
 	}
 
@@ -410,7 +430,7 @@ func (h *APIKeysHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to deactivate API key", "error", err)
-		h.sendDeleteError(w, "Error revoking API key")
+		writeDeleteError(w, "Error revoking API key")
 		return
 	}
 
@@ -472,13 +492,6 @@ func (h *APIKeysHandler) BulkDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeBulkActionSuccess(w, deleted, failed)
-}
-
-// sendDeleteError sends an error response for delete operations.
-func (h *APIKeysHandler) sendDeleteError(w http.ResponseWriter, message string) {
-	w.Header().Set("HX-Reswap", "none")
-	w.Header().Set("HX-Trigger", `{"showToast": "`+message+`", "toastType": "error"}`)
-	w.WriteHeader(http.StatusBadRequest)
 }
 
 // apiKeyFormInput holds parsed form input for API key creation/update.
@@ -699,12 +712,12 @@ func (h *APIKeysHandler) fetchAPIKey(w http.ResponseWriter, r *http.Request, id 
 }
 
 // fetchAPIKeyForDelete fetches an API key by ID for delete operations.
-// Uses sendDeleteError for error responses (HTMX-compatible).
+// Uses writeDeleteError for error responses (HTMX-compatible).
 // Returns the API key and true if successful, or zero value and false if an error occurred.
 func (h *APIKeysHandler) fetchAPIKeyForDelete(w http.ResponseWriter, r *http.Request, id int64) (store.ApiKey, bool) {
 	return requireEntityWithCustomError(w, "API key", id,
 		func(id int64) (store.ApiKey, error) { return h.queries.GetAPIKeyByID(r.Context(), id) },
-		h.sendDeleteError)
+		writeDeleteError)
 }
 
 // renderAPIKeyForm renders the API key form using templ.

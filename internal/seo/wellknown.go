@@ -137,8 +137,10 @@ type MCPToolsCapability struct{}
 
 // MCPCapabilities is the capabilities object declared by the server.
 type MCPCapabilities struct {
-	Tools *MCPToolsCapability `json:"tools,omitempty"`
-	REST  *MCPRESTCapability  `json:"rest,omitempty"`
+	Tools     *MCPToolsCapability `json:"tools,omitempty"`
+	Prompts   *MCPToolsCapability `json:"prompts,omitempty"`
+	Resources *MCPToolsCapability `json:"resources,omitempty"`
+	REST      *MCPRESTCapability  `json:"rest,omitempty"`
 }
 
 // MCPTransport is the transport object required by the SEP-1649 draft.
@@ -151,6 +153,8 @@ type MCPTransport struct {
 // MCP server is actually reachable, so the card never advertises an endpoint
 // that would answer 404.
 type MCPEndpoint struct {
+	Prompts          bool
+	Resources        bool
 	Path             string   // site-relative endpoint path, e.g. "/api/mcp"
 	Name             string   // serverInfo.name the endpoint reports at initialize
 	Title            string   // serverInfo.title the endpoint reports at initialize
@@ -212,6 +216,12 @@ func BuildMCPServerCard(siteURL, version string, endpoint *MCPEndpoint) []byte {
 		card.ServerInfo = MCPServerInfo{Name: endpoint.Name, Title: endpoint.Title, Version: endpoint.Version}
 		card.Transport = &MCPTransport{Type: mcpStreamableHTTP, Endpoint: endpointURL}
 		card.Capabilities.Tools = &MCPToolsCapability{}
+		if endpoint.Prompts {
+			card.Capabilities.Prompts = &MCPToolsCapability{}
+		}
+		if endpoint.Resources {
+			card.Capabilities.Resources = &MCPToolsCapability{}
+		}
 	}
 	out, _ := json.MarshalIndent(card, "", "  ")
 	return out

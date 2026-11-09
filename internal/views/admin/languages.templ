@@ -226,7 +226,7 @@ templ LanguageFormPage(pc *PageContext, data LanguageFormData) {
 		}
 		@card.Card(card.Props{}) {
 			@card.Content() {
-				<form method="POST" action={ languageFormAction(data) } class="form" x-data={ languageFormAlpineData(data) }>
+				<form method="POST" action={ languageFormAction(data) } class="form" x-data="languageForm" data-language={ languageFormJSON(data) }>
 					if data.IsEdit {
 						<input type="hidden" name="_method" value="PUT"/>
 					}
@@ -422,21 +422,24 @@ templ LanguageFormPage(pc *PageContext, data LanguageFormData) {
 				</form>
 			}
 		}
-		if !data.IsEdit {
-			@languageFormScript()
-		}
+		@languageFormScript()
 	}
 }
 
-// languageFormScript renders the Alpine.js script for the quick-select feature.
+// languageFormScript initializes the fields and handles the quick-select feature.
 templ languageFormScript() {
 	<script nonce={ templ.GetNonce(ctx) }>
+	document.addEventListener('alpine:init', () => Alpine.data('languageForm', languageForm));
+
 	function languageForm() {
 		return {
 			code: '',
 			name: '',
 			nativeName: '',
 			direction: 'ltr',
+			init() {
+				Object.assign(this, JSON.parse(this.$el.dataset.language));
+			},
 			selectLanguage(value) {
 				if (!value) return;
 				const parts = value.split('|');
@@ -525,21 +528,21 @@ func languageCurrentDirection(data LanguageFormData) string {
 	return "ltr"
 }
 
-func languageFormAlpineData(data LanguageFormData) string {
-	if data.IsEdit {
-		payload := map[string]string{
-			"code":       languageFormValue(data, "code"),
-			"name":       languageFormValue(data, "name"),
-			"nativeName": languageFormValue(data, "native_name"),
-			"direction":  languageCurrentDirection(data),
-		}
-		encoded, err := json.Marshal(payload)
-		if err != nil {
-			return "{}"
-		}
-		return string(encoded)
+func languageFormJSON(data LanguageFormData) string {
+	if !data.IsEdit {
+		return "{}"
 	}
-	return "languageForm()"
+	payload := map[string]string{
+		"code":       languageFormValue(data, "code"),
+		"name":       languageFormValue(data, "name"),
+		"nativeName": languageFormValue(data, "native_name"),
+		"direction":  languageCurrentDirection(data),
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return "{}"
+	}
+	return string(encoded)
 }
 
 func languageFormTitle(pc *PageContext, isEdit bool) string {

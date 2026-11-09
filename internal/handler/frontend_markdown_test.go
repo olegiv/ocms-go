@@ -186,10 +186,9 @@ func TestFrontendHandler_Page_Markdown_DraftAnonymousGets404(t *testing.T) {
 	}
 }
 
-// TestFrontendHandler_Page_Markdown_DraftEditorSeesMarkdown verifies that an
-// authenticated editor receives a draft rendered as markdown — symmetric to
-// the HTML draft-preview path.
-func TestFrontendHandler_Page_Markdown_DraftEditorSeesMarkdown(t *testing.T) {
+// TestFrontendHandler_Page_Markdown_DraftEditorGetsIsolatedPreview verifies
+// that draft content negotiation cannot bypass the isolated revision renderer.
+func TestFrontendHandler_Page_Markdown_DraftEditorGetsIsolatedPreview(t *testing.T) {
 	db, _ := testHandlerSetup(t)
 	admin := createTestAdminUser(t, db)
 	seedSiteURL(t, db)
@@ -211,12 +210,12 @@ func TestFrontendHandler_Page_Markdown_DraftEditorSeesMarkdown(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("editor status = %d; want 200", resp.StatusCode)
 	}
-	if ct := resp.Header.Get("Content-Type"); ct != "text/markdown; charset=utf-8" {
-		t.Errorf("editor Content-Type = %q; want text/markdown", ct)
+	if ct := resp.Header.Get("Content-Type"); ct != "text/html; charset=utf-8" {
+		t.Errorf("editor Content-Type = %q; want isolated HTML preview", ct)
 	}
 	body := w.Body.String()
-	if !strings.Contains(body, "# Draft Page") {
-		t.Errorf("editor draft markdown missing H1 title:\n%s", body)
+	if !strings.Contains(body, "Draft Page") {
+		t.Errorf("editor draft preview missing title:\n%s", body)
 	}
 }
 

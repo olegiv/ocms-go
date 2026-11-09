@@ -450,13 +450,13 @@ func (h *WebhooksHandler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *WebhooksHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	// Block in demo mode
 	if middleware.IsDemoMode() {
-		h.sendDeleteError(w, middleware.DemoModeMessageDetailed(middleware.RestrictionWebhooks))
+		writeDeleteError(w, middleware.DemoModeMessageDetailed(middleware.RestrictionWebhooks))
 		return
 	}
 
 	id, err := ParseIDParam(r)
 	if err != nil {
-		h.sendDeleteError(w, "Invalid webhook ID")
+		writeDeleteError(w, "Invalid webhook ID")
 		return
 	}
 
@@ -467,7 +467,7 @@ func (h *WebhooksHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.queries.DeleteWebhook(r.Context(), id); err != nil {
 		slog.Error("failed to delete webhook", "error", err)
-		h.sendDeleteError(w, "Error deleting webhook")
+		writeDeleteError(w, "Error deleting webhook")
 		return
 	}
 
@@ -537,6 +537,9 @@ func (h *WebhooksHandler) Deliveries(w http.ResponseWriter, r *http.Request) {
 
 // Test handles POST /admin/webhooks/{id}/test - sends a test event.
 func (h *WebhooksHandler) Test(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionWebhooks, redirectAdminWebhooks) {
+		return
+	}
 	id, err := ParseIDParam(r)
 	if err != nil {
 		flashError(w, r, h.renderer, redirectAdminWebhooks, "Invalid webhook ID")
@@ -585,6 +588,9 @@ func (h *WebhooksHandler) Test(w http.ResponseWriter, r *http.Request) {
 
 // RetryDelivery handles POST /admin/webhooks/{id}/deliveries/{did}/retry - retries a delivery.
 func (h *WebhooksHandler) RetryDelivery(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionWebhooks, redirectAdminWebhooks) {
+		return
+	}
 	webhookIDStr := chi.URLParam(r, "id")
 	webhookID, err := strconv.ParseInt(webhookIDStr, 10, 64)
 	if err != nil {
@@ -615,13 +621,6 @@ func (h *WebhooksHandler) RetryDelivery(w http.ResponseWriter, r *http.Request) 
 	flashSuccess(w, r, h.renderer, fmt.Sprintf(redirectAdminWebhooksIDDeliveries, webhookID), "Delivery queued for retry")
 }
 
-// sendDeleteError sends an error response for delete operations.
-func (h *WebhooksHandler) sendDeleteError(w http.ResponseWriter, message string) {
-	w.Header().Set("HX-Reswap", "none")
-	w.Header().Set("HX-Trigger", `{"showToast": "`+message+`", "toastType": "error"}`)
-	w.WriteHeader(http.StatusBadRequest)
-}
-
 // requireWebhookWithRedirect fetches a webhook by ID and redirects with flash on error.
 func (h *WebhooksHandler) requireWebhookWithRedirect(w http.ResponseWriter, r *http.Request, id int64) (store.Webhook, bool) {
 	return requireEntityWithRedirect(w, r, h.renderer, redirectAdminWebhooks, "Webhook", id,
@@ -632,7 +631,7 @@ func (h *WebhooksHandler) requireWebhookWithRedirect(w http.ResponseWriter, r *h
 func (h *WebhooksHandler) requireWebhookWithDeleteError(w http.ResponseWriter, r *http.Request, id int64) (store.Webhook, bool) {
 	return requireEntityWithCustomError(w, "Webhook", id,
 		func(id int64) (store.Webhook, error) { return h.queries.GetWebhookByID(r.Context(), id) },
-		h.sendDeleteError)
+		writeDeleteError)
 }
 
 // webhookFormInput holds parsed form values for webhook create/update.

@@ -1,0 +1,131 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package admin
+
+import "github.com/olegiv/ocms-go/internal/views/components/button"
+import "github.com/olegiv/ocms-go/internal/views/components/card"
+import "github.com/olegiv/ocms-go/internal/views/components/input"
+import "github.com/olegiv/ocms-go/internal/views/components/label"
+import "github.com/olegiv/ocms-go/internal/views/components/textarea"
+
+type EditorialOption struct{ Code, Name, URL string }
+type EditorialData struct {
+	LanguageCode, DefaultURL, Guide, PresetSlug, PresetName, PresetInstructions, Error string
+	Inherited, IsDemoMode                                                              bool
+	Languages, Presets                                                                 []EditorialOption
+}
+
+templ EditorialPage(pc *PageContext, data EditorialData) {
+	@AdminLayout(pc) {
+		@PageHeader(pc.T("editorial.title"), pc.T("editorial.description"))
+		<div class="space-y-6 max-w-5xl">
+			if data.Error != "" {
+				<p role="alert" class="rounded border border-destructive p-4 text-destructive">{ data.Error }</p>
+			}
+			@card.Card() {
+				@card.Header() {
+					@card.Title() {
+						{ pc.T("editorial.language") }
+					}
+				}
+				@card.Content(card.ContentProps{Class: "pt-4"}) {
+					<nav aria-label={ pc.T("editorial.language") } class="flex flex-wrap gap-2">
+						@button.Button(button.Props{Href: data.DefaultURL, Variant: editorialVariant(data.LanguageCode == ""), Attributes: templ.Attributes{"aria-current": editorialCurrent(data.LanguageCode == "")}}) {
+							{ pc.T("editorial.default") }
+						}
+						for _,language:=range data.Languages {
+							@button.Button(button.Props{Href: language.URL, Variant: editorialVariant(data.LanguageCode == language.Code), Attributes: templ.Attributes{"aria-current": editorialCurrent(data.LanguageCode == language.Code)}}) {
+								{ language.Name } <span class="text-muted-foreground">{ language.Code }</span>
+							}
+						}
+					</nav>
+				}
+			}
+			@card.Card() {
+				@card.Header() {
+					@card.Title() {
+						{ pc.T("editorial.guide") }
+					}
+					@card.Description() {
+						{ pc.T("editorial.guide_help") }
+					}
+				}
+				@card.Content(card.ContentProps{Class: "pt-4"}) {
+					if data.Inherited {
+						<p class="mb-3 text-sm text-muted-foreground">{ pc.T("editorial.inherited") }</p>
+					}
+					<form method="POST" action="/admin/editorial" class="space-y-4">
+						@csrfField()
+						<input type="hidden" name="kind" value="guide"/>
+						<input type="hidden" name="language_code" value={ data.LanguageCode }/>
+						<input type="hidden" name="preset" value={ data.PresetSlug }/>
+						@label.Label(label.Props{For: "editorial-guide"}) {
+							{ pc.T("editorial.guide_body") }
+						}
+						@textarea.Textarea(textarea.Props{ID: "editorial-guide", Name: "guide", Value: data.Guide, Rows: 10, Readonly: data.IsDemoMode, Attributes: templ.Attributes{"maxlength": "8000"}})
+						if data.LanguageCode != "" {
+							<p class="text-sm text-muted-foreground">{ pc.T("editorial.reset_help") }</p>
+						}
+						@button.Button(button.Props{Type: button.TypeSubmit, Disabled: data.IsDemoMode}) {
+							{ pc.T("editorial.save_guide") }
+						}
+					</form>
+				}
+			}
+			@card.Card() {
+				@card.Header() {
+					@card.Title() {
+						{ pc.T("editorial.presets") }
+					}
+					@card.Description() {
+						{ pc.T("editorial.preset_help") }
+					}
+				}
+				@card.Content(card.ContentProps{Class: "pt-4 space-y-4"}) {
+					<nav aria-label={ pc.T("editorial.presets") } class="flex flex-wrap gap-2">
+						for _,preset:=range data.Presets {
+							@button.Button(button.Props{Href: preset.URL, Variant: editorialVariant(data.PresetSlug == preset.Code), Attributes: templ.Attributes{"aria-current": editorialCurrent(data.PresetSlug == preset.Code)}}) {
+								{ preset.Name }
+							}
+						}
+					</nav>
+					<form method="POST" action="/admin/editorial" class="space-y-4">
+						@csrfField()
+						<input type="hidden" name="kind" value="preset"/>
+						<input type="hidden" name="language_code" value={ data.LanguageCode }/>
+						<input type="hidden" name="preset" value={ data.PresetSlug }/>
+						@label.Label(label.Props{For: "editorial-preset-name"}) {
+							{ pc.T("editorial.preset_name") }
+						}
+						@input.Input(input.Props{ID: "editorial-preset-name", Name: "name", Value: data.PresetName, Readonly: data.IsDemoMode, Attributes: templ.Attributes{"maxlength": "100"}})
+						@label.Label(label.Props{For: "editorial-preset-instructions"}) {
+							{ pc.T("editorial.preset_instructions") }
+						}
+						@textarea.Textarea(textarea.Props{ID: "editorial-preset-instructions", Name: "instructions", Value: data.PresetInstructions, Rows: 7, Readonly: data.IsDemoMode, Attributes: templ.Attributes{"maxlength": "4000"}})
+						if data.LanguageCode != "" {
+							<p class="text-sm text-muted-foreground">{ pc.T("editorial.reset_preset_help") }</p>
+						}
+						@button.Button(button.Props{Type: button.TypeSubmit, Disabled: data.IsDemoMode}) {
+							{ pc.T("editorial.save_preset") }
+						}
+					</form>
+				}
+			}
+		</div>
+	}
+}
+
+func editorialCurrent(active bool) string {
+	if active {
+		return "page"
+	}
+	return "false"
+}
+
+func editorialVariant(active bool) button.Variant {
+	if active {
+		return button.VariantDefault
+	}
+	return button.VariantOutline
+}

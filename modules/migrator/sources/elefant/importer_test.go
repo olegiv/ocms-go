@@ -497,6 +497,8 @@ func TestImportPagesPreservesSafeLegacyAlias(t *testing.T) {
 	if !foundTrackedAlias {
 		t.Fatalf("alias tracking entry missing: %v", tracker.items)
 	}
+	testutil.AssertPageRevision(t, queries, page.ID, 2)
+
 }
 
 func TestImportPagesRefusesLegacyAliasShadowedByExistingPageSlug(t *testing.T) {

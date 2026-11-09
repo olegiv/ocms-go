@@ -229,6 +229,16 @@ API keys (REST API, MCP server, `/health`) authenticate with a bearer token,
 not a session, and are not affected; restrict them with their own expiry and
 source-CIDR policies. Passkeys (WebAuthn) as a second factor are planned.
 
+Optional [MCP OAuth](oauth.md) is bound to the account's credential/session
+version, so password and second-factor resets also invalidate its grants.
+Its authorization screen requires a fresh complete password/MFA sign-in
+after the authorization request starts. A previously verified session alone
+cannot approve a new connection. Consent is session-bound, single-use and
+expires after ten minutes. Revoke a connection in **Account → Security →
+Connected AI apps**; the next MCP request fails, including on an existing
+client connection. Current account role/deletion checks also apply to OAuth
+tokens and MCP API-key owners.
+
 ## Session Lifetime
 
 Sessions are stored server-side; the session row holds the data and the cookie only carries its token. A session ends after **24 hours** regardless of activity, and after **2 hours** without any request; each request renews the idle window. This applies to every session, admin and public alike.
@@ -267,6 +277,12 @@ All login-related events are logged to the events system:
 | User logged in | Info | Successful login; metadata `second_factor` names `totp` or `recovery_code` when one was used |
 
 View these events in the admin panel under **Admin > Events**.
+
+Login, lockout, MFA, and related account security records are kept indefinitely
+by default. Set `OCMS_EVENT_AUDIT_RETENTION_DAYS` to a positive number of days
+to expire classified security and audit records. This affects the Event Log.
+See [Event Log retention](scheduler.md#event-log-retention) for upgrade and
+backup details.
 
 ## Configuration
 

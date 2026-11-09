@@ -613,9 +613,7 @@ templ userMFACard(pc *PageContext, userID int64, status UserMFAStatus) {
 				<form
 					method="POST"
 					action={ templ.SafeURL(fmt.Sprintf("/admin/users/%d/mfa/reset", userID)) }
-					x-data
-					data-confirm={ pc.T("users.mfa_reset_confirm") }
-					@submit="if (!confirm($el.dataset.confirm)) $event.preventDefault()"
+					data-confirm-submit={ pc.T("users.mfa_reset_confirm") }
 				>
 					@csrfField()
 					<p class="form-help mb-4">{ pc.T("users.mfa_reset_help") }</p>

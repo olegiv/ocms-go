@@ -1,0 +1,117 @@
+# Copyright (c) 2025-2026 Oleg Ivanchenko
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# Public MCP acceptance environment. Bootstrap accounts privately first:
+# docs/mcp-staging-fly.md. Always select this file and --ha=false explicitly.
+app = 'ocms-mcp-staging'
+primary_region = 'fra'
+kill_timeout = 60
+
+[build]
+  dockerfile = 'Dockerfile'
+
+  [build.args]
+    VERSION = 'mcp-staging'
+
+[deploy]
+  strategy = 'rolling'
+
+[env]
+  GOMEMLIMIT = '800MiB'
+  OCMS_ENV_FILE = '/dev/null'
+  OCMS_ENV = 'staging'
+  # Dual-stack binding also permits the owner's private 6PN tunnel.
+  OCMS_SERVER_HOST = '[::]'
+  OCMS_SERVER_PORT = '8080'
+  OCMS_SITE_URL = 'https://ocms-mcp-staging.fly.dev'
+  OCMS_DB_PATH = '/app/data/ocms.db'
+  OCMS_UPLOADS_DIR = '/app/data/uploads'
+  OCMS_CUSTOM_DIR = '/app/custom'
+  OCMS_ACTIVE_THEME = 'developer'
+  OCMS_LOG_LEVEL = 'info'
+  OCMS_DEMO_MODE = 'false'
+  OCMS_DO_SEED = 'false'
+  # The bootstrap seeds the first admin with the owner's Fly secret
+  # OCMS_SEED_ADMIN_PASSWORD, never the documented default password.
+  OCMS_REQUIRE_SEED_ADMIN_PASSWORD = 'true'
+  OCMS_REQUIRE_MFA = 'true'
+  OCMS_OAUTH_ENABLED = 'true'
+  OCMS_OAUTH_CIMD_ALLOWED_HOSTS = 'claude.ai,chatgpt.com'
+  # Owner-reviewed Claude public identity (2026-10-31); no account access is granted.
+  # Fly currently receives HTTP 403 from live Claude metadata discovery.
+  OCMS_OAUTH_PRE_REGISTERED_CLIENTS = '[{"client_id":"https://claude.ai/oauth/mcp-oauth-client-metadata","client_name":"Claude","redirect_uris":["https://claude.ai/api/mcp/auth_callback"],"grant_types":["authorization_code","refresh_token"],"response_types":["code"],"token_endpoint_auth_method":"none"},{"client_id":"https://claude.ai/oauth/claude-code-client-metadata","client_name":"Claude Code","redirect_uris":["http://localhost/callback"],"grant_types":["authorization_code","refresh_token"],"response_types":["code"],"token_endpoint_auth_method":"none"}]'
+  OCMS_OAUTH_ALLOW_DCR = 'false'
+  OCMS_OAUTH_ACCESS_TTL = '3600'
+  OCMS_OAUTH_REFRESH_TTL_DAYS = '30'
+  OCMS_AI_DISABLED = 'false'
+  OCMS_SANITIZE_PAGE_HTML = 'true'
+  OCMS_REQUIRE_HTTPS_OUTBOUND = 'true'
+  OCMS_REQUIRE_API_KEY_EXPIRY = 'true'
+  OCMS_REQUIRE_API_KEY_SOURCE_CIDRS = 'true'
+  OCMS_API_KEY_MAX_TTL_DAYS = '90'
+  # Runtime hardening that OCMS_ENV=production and staging turn on by
+  # default. Stated explicitly so the development-mode bootstrap keeps the
+  # same posture (TestFlyStagingMatchesProductionHardening).
+  OCMS_BLOCK_SUSPICIOUS_PAGE_HTML = 'true'
+  OCMS_REQUIRE_FORM_CAPTCHA = 'true'
+  OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE = 'true'
+  OCMS_REQUIRE_WEBHOOK_ALLOWED_HOSTS = 'true'
+  OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS = 'true'
+  # Owner sets SESSION_SECRET, MFA_KEY, TRUSTED_PROXIES (the verified Fly
+  # ingress) and API_ALLOWED_CIDRS through Fly secrets; staging gets the
+  # production startup checks and refuses to start without them.
+  # Do not copy the demo's disabled production posture settings here.
+
+[processes]
+  app = '/app/ocms'
+
+[[mounts]]
+  source = 'ocms_staging_data'
+  destination = '/app/data'
+  initial_size = '1gb'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ['app']
+
+  [http_service.concurrency]
+    type = 'requests'
+    soft_limit = 20
+    hard_limit = 32
+
+  # Service checks gate public request routing; top-level checks below monitor.
+  [[http_service.checks]]
+    grace_period = '15s'
+    interval = '15s'
+    method = 'GET'
+    timeout = '5s'
+    path = '/health/ready'
+
+[checks]
+  [checks.liveness]
+    port = 8080
+    type = 'http'
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '15s'
+    path = '/health/live'
+
+  [checks.readiness]
+    port = 8080
+    type = 'http'
+    interval = '15s'
+    timeout = '5s'
+    grace_period = '15s'
+    path = '/health/ready'
+
+[[restart]]
+  policy = 'always'
+
+[[vm]]
+  cpu_kind = 'shared'
+  cpus = 2
+  memory = '1gb'

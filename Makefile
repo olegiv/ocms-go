@@ -49,11 +49,11 @@ install-test-gate:
 check-no-absolute-paths:
 	./scripts/check-no-absolute-paths.sh --all
 
-# Development server with asset build
+# Server with asset build. Select OCMS_ENV=development explicitly for local runs.
 dev: assets
 	go run $(MAIN_DIR)
 
-# Development server (without asset build)
+# Server without asset build, using the same environment selection as dev.
 run:
 	go run $(MAIN_DIR)
 
@@ -70,6 +70,13 @@ build:
 	@echo "Building $(BINARY_NAME) $(VERSION)..."
 	@mkdir -p $(BUILD_DIR)
 	$(GO) build $(GOFLAGS) -ldflags="$(LDFLAGS_VERSION)" -o $(BUILD_DIR)/$(BINARY_NAME) $(MAIN_DIR)
+
+.PHONY: build-dev-authenticator
+
+# Local agent authenticator; the seed stays in the macOS login Keychain.
+build-dev-authenticator:
+	@mkdir -p $(BUILD_DIR)
+	$(GO) build -o $(BUILD_DIR)/ocms-dev-auth ./cmd/ocms-dev-auth
 
 # Build with optimizations (smaller binary)
 build-prod:
@@ -102,15 +109,15 @@ build-all-platforms: build-linux-amd64 build-linux-arm64 build-darwin-arm64
 
 # Run tests
 test:
-	go test -v ./...
+	./scripts/with-go-packages.sh go test -v
 
 # Test coverage summary
 coverage:
-	go test -cover ./...
+	./scripts/with-go-packages.sh go test -cover
 
 # Test coverage HTML report
 coverage-html:
-	go test -coverprofile=coverage.out ./...
+	./scripts/with-go-packages.sh go test -coverprofile=coverage.out
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report: coverage.html"
 	@command -v open >/dev/null 2>&1 && open coverage.html || command -v xdg-open >/dev/null 2>&1 && xdg-open coverage.html || true

@@ -8,7 +8,6 @@ package service
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"log/slog"
 	"strings"
 	"time"
@@ -30,7 +29,8 @@ func SetGlobalConfigGetter(fn func(ctx context.Context, key string) (string, err
 
 // EventService provides event logging functionality.
 type EventService struct {
-	queries *store.Queries
+	queries         *store.Queries
+	anonymousEvents anonymousEventLimiter
 }
 
 // NewEventService creates a new EventService.
@@ -75,22 +75,14 @@ func (s *EventService) LogEvent(ctx context.Context, level, category, message st
 		nullUserID = sql.NullInt64{Int64: *userID, Valid: true}
 	}
 
-	metadataJSON := "{}"
-	if metadata != nil {
-		jsonBytes, err := json.Marshal(metadata)
-		if err == nil {
-			metadataJSON = string(jsonBytes)
-		}
-	}
-
 	_, err := s.queries.CreateEvent(ctx, store.CreateEventParams{
 		Level:      level,
 		Category:   category,
 		Message:    message,
 		UserID:     nullUserID,
-		Metadata:   metadataJSON,
+		Metadata:   encodeEventMetadata(metadata),
 		IpAddress:  ipAddress,
-		RequestUrl: requestURL,
+		RequestUrl: util.BoundedLogField(requestURL),
 		CreatedAt:  time.Now(),
 	})
 	if err != nil {
@@ -214,10 +206,4 @@ func (s *EventService) LogWebhookEvent(ctx context.Context, level, message strin
 // LogSecurityEvent logs a security-related event.
 func (s *EventService) LogSecurityEvent(ctx context.Context, level, message string, userID *int64, ipAddress, requestURL string, metadata map[string]any) error {
 	return s.LogEvent(ctx, level, model.EventCategorySecurity, message, userID, ipAddress, requestURL, metadata)
-}
-
-// DeleteOldEvents removes events older than the specified duration.
-func (s *EventService) DeleteOldEvents(ctx context.Context, olderThan time.Duration) error {
-	cutoff := time.Now().Add(-olderThan)
-	return s.queries.DeleteOldEvents(ctx, cutoff)
 }

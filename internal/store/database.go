@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -14,10 +15,21 @@ import (
 	"github.com/pressly/goose/v3"
 
 	_ "modernc.org/sqlite" // SQLite driver for database/sql
+	sqlite "modernc.org/sqlite/lib"
 )
 
 //go:embed migrations/*.sql
 var migrations embed.FS
+
+// IsSQLiteBusy matches SQLite BUSY and LOCKED, including extended codes.
+func IsSQLiteBusy(err error) bool {
+	var driverError interface{ Code() int }
+	if !errors.As(err, &driverError) {
+		return false
+	}
+	code := driverError.Code() & 0xff
+	return code == sqlite.SQLITE_BUSY || code == sqlite.SQLITE_LOCKED
+}
 
 // DBConfig holds database configuration options.
 type DBConfig struct {
@@ -132,7 +144,15 @@ func RunMigrationCommand(ctx context.Context, db *sql.DB, command string, args .
 		return fmt.Errorf("setting dialect: %w", err)
 	}
 
-	if err := goose.RunContext(ctx, command, db, "migrations", args...); err != nil {
+	// "up" also applies an older migration that a later merge brought in:
+	// branches add migrations in parallel, and a database that already ran
+	// a branch's newer ones must still get it instead of refusing to start
+	// (TestMigrateAppliesAnOlderMigrationMergedLater).
+	var options []goose.OptionsFunc
+	if command == "up" {
+		options = append(options, goose.WithAllowMissing())
+	}
+	if err := goose.RunWithOptionsContext(ctx, command, db, "migrations", args, options...); err != nil {
 		return fmt.Errorf("running migrations: %w", err)
 	}
 

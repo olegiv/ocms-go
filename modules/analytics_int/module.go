@@ -43,6 +43,9 @@ type Module struct {
 	// touches the field; TestSettingsAccessHoldsTheLock checks that every
 	// access takes the lock.
 	settingsMu sync.RWMutex
+	// settingsWriteMu orders database reloads, form saves and salt rotation.
+	// Writers take it before settingsMu when they need both.
+	settingsWriteMu sync.Mutex
 
 	// reload tracks whether the stored settings are in effect. While they
 	// cannot be read the module runs on fallback values with tracking off,
@@ -91,8 +94,8 @@ func (m *Module) Init(ctx *module.Context) error {
 	// The hourly aggregation, the expiry cleanup, the dashboard and settings
 	// saves retry the load (see reload).
 	settings, err := m.loadSettings()
-	loaded := err == nil
-	if loaded {
+	loaded := err == nil && settings != nil
+	if err == nil && settings != nil {
 		m.reload.MarkLoaded()
 	} else {
 		ctx.Logger.Error("failed to load analytics_int settings; tracking is off until they load", "error", err)

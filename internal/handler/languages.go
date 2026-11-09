@@ -18,6 +18,8 @@ import (
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/pagewrite"
+	"github.com/olegiv/ocms-go/internal/provenance"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
@@ -67,13 +69,20 @@ func NewLanguagesHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionM
 // language middleware consumes that page's URL with neither request having
 // seen a conflict.
 func (h *LanguagesHandler) updateLanguage(ctx context.Context, params store.UpdateLanguageParams,
-	previousCode string) error {
+	previousCode string, actorIDs ...int64) error {
 	tx, err := h.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin language update: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 	queries := store.New(h.db).WithTx(tx)
+	principal := provenance.Principal{Source: "system", Transport: "language_rename"}
+	if len(actorIDs) > 0 {
+		principal = provenance.Principal{UserID: actorIDs[0], Source: "human", Transport: "admin"}
+		if err = pagewrite.RequireEditor(ctx, queries, principal.UserID); err != nil {
+			return err
+		}
+	}
 
 	conflict, err := validateLanguagePrefixAgainstPages(ctx, queries, params.Code, params.IsActive)
 	if err != nil {
@@ -91,6 +100,20 @@ func (h *LanguagesHandler) updateLanguage(ctx context.Context, params store.Upda
 			return fmt.Errorf("commit language update: %w", err)
 		}
 		return nil
+	}
+
+	work, err := pagewrite.NewTx(queries, principal)
+	if err != nil {
+		return err
+	}
+	ids, err := queries.ListPageIDsByLanguage(ctx, previousCode)
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		if err = work.TrackComponent(ctx, id); err != nil {
+			return err
+		}
 	}
 
 	for _, query := range []string{
@@ -114,6 +137,10 @@ func (h *LanguagesHandler) updateLanguage(ctx context.Context, params store.Upda
 	if _, err := queries.UpdateLanguage(ctx, params); err != nil {
 		return fmt.Errorf("update renamed language: %w", err)
 	}
+	if err = work.Finish(ctx); err != nil {
+		return err
+	}
+
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit language rename: %w", err)
 	}
@@ -715,7 +742,7 @@ func (h *LanguagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Direction:  direction,
 		Position:   position,
 		UpdatedAt:  now,
-	}, existingLang.Code)
+	}, existingLang.Code, middleware.GetUserID(r))
 	if errors.Is(err, errLanguagePrefixTaken) {
 		// A page claimed the prefix between validation and this write.
 		validationErrors["code"] = i18n.T(h.renderer.GetAdminLang(r), "languages.error_code_page_conflict")

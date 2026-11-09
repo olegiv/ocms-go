@@ -2,7 +2,15 @@
 # Copyright (c) 2025-2026 Oleg Ivanchenko
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Sync production data (DB, uploads, logs, custom) to local development environment
+# Sync production data (DB, uploads, logs, custom) to local development.
+# The copied SQLite databases lose sessions, OAuth credentials and preview
+# links. Webhook and HTTP task destinations are cleared and disabled, webhook
+# signing secrets and headers are cleared, and CAPTCHA and embed credentials
+# and provider activation are reset.
+# Treat the copy as production data. It still contains account, API-key and
+# recovery-code verifiers, sealed MFA secrets, content, form submissions and
+# integration history. Logs, uploads, custom settings and other copied files
+# can contain private data or credentials.
 # Usage: ./scripts/deploy/sync-prod-to-dev.sh <server> <instance> [options]
 
 set -euo pipefail
@@ -10,6 +18,7 @@ set -euo pipefail
 # Get script directory and source helper
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/helper.sh"
+SCRUB_POLICY="${SCRIPT_DIR}/sync-db-policy.sql"
 
 # Hardcoded values
 REMOTE_BIN_DIR="/opt/ocms/bin"
@@ -36,6 +45,7 @@ SYNC_CUSTOM=false
 # restart_remote_on_exit.
 REMOTE_STOPPED=false
 REMOTE_UNCHECKED=false
+SYNC_TMP=""
 
 # Load local port from .env if available
 LOCAL_PORT=""
@@ -49,7 +59,8 @@ usage() {
 Usage: $(basename "$0") <server> <instance> -v <vhost> [options]
 
 Sync production data (DB, uploads, logs) to local development environment.
-Stops both local and remote servers before syncing.
+Stops production while capturing the database and uploads. Restarts it before
+scrubbing and publishing the local copy. Logs and custom files are copied live.
 
 Arguments:
   server      Remote server hostname (e.g., server.example.com)
@@ -153,6 +164,22 @@ if [[ -z "$VHOST" ]]; then
     exit 1
 fi
 check_health_settings
+if [[ "$DRY_RUN" != true ]]; then
+    if ! command -v rsync >/dev/null; then
+        echo_error "Install rsync locally before syncing."
+        exit 1
+    fi
+    if [[ "$SYNC_DB" == true ]]; then
+        if ! command -v sqlite3 >/dev/null; then
+            echo_error "Install sqlite3 locally to scrub credentials from the database copy."
+            exit 1
+        fi
+        if [[ ! -r "$SCRUB_POLICY" ]]; then
+            echo_error "Cannot read the database scrub policy."
+            exit 1
+        fi
+    fi
+fi
 
 # Construct remote paths from instance directory
 REMOTE_INSTANCE_DIR="${VHOST}"
@@ -250,6 +277,9 @@ restart_remote_on_exit() {
     elif [[ "$REMOTE_UNCHECKED" == true ]]; then
         echo_warn "The remote instance '${INSTANCE}' was started, but its health check was cut short; check it with ${REMOTE_BIN_DIR}/ocmsctl health ${INSTANCE}"
     fi
+    if [[ "$DRY_RUN" != true && -n "$SYNC_TMP" ]]; then
+        rm -rf -- "$SYNC_TMP" || echo_warn "Could not remove private staging directory: $SYNC_TMP"
+    fi
     exit "$status"
 }
 # Turn an interrupt into a normal exit, so restart_remote_on_exit runs from
@@ -263,54 +293,88 @@ trap restart_remote_on_exit EXIT
 
 checkpoint_remote_db() {
     echo_step "Checkpointing remote SQLite WAL..."
-    ssh_cmd "sqlite3 ${REMOTE_DATA_DIR}/ocms.db 'PRAGMA wal_checkpoint(TRUNCATE);'"
-    echo_ok "WAL checkpoint complete"
-}
-
-sync_database() {
-    if [[ "$SYNC_DB" != true ]]; then
-        echo_warn "Skipping database sync (--no-db)"
+    local database="${REMOTE_DATA_DIR}/ocms.db" command result
+    database="${database//\'/\'\\\'\'}"
+    command="if [ -f '$database' ]; then sqlite3 -batch -bail -init /dev/null '$database' 'PRAGMA wal_checkpoint(TRUNCATE);'; else echo missing; fi"
+    if [[ "$DRY_RUN" == true ]]; then
+        ssh_cmd "$command"
         return
     fi
-
-    echo_step "Syncing database..."
-
-    # Create local data directory if it doesn't exist
-    if [[ "$DRY_RUN" != true ]]; then
-        mkdir -p "${LOCAL_DATA_DIR}"
-    else
-        echo_dry_run "mkdir -p ${LOCAL_DATA_DIR}"
-    fi
-
-    # Sync entire data directory
-    rsync_cmd -avz --progress --delete \
-        "${SSH_USER}@${SERVER}:${REMOTE_DATA_DIR}/" \
-        "${LOCAL_DATA_DIR}/"
-
-    echo_ok "Database synced"
+    result=$(ssh_cmd "$command")
+    case "$result" in
+        missing) echo_info "Default remote database not found; capturing data/ including journal files." ;;
+        0\|*) echo_ok "Default remote database checkpoint succeeded" ;;
+        *) echo_error "Remote database checkpoint did not finish successfully: $result"; return 1 ;;
+    esac
 }
 
-sync_uploads() {
-    if [[ "$SYNC_UPLOADS" != true ]]; then
-        echo_warn "Skipping uploads sync (--no-uploads)"
+scrub_database_credentials() {
+    local database="$1" statements sidecar
+    for sidecar in "$database-wal" "$database-shm" "$database-journal"; do
+        if [[ -L "$sidecar" ]]; then
+            echo_error "Cannot scrub a SQLite database with a symlinked journal or WAL."
+            return 1
+        fi
+    done
+    statements=$(sqlite3 -batch -bail -init /dev/null "$database" < "$SCRUB_POLICY")
+    if [[ -z "$statements" ]]; then
         return
     fi
+    sqlite3 -batch -bail -init /dev/null "$database" "
+        PRAGMA journal_mode = DELETE;
+        PRAGMA secure_delete = ON;
+        BEGIN IMMEDIATE;
+        $statements
+        COMMIT;
+        VACUUM;" >/dev/null
+}
 
-    echo_step "Syncing uploads..."
-
-    # Create local uploads directory if it doesn't exist
-    if [[ "$DRY_RUN" != true ]]; then
-        mkdir -p "${LOCAL_UPLOADS_DIR}"
-    else
-        echo_dry_run "mkdir -p ${LOCAL_UPLOADS_DIR}"
+scrub_staged_databases() {
+    local database header found=false
+    # OCMS_DB_PATH may select a different name under data/. Match SQLite's
+    # file signature so the scrub does not depend on a filename or extension.
+    find "${SYNC_TMP}/data" -type f -print0 > "${SYNC_TMP}/files"
+    while IFS= read -r -d '' database; do
+        # Scrubbing a database can remove its WAL and journal files.
+        [[ -f "$database" ]] || continue
+        header=$(LC_ALL=C od -An -tx1 -N16 "$database" | tr -d '[:space:]')
+        if [[ "$header" == 53514c69746520666f726d6174203300 ]]; then
+            found=true
+            scrub_database_credentials "$database"
+        fi
+    done < "${SYNC_TMP}/files"
+    if [[ "$found" != true ]]; then
+        echo_error "No SQLite database found in the synced data directory."
+        return 1
     fi
+}
 
-    # Sync uploads with delete to mirror production exactly
-    rsync_cmd -avz --progress --delete \
-        "${SSH_USER}@${SERVER}:${REMOTE_UPLOADS_DIR}/" \
-        "${LOCAL_UPLOADS_DIR}/"
+prepare_snapshot() {
+    if [[ "$DRY_RUN" == true ]]; then
+        SYNC_TMP="<private-staging>"
+    else
+        SYNC_TMP=$(mktemp -d "${TMPDIR:-/tmp}/ocms-sync.XXXXXXXX")
+        mkdir "${SYNC_TMP}/data" "${SYNC_TMP}/uploads"
+    fi
+    if [[ "$SYNC_UPLOADS" == true && -d "$LOCAL_UPLOADS_DIR" ]]; then
+        # Seed a private transfer basis while production is still running.
+        # Independent copies keep remote rsync changes off the local originals.
+        rsync_cmd -a "${LOCAL_UPLOADS_DIR}/" "${SYNC_TMP}/uploads/"
+    fi
+}
 
-    echo_ok "Uploads synced"
+capture_snapshot_part() {
+    local name="$1" remote="$2"
+    shift 2
+    echo_step "Capturing remote ${name}..."
+    rsync_cmd -avz --progress --delete "$@" "${SSH_USER}@${SERVER}:${remote}/" "${SYNC_TMP}/${name}/"
+}
+
+publish_snapshot_part() {
+    local name="$1" destination="$2"
+    echo_step "Publishing local ${name}..."
+    run mkdir -p "$destination"
+    rsync_cmd -a --checksum --delete "${SYNC_TMP}/${name}/" "${destination}/"
 }
 
 sync_logs() {
@@ -403,33 +467,47 @@ fi
 # Step 1: Stop local server
 stop_local_server
 
-# Step 2: Stop remote server. From here until it starts again, a failing step
-# or an interrupt makes restart_remote_on_exit start it.
-REMOTE_STOPPED=true
-stop_remote_server
+# Capture the database and uploads from the same stopped instance.
+if [[ "$SYNC_DB" == true || "$SYNC_UPLOADS" == true ]]; then
+    prepare_snapshot
+    REMOTE_STOPPED=true
+    stop_remote_server
+    if [[ "$SYNC_DB" == true ]]; then
+        checkpoint_remote_db
+        capture_snapshot_part data "$REMOTE_DATA_DIR"
+    fi
+    if [[ "$SYNC_UPLOADS" == true ]]; then
+        # The local basis can have different content with the same size and
+        # modification time. Compare it to production before accepting it.
+        capture_snapshot_part uploads "$REMOTE_UPLOADS_DIR" --checksum
+    fi
 
-# Step 3: Checkpoint remote database (flush WAL to main file)
-if [[ "$SYNC_DB" == true ]]; then
-    checkpoint_remote_db
+    # An interrupt before start succeeds still invokes recovery. An explicit
+    # start or health failure is reported here and leaves local data alone.
+    STARTED=true
+    start_remote_server || STARTED=false
+    REMOTE_STOPPED=false
+    if [[ "$STARTED" != true ]]; then
+        echo_error "The remote instance '${INSTANCE}' is not healthy; the local snapshot was not published. See ${REMOTE_BIN_DIR}/ocmsctl logs ${INSTANCE}"
+        exit 1
+    fi
 fi
 
-# Step 4: Sync data
-sync_database
-sync_uploads
+# All local scrub and publish work runs after production has restarted.
+if [[ "$SYNC_DB" == true ]]; then
+    echo_step "Scrubbing copied SQLite credentials and outbound integration settings..."
+    if [[ "$DRY_RUN" == true ]]; then
+        echo_dry_run "Apply sync-db-policy.sql to all staged SQLite databases"
+    else
+        scrub_staged_databases
+    fi
+    publish_snapshot_part data "$LOCAL_DATA_DIR"
+fi
+if [[ "$SYNC_UPLOADS" == true ]]; then
+    publish_snapshot_part uploads "$LOCAL_UPLOADS_DIR"
+fi
 sync_logs
 sync_custom
-
-# Step 5: Start remote server; it must report healthy again. REMOTE_STOPPED
-# stays set until ocmsctl start succeeds, so an interrupt before then still
-# makes restart_remote_on_exit start the instance; a start that failed is
-# reported here and not tried again.
-STARTED=true
-start_remote_server || STARTED=false
-REMOTE_STOPPED=false
-if [[ "$STARTED" != true ]]; then
-    echo_error "The data was synced, but the remote instance '${INSTANCE}' is not healthy; see ${REMOTE_BIN_DIR}/ocmsctl logs ${INSTANCE}"
-    exit 1
-fi
 
 # Summary
 echo ""

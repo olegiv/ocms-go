@@ -40,10 +40,21 @@ for arg in "$@"; do
     esac
 done
 
-# Derive version info from git
-GIT_VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
-GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+# Use one committed snapshot for the image and the Fly configuration. The
+# live checkout may contain site modules synced into custom/modules/.
+REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+COMMIT=$(git -C "$REPO_ROOT" rev-parse --verify HEAD)
+GIT_VERSION=$(git -C "$REPO_ROOT" describe --tags --always "$COMMIT")
+GIT_COMMIT=$(git -C "$REPO_ROOT" rev-parse --short "$COMMIT")
 BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+CONTEXT=$(mktemp -d "${TMPDIR:-/tmp}/ocms-fly-demo.XXXXXXXX")
+trap 'rm -rf -- "$CONTEXT"' EXIT
+(
+    set -o pipefail
+    git -C "$REPO_ROOT" archive --format=tar "$COMMIT" | tar -xf - -C "$CONTEXT"
+)
+cd "$CONTEXT"
 
 echo "==> Building Docker image (version: ${GIT_VERSION})..."
 BUILD_ARGS=(

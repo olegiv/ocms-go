@@ -6,27 +6,26 @@ package mcpserver
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
-	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/olegiv/ocms-go/internal/connectedapps"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
+	accountviews "github.com/olegiv/ocms-go/internal/views/account"
 )
-
-// keysPageSize is how many API keys the admin overview reads per query. It
-// pages through all of them: a key with MCP access must never drop off the
-// list just because many newer keys exist.
-const keysPageSize = 500
 
 // keyPlaceholder stands in for a real key in the client snippets: the admin
 // page never displays key material.
@@ -34,21 +33,43 @@ const keyPlaceholder = "<YOUR_API_KEY>"
 
 // handleDashboard handles GET /admin/mcp.
 func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	pages, err := connectedapps.ParsePagination(r.URL.Query())
+	if err != nil {
+		http.Error(w, "Invalid page", http.StatusBadRequest)
+		return
+	}
+	page, err := connectedapps.New(m.ctx.DB).List(r.Context(), connectedapps.Actor{UserID: user.ID, SessionVersion: user.SessionVersion}, true, pages, m.ctx.OAuth != nil)
+	if err != nil {
+		m.connectionError(w, err)
+		return
+	}
 	lang := m.ctx.Render.GetAdminLang(r)
 	pc := m.ctx.Render.BuildPageContext(r, i18n.T(lang, "mcp.title"), []render.Breadcrumb{
 		{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
 		{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
 		{Label: i18n.T(lang, "mcp.title"), URL: adminPath, Active: true},
 	})
-	render.Templ(w, r, DashboardPage(pc, m.dashboardData(r.Context())))
+	data := m.dashboardData(r.Context())
+	data.Connections = &accountviews.ConnectionsData{Page: page, Admin: true, BasePath: adminPath}
+	w.Header().Set("Cache-Control", "private, no-store")
+	w.Header().Set("Referrer-Policy", "same-origin")
+	render.Templ(w, r, DashboardPage(pc, data))
 }
 
-// dashboardData collects everything the admin page shows.
+// dashboardData collects everything the admin page shows, except the
+// connected-app overview, which handleDashboard adds with its own bounded,
+// paginated metadata.
 func (m *Module) dashboardData(ctx context.Context) DashboardData {
 	data := DashboardData{
 		ProtocolVersions: strings.Join(mcp.SupportedProtocolVersions(), ", "),
 		Version:          moduleVersion,
 		MaxInstructions:  maxInstructionsRunes,
+		OAuthEnabled:     m.ctx.OAuth != nil,
 	}
 
 	// The form shows what is stored, which also brings the running server
@@ -61,6 +82,18 @@ func (m *Module) dashboardData(ctx context.Context) DashboardData {
 		settings = m.currentSettings()
 	}
 	data.AllowDrafts, data.Instructions = settings.AllowDrafts, settings.Instructions
+	data.DraftToolsEnabled, data.ExternalLinks = settings.DraftToolsEnabled, linkPolicy(settings)
+	data.AgentShareLinks = settings.AgentShareLinks
+	links, err := store.New(m.ctx.DB).ListActiveAgentPreviewLinks(ctx, time.Now().Unix())
+	if err != nil {
+		m.logger.Error("failed to list agent share links for the MCP page", "error", err)
+		data.ShareLinksError = true
+	}
+	for _, link := range links {
+		data.ShareLinks = append(data.ShareLinks, ShareLinkRow{ID: link.ID, PageID: link.PageID, PageTitle: link.PageTitle, Revision: link.Revision,
+			Creator: link.CreatorName, CreatorEmail: link.CreatorEmail, ViaOAuth: link.ViaOauth == 1,
+			Created: time.Unix(link.CreatedAt, 0).UTC().Format("2006-01-02 15:04 UTC"), Expires: time.Unix(link.ExpiresAt, 0).UTC().Format("2006-01-02 15:04 UTC")})
+	}
 
 	endpoint := EndpointPath
 	siteURL, status, err := m.resolveSiteURL(ctx)
@@ -85,60 +118,95 @@ func (m *Module) dashboardData(ctx context.Context) DashboardData {
 	data.ClaudeCodeCommand = claudeCodeCommand(endpoint)
 	data.ClientConfigJSON = clientConfigJSON(endpoint)
 
-	for _, spec := range toolCatalog() {
+	for _, spec := range m.catalog() {
 		data.Tools = append(data.Tools, ToolRow{Name: spec.Name, Title: spec.Title, Description: spec.Description})
 	}
-	keys, err := m.mcpKeys(ctx)
-	if err != nil {
-		m.logger.Error("failed to list API keys for the MCP page", "error", err)
-		data.KeysError = true
-	}
-	data.Keys = keys
 	return data
 }
 
-// mcpKeys lists the API keys holding mcp:access. Only display metadata is
-// returned; key hashes never leave the store layer.
-func (m *Module) mcpKeys(ctx context.Context) ([]KeyRow, error) {
-	now := time.Now()
-	var rows []KeyRow
-	for offset := int64(0); ; offset += keysPageSize {
-		keys, err := m.svc.queries.ListAPIKeys(ctx, store.ListAPIKeysParams{Limit: keysPageSize, Offset: offset})
-		if err != nil {
-			return nil, fmt.Errorf("listing API keys: %w", err)
-		}
-		for i := range keys {
-			if row, ok := mcpKeyRow(&keys[i], now); ok {
-				rows = append(rows, row)
-			}
-		}
-		if len(keys) < keysPageSize {
-			return rows, nil
+func (m *Module) handleRevokeConnection(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "private, no-store")
+	if middleware.IsDemoMode() {
+		http.Error(w, middleware.DemoModeMessageDetailed(middleware.RestrictionAPIKeys), http.StatusForbidden)
+		return
+	}
+	user := middleware.GetUser(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	kind, id, err := connectedapps.ParseRevoke(w, r)
+	if err == nil {
+		err = connectedapps.New(m.ctx.DB).Revoke(r.Context(), connectedapps.Actor{UserID: user.ID, SessionVersion: user.SessionVersion}, true, kind, id)
+	}
+	if err != nil {
+		m.connectionError(w, err)
+		return
+	}
+	if m.ctx.Events != nil {
+		if err := m.ctx.Events.LogEvent(r.Context(), model.EventLevelInfo, model.EventCategorySecurity,
+			"Administrator revoked connected app access", &user.ID, middleware.GetClientIP(r), r.URL.Path,
+			map[string]any{"kind": kind, "connection_id": id}); err != nil {
+			m.logger.WarnContext(service.WithoutEventLog(r.Context()), "failed to record connection revocation", "error", err)
 		}
 	}
+	http.Redirect(w, r, adminPath, http.StatusSeeOther)
 }
 
-// mcpKeyRow returns the overview row of a key holding mcp:access.
-func mcpKeyRow(key *store.ApiKey, now time.Time) (KeyRow, bool) {
-	permissions := middleware.ParseAPIKeyPermissions(key)
-	if !slices.Contains(permissions, model.PermissionMCPAccess) {
-		return KeyRow{}, false
+// handleRevokeShareLink revokes one share link an AI client issued. Links
+// issued from the page editor are revoked there, not here.
+func (m *Module) handleRevokeShareLink(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "private, no-store")
+	if middleware.IsDemoMode() {
+		http.Error(w, middleware.DemoModeMessageDetailed(middleware.RestrictionAPIKeys), http.StatusForbidden)
+		return
 	}
-	row := KeyRow{
-		ID:          key.ID,
-		Name:        key.Name,
-		Prefix:      key.KeyPrefix,
-		Permissions: permissions,
-		Active:      key.IsActive,
+	user := middleware.GetUser(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
 	}
-	if key.LastUsedAt.Valid {
-		row.LastUsed = key.LastUsedAt.Time.Format("2006-01-02 15:04")
+	lang := m.ctx.Render.GetAdminLang(r)
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || id <= 0 {
+		http.Error(w, "Invalid share link", http.StatusBadRequest)
+		return
 	}
-	if key.ExpiresAt.Valid {
-		row.Expires = key.ExpiresAt.Time.Format("2006-01-02")
-		row.Expired = key.ExpiresAt.Time.Before(now)
+	revoked, err := store.New(m.ctx.DB).RevokeAgentPreviewLink(r.Context(), store.RevokeAgentPreviewLinkParams{RevokedAt: time.Now().Unix(), ID: id})
+	if err != nil {
+		m.logger.Error("failed to revoke agent share link", "error", err, "link_id", id)
+		m.ctx.Render.SetFlash(r, i18n.T(lang, "mcp.share_revoke_error"), "error")
+		http.Redirect(w, r, adminPath+"#mcp-share-links", http.StatusSeeOther)
+		return
 	}
-	return row, true
+	if revoked == 0 {
+		m.ctx.Render.SetFlash(r, i18n.T(lang, "mcp.share_revoke_missing"), "info")
+		http.Redirect(w, r, adminPath+"#mcp-share-links", http.StatusSeeOther)
+		return
+	}
+	if m.ctx.Events != nil {
+		if err := m.ctx.Events.LogEvent(r.Context(), model.EventLevelInfo, model.EventCategorySecurity,
+			"Preview share link revoked", &user.ID, middleware.GetClientIP(r), r.URL.Path,
+			map[string]any{"link_id": id, "revoked_from": "mcp_admin"}); err != nil {
+			m.logger.WarnContext(service.WithoutEventLog(r.Context()), "failed to record share link revocation", "error", err)
+		}
+	}
+	m.ctx.Render.SetFlash(r, i18n.T(lang, "mcp.share_revoked"), "success")
+	http.Redirect(w, r, adminPath+"#mcp-share-links", http.StatusSeeOther)
+}
+
+func (m *Module) connectionError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, connectedapps.ErrForbidden):
+		http.Error(w, "Forbidden", http.StatusForbidden)
+	case errors.Is(err, connectedapps.ErrInvalid):
+		http.Error(w, "Invalid connection request", http.StatusBadRequest)
+	case errors.Is(err, connectedapps.ErrNotFound):
+		http.Error(w, "Not found", http.StatusNotFound)
+	default:
+		m.logger.Error("connected app operation failed", "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
 }
 
 // claudeCodeCommand renders the Claude Code CLI command for the endpoint.
@@ -208,8 +276,18 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	next := Settings{
-		AllowDrafts:  r.FormValue("allow_drafts") == "1",
-		Instructions: instructions,
+		AllowDrafts:       r.FormValue("allow_drafts") == "1",
+		Instructions:      instructions,
+		DraftToolsEnabled: r.FormValue("draft_tools_enabled") == "1",
+		ExternalLinks:     r.FormValue("external_links"),
+		AgentShareLinks:   r.FormValue("agent_share_links") == "1",
+	}
+	if next.ExternalLinks == "" {
+		next.ExternalLinks = linkPolicy(m.currentSettings())
+	}
+	if next.ExternalLinks != "keep" && next.ExternalLinks != "nofollow" && next.ExternalLinks != "strip" {
+		fail(i18n.T(lang, "mcp.invalid_link_policy"))
+		return
 	}
 	prev, err := m.saveAndApply(r.Context(), next)
 	if err != nil {
@@ -219,6 +297,9 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	meta := map[string]any{
+		"draft_tools_enabled":   next.DraftToolsEnabled,
+		"agent_share_links":     next.AgentShareLinks,
+		"external_links":        next.ExternalLinks,
 		"allow_drafts":          next.AllowDrafts,
 		"previous_allow_drafts": prev.AllowDrafts,
 		"instructions_length":   utf8.RuneCountInString(next.Instructions),

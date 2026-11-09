@@ -32,6 +32,10 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/imaging"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/pagewrite"
+	"github.com/olegiv/ocms-go/internal/provenance"
+	"github.com/olegiv/ocms-go/internal/review"
+	"github.com/olegiv/ocms-go/internal/security"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
 )
@@ -184,6 +188,7 @@ type mediaZipManifest struct {
 
 // Importer handles importing CMS content from JSON format.
 type Importer struct {
+	principal             provenance.Principal
 	store                 *store.Queries
 	db                    *sql.DB
 	logger                *slog.Logger
@@ -191,6 +196,8 @@ type Importer struct {
 	processor             *imaging.Processor
 	beforeMediaImport     func()
 	beforeMediaOwnerCheck func()
+	sanitizePageHTML      bool
+	blockSuspiciousMarkup bool
 }
 
 // NewImporter creates a new Importer instance.
@@ -407,6 +414,10 @@ func (i *Importer) importWithPreCommit(
 		opts.ConflictStrategy = ConflictSkip
 	}
 	result := NewImportResult(opts.DryRun)
+	if data == nil {
+		result.AddError("import", "data", "import data is required")
+		return result, errors.New("import data is required")
+	}
 	if !isValidConflictStrategy(opts.ConflictStrategy) {
 		result.AddError("import", "conflict_strategy", fmt.Sprintf("invalid conflict strategy %q", opts.ConflictStrategy))
 		return result, errors.New("invalid conflict strategy")
@@ -414,6 +425,7 @@ func (i *Importer) importWithPreCommit(
 
 	// Validate the import data first
 	validationErrors := i.validate(data, opts.ImportLanguages, opts.ImportMedia || opts.ImportMediaFiles, opts.ImportUsers)
+	validationErrors = append(validationErrors, i.validatePageHTMLPolicy(data, opts)...)
 	if len(validationErrors) > 0 {
 		for _, err := range validationErrors {
 			result.AddError(err.Entity, err.ID, err.Message)
@@ -484,11 +496,29 @@ func (i *Importer) importWithPreCommit(
 		result.Updated = make(map[string]int)
 		result.Skipped = make(map[string]int)
 		result.IDMaps = make(map[string]IDMapping)
+		result.Notices = nil
 	}()
 
 	// Create queries with transaction
 	queries := i.store.WithTx(tx)
-	if err := i.importSelectedEntities(ctx, queries, data, opts, result); err != nil {
+	principal := i.principal
+	if principal.Source == "" {
+		principal = provenance.Principal{Source: "system", Transport: "import"}
+	}
+	work, err := pagewrite.NewTx(queries, principal)
+	if err != nil {
+		return result, err
+	}
+	if principal.UserID > 0 {
+		if err = pagewrite.RequireEditor(ctx, queries, principal.UserID); err != nil {
+			return result, err
+		}
+	}
+	if err := trackImportedPages(ctx, work, data, opts); err != nil {
+		return result, err
+	}
+
+	if err := i.importSelectedEntities(ctx, queries, data, opts, result, work); err != nil {
 		return result, err
 	}
 
@@ -496,6 +526,17 @@ func (i *Importer) importWithPreCommit(
 		if err := preCommitCheck(); err != nil {
 			return result, fmt.Errorf("pre-commit import validation failed: %w", err)
 		}
+	}
+
+	if opts.ImportPages {
+		for _, id := range result.IDMaps["pages"] {
+			if err := work.RequireTracked(id); err != nil {
+				return result, err
+			}
+		}
+	}
+	if err := work.Finish(ctx); err != nil {
+		return result, err
 	}
 
 	// Commit transaction
@@ -513,6 +554,7 @@ func (i *Importer) importSelectedEntities(
 	data *ExportData,
 	opts ImportOptions,
 	result *ImportResult,
+	work *pagewrite.Tx,
 ) error {
 	// Import in dependency order: languages, users, taxonomy, media, pages,
 	// menus, forms, config, then translation edges.
@@ -598,9 +640,9 @@ func (i *Importer) importSelectedEntities(
 		}
 	}
 	if opts.ImportPages && len(data.Pages) > 0 {
-		if err := i.importPages(ctx, queries, data.Pages, userMap, categoryMap, tagMap, mediaMap,
-			defaultLangCode, opts, result); err != nil {
-			return fmt.Errorf("failed to import pages: %w", err)
+		if importErr := i.importPages(ctx, work, data.Pages, userMap, categoryMap, tagMap, mediaMap,
+			defaultLangCode, opts, result); importErr != nil {
+			return fmt.Errorf("failed to import pages: %w", importErr)
 		}
 	}
 
@@ -633,7 +675,7 @@ func (i *Importer) importSelectedEntities(
 	if opts.ImportConfig && len(data.Config) > 0 {
 		i.importConfig(ctx, queries, data.Config, userMap, defaultLangCode, opts, result)
 	}
-	if err := i.importTranslations(ctx, queries, data, defaultLangCode, opts, result); err != nil {
+	if err := i.importTranslations(ctx, work, data, defaultLangCode, opts, result); err != nil {
 		return fmt.Errorf("failed to import translations: %w", err)
 	}
 
@@ -1000,7 +1042,7 @@ func (i *Importer) ImportFromZip(ctx context.Context, zipReader *zip.Reader, opt
 				return nil, errors.New("duplicate export.json entry")
 			}
 			var err error
-			exportData, err = readZipExportData(f)
+			exportData, err = ReadZipExportData(f)
 			if err != nil {
 				return nil, err
 			}
@@ -1011,7 +1053,11 @@ func (i *Importer) ImportFromZip(ctx context.Context, zipReader *zip.Reader, opt
 	if !exportFound {
 		return nil, errors.New("export.json not found in zip archive")
 	}
-	exportData = *normalizedTransferMediaIdentities(&exportData, opts.ImportMedia || opts.ImportMediaFiles)
+	normalizedData := normalizedTransferMediaIdentities(&exportData, opts.ImportMedia || opts.ImportMediaFiles)
+	if normalizedData == nil {
+		return nil, errors.New("import data is required")
+	}
+	exportData = *normalizedData
 	manifest, err := buildMediaZipManifest(zipReader, &exportData)
 	if err != nil {
 		return nil, fmt.Errorf("invalid media manifest: %w", err)
@@ -1171,7 +1217,36 @@ func (i *Importer) ImportFromZipBytes(ctx context.Context, data []byte, opts Imp
 	return i.ImportFromZip(ctx, zipReader, opts)
 }
 
-func readZipExportData(file *zip.File) (ExportData, error) {
+// ReadZipExportDataBytes rejects oversized, entry-dense and unsupported archive
+// containers before allocating the ZIP directory, then reads bounded metadata.
+// Media validation stays separate so previews can offer viable partial imports.
+func ReadZipExportDataBytes(data []byte) (ExportData, error) {
+	reader := bytes.NewReader(data)
+	if err := validateZipContainer(reader, int64(len(data))); err != nil {
+		return ExportData{}, err
+	}
+	archive, err := zip.NewReader(reader, int64(len(data)))
+	if err != nil {
+		return ExportData{}, err
+	}
+	var metadata *zip.File
+	for _, file := range archive.File {
+		if file.Name == "export.json" {
+			if metadata != nil {
+				return ExportData{}, errors.New("duplicate export.json entry")
+			}
+			metadata = file
+		}
+	}
+	if metadata == nil {
+		return ExportData{}, errors.New("export.json not found in zip")
+	}
+	return ReadZipExportData(metadata)
+}
+
+// ReadZipExportData applies the same declared-size and decompressed-byte limits
+// to archive metadata in validation, browser previews and imports, then parses JSON.
+func ReadZipExportData(file *zip.File) (ExportData, error) {
 	if file.UncompressedSize64 > uint64(maxZipExportJSONUncompressedBytes) {
 		return ExportData{}, fmt.Errorf("export.json exceeds max size (%d bytes)", maxZipExportJSONUncompressedBytes)
 	}
@@ -1231,6 +1306,9 @@ func buildMediaZipManifest(zipReader *zip.Reader, data *ExportData) (mediaZipMan
 		return mediaZipManifest{}, err
 	}
 	data = normalizedTransferMediaIdentities(data, false)
+	if data == nil {
+		return mediaZipManifest{}, errors.New("import data is required")
+	}
 	manifest := mediaZipManifest{
 		mediaByUUID:   make(map[string]ExportMedia),
 		entryPaths:    make(map[string]struct{}),
@@ -1984,6 +2062,9 @@ func (i *Importer) generateMissingVariantsBeforeImport(
 			if variant == nil {
 				continue
 			}
+			if creation == nil {
+				return fmt.Errorf("generated %q variant for media %q has no ownership record", variantType, medium.UUID)
+			}
 			if creation.Directory != nil {
 				if err := ownedFiles.recordDirectory(medium.UUID, creation.Directory); err != nil {
 					return fmt.Errorf("record generated %q directory for media %q: %w", variantType, medium.UUID, err)
@@ -2316,7 +2397,7 @@ func (i *Importer) ValidateZip(ctx context.Context, zipReader *zip.Reader) (*Val
 				}, nil
 			}
 			var err error
-			data, err = readZipExportData(f)
+			data, err = ReadZipExportData(f)
 			if err != nil {
 				return &ValidationResult{
 					Valid:  false,
@@ -3283,6 +3364,9 @@ func (i *Importer) ValidateReader(ctx context.Context, r io.Reader) (*Validation
 func (i *Importer) ValidateData(ctx context.Context, data *ExportData) (*ValidationResult, error) {
 	mediaDeselectedData := normalizedTransferMediaIdentities(data, false)
 	data = normalizedTransferMediaIdentities(data, true)
+	if data == nil || mediaDeselectedData == nil {
+		return &ValidationResult{Valid: false, Errors: []ImportError{{Entity: "import", ID: "data", Message: "import data is required"}}}, nil
+	}
 	result := &ValidationResult{
 		Valid:     true,
 		Version:   data.Version,
@@ -4202,7 +4286,7 @@ func replaceMediaVariants(
 
 func (i *Importer) importPages(
 	ctx context.Context,
-	queries *store.Queries,
+	work *pagewrite.Tx,
 	pages []ExportPage,
 	userMap map[string]int64,
 	categoryMap map[string]int64,
@@ -4212,6 +4296,7 @@ func (i *Importer) importPages(
 	opts ImportOptions,
 	result *ImportResult,
 ) error {
+	queries := work.Q
 	now := time.Now()
 
 	pageOldToNew := make(map[int64]int64) // maps export ID to new ID
@@ -4238,12 +4323,15 @@ func (i *Importer) importPages(
 				result.IncrementSkipped("pages")
 				continue
 			case ConflictOverwrite:
-				pageID, existsErr = i.updateExistingPage(ctx, queries, page, existing.ID, mediaMap, defaultLangCode, now)
+				pageID, existsErr = i.updateExistingPage(ctx, work, page, existing.ID, mediaMap, defaultLangCode, now, result)
 				if existsErr != nil {
 					result.AddError("page", page.Slug, existsErr.Error())
 					continue
 				}
 				// Update categories and tags
+				if err := work.RequireTracked(pageID); err != nil {
+					return err
+				}
 				if err := queries.ClearPageCategories(ctx, pageID); err != nil {
 					result.AddError("page", page.Slug, fmt.Sprintf("clear categories: %v", err))
 					return err
@@ -4263,7 +4351,7 @@ func (i *Importer) importPages(
 
 		if shouldCreate {
 			var createErr error
-			pageID, createErr = i.createNewPage(ctx, queries, page, userMap, mediaMap, defaultLangCode, now)
+			pageID, createErr = i.createNewPage(ctx, work, page, userMap, mediaMap, defaultLangCode, now, result)
 			if createErr != nil {
 				result.AddError("page", page.Slug, createErr.Error())
 				continue
@@ -4271,6 +4359,9 @@ func (i *Importer) importPages(
 			createdPage = true
 		}
 
+		if err := work.RequireTracked(pageID); err != nil {
+			return err
+		}
 		// Add categories
 		for _, catSlug := range page.Categories {
 			catID, ok := categoryMap[catSlug]
@@ -4304,6 +4395,14 @@ func (i *Importer) importPages(
 				return err
 			}
 		}
+		if updatedPage {
+			// An overwrite can publish an AI draft, so it takes the check every
+			// other publish path runs before the page leaves draft.
+			if err := validateOverwrittenPublication(ctx, queries, pageID); err != nil {
+				result.AddError("page", page.Slug, err.Error())
+				return fmt.Errorf("import page %q: %w", page.Slug, err)
+			}
+		}
 		pageOldToNew[page.ID] = pageID
 		if createdPage {
 			result.IncrementCreated("pages")
@@ -4318,6 +4417,21 @@ func (i *Importer) importPages(
 		result.GetIDMap("pages")[oldID] = newID
 	}
 	return nil
+}
+
+// validateOverwrittenPublication runs review.ValidatePublication on a page the
+// import just overwrote, with its imported taxonomy, when it ends up published
+// or scheduled. Pages without AI access or authoring history pass unchecked, as
+// they do in the editor.
+func validateOverwrittenPublication(ctx context.Context, q *store.Queries, pageID int64) error {
+	page, err := q.GetPageByID(ctx, pageID)
+	if err != nil {
+		return err
+	}
+	if page.Status != "published" && !page.ScheduledAt.Valid {
+		return nil
+	}
+	return review.ValidatePublication(ctx, q, page)
 }
 
 // pageImportFields holds common fields extracted from an ExportPage.
@@ -4384,36 +4498,58 @@ func extractPageFields(page ExportPage, mediaMap map[string]int64, defaultLangCo
 // updateExistingPage updates an existing page with imported data.
 func (i *Importer) updateExistingPage(
 	ctx context.Context,
-	queries *store.Queries,
+	work *pagewrite.Tx,
 	page ExportPage,
 	existingID int64,
 	mediaMap map[string]int64,
 	defaultLangCode string,
 	now time.Time,
+	result *ImportResult,
 ) (int64, error) {
-	f := extractPageFields(page, mediaMap, defaultLangCode)
-
-	updated, err := queries.UpdatePage(ctx, store.UpdatePageParams{
-		ID:              existingID,
-		Title:           page.Title,
-		Slug:            page.Slug,
-		Body:            page.Body,
-		Status:          page.Status,
-		FeaturedImageID: f.FeaturedImageID,
-		MetaTitle:       f.MetaTitle,
-		MetaDescription: f.MetaDescription,
-		MetaKeywords:    f.MetaKeywords,
-		OgImageID:       f.OgImageID,
-		NoIndex:         f.NoIndex,
-		NoFollow:        f.NoFollow,
-		CanonicalUrl:    f.CanonicalURL,
-		ScheduledAt:     f.ScheduledAt,
-		LanguageCode:    f.LanguageCode,
-		UpdatedAt:       now,
-	})
+	if err := work.RequireTracked(existingID); err != nil {
+		return 0, err
+	}
+	queries := work.Q
+	current, err := queries.GetPageByID(ctx, existingID)
 	if err != nil {
 		return 0, err
 	}
+	f := extractPageFields(page, mediaMap, defaultLangCode)
+	body, removed := security.NormalizePageHTMLForStorage(page.Body, i.sanitizePageHTML)
+	params := pagewrite.ParamsFor(current)
+	params.Title = page.Title
+	params.Slug = page.Slug
+	params.Body = body
+	params.Status = page.Status
+	params.FeaturedImageID = f.FeaturedImageID
+	params.MetaTitle = f.MetaTitle
+	params.MetaDescription = f.MetaDescription
+	params.MetaKeywords = f.MetaKeywords
+	params.OgImageID = f.OgImageID
+	params.NoIndex = f.NoIndex
+	params.NoFollow = f.NoFollow
+	params.CanonicalUrl = f.CanonicalURL
+	params.ScheduledAt = f.ScheduledAt
+	params.LanguageCode = f.LanguageCode
+	params.VideoUrl = page.VideoURL
+	params.VideoTitle = page.VideoTitle
+	params.UpdatedAt = now
+	params.PublishedAt = sql.NullTime{}
+	if page.Status == "published" {
+		switch {
+		case page.PublishedAt != nil:
+			params.PublishedAt = sql.NullTime{Time: *page.PublishedAt, Valid: true}
+		case current.PublishedAt.Valid:
+			params.PublishedAt = current.PublishedAt
+		default:
+			params.PublishedAt = sql.NullTime{Time: now, Valid: true}
+		}
+	}
+	updated, err := queries.UpdatePage(ctx, params)
+	if err != nil {
+		return 0, err
+	}
+	noteImportedPageHTML(result, page.Slug, removed)
 
 	return updated.ID, nil
 }
@@ -4421,13 +4557,15 @@ func (i *Importer) updateExistingPage(
 // createNewPage creates a new page from imported data.
 func (i *Importer) createNewPage(
 	ctx context.Context,
-	queries *store.Queries,
+	work *pagewrite.Tx,
 	page ExportPage,
 	userMap map[string]int64,
 	mediaMap map[string]int64,
 	defaultLangCode string,
 	now time.Time,
+	result *ImportResult,
 ) (int64, error) {
+	queries := work.Q
 	// Get author ID
 	authorID := int64(1)
 	if page.AuthorEmail != "" {
@@ -4438,10 +4576,26 @@ func (i *Importer) createNewPage(
 
 	f := extractPageFields(page, mediaMap, defaultLangCode)
 
+	if err := pagewrite.SlugAvailableInLanguage(ctx, queries, page.Slug, f.LanguageCode, 0); err != nil {
+		return 0, err
+	}
+	createdAt := page.CreatedAt
+	if createdAt.IsZero() {
+		createdAt = now
+	}
+	publishedAt := sql.NullTime{}
+	if page.Status == "published" {
+		publishedAt = sql.NullTime{Time: now, Valid: true}
+		if page.PublishedAt != nil {
+			publishedAt.Time = *page.PublishedAt
+		}
+	}
+
+	body, removed := security.NormalizePageHTMLForStorage(page.Body, i.sanitizePageHTML)
 	created, err := queries.CreatePage(ctx, store.CreatePageParams{
 		Title:           page.Title,
 		Slug:            page.Slug,
-		Body:            page.Body,
+		Body:            body,
 		Status:          page.Status,
 		AuthorID:        authorID,
 		FeaturedImageID: f.FeaturedImageID,
@@ -4454,15 +4608,19 @@ func (i *Importer) createNewPage(
 		CanonicalUrl:    f.CanonicalURL,
 		ScheduledAt:     f.ScheduledAt,
 		LanguageCode:    f.LanguageCode,
+		PageType:        "post",
 		VideoUrl:        page.VideoURL,
 		VideoTitle:      page.VideoTitle,
-		CreatedAt:       now,
+		CreatedAt:       createdAt,
+		PublishedAt:     publishedAt,
 		UpdatedAt:       now,
 	})
 	if err != nil {
 		return 0, err
 	}
 
+	work.Created(created)
+	noteImportedPageHTML(result, page.Slug, removed)
 	return created.ID, nil
 }
 
@@ -4887,11 +5045,11 @@ func validateTranslationGraph(
 		languages map[int64]string
 		edges     map[int64]map[int64]struct{}
 	}
-	graphs := make(map[string]*componentGraph)
+	graphs := make(map[string]componentGraph)
 	for _, set := range sets {
 		graph := graphs[set.entityType]
-		if graph == nil {
-			graph = &componentGraph{languages: set.languages, edges: make(map[int64]map[int64]struct{})}
+		if graph.edges == nil {
+			graph = componentGraph{languages: set.languages, edges: make(map[int64]map[int64]struct{})}
 			graphs[set.entityType] = graph
 		}
 		if graph.edges[set.sourceOldID] == nil {
@@ -5031,22 +5189,23 @@ func validateTranslationComponentMerge(
 }
 
 func translationEntitySlugs(data *ExportData) map[string]map[int64]string {
-	slugs := map[string]map[int64]string{
-		"page": {}, "category": {}, "tag": {}, "form": {},
-	}
+	pages := make(map[int64]string)
+	categories := make(map[int64]string)
+	tags := make(map[int64]string)
+	forms := make(map[int64]string)
 	for _, entity := range data.Pages {
-		slugs["page"][entity.ID] = entity.Slug
+		pages[entity.ID] = entity.Slug
 	}
 	for _, entity := range data.Categories {
-		slugs["category"][entity.ID] = entity.Slug
+		categories[entity.ID] = entity.Slug
 	}
 	for _, entity := range data.Tags {
-		slugs["tag"][entity.ID] = entity.Slug
+		tags[entity.ID] = entity.Slug
 	}
 	for _, entity := range data.Forms {
-		slugs["form"][entity.ID] = entity.Slug
+		forms[entity.ID] = entity.Slug
 	}
-	return slugs
+	return map[string]map[int64]string{"page": pages, "category": categories, "tag": tags, "form": forms}
 }
 
 func lookupExistingTranslationEntity(
@@ -5086,11 +5245,11 @@ func (i *Importer) validateExistingTranslationComponentMerges(
 		languages map[int64]string
 		edges     map[int64]map[int64]struct{}
 	}
-	graphs := make(map[string]*archiveGraph)
+	graphs := make(map[string]archiveGraph)
 	for _, set := range sets {
 		graph := graphs[set.entityType]
-		if graph == nil {
-			graph = &archiveGraph{languages: set.languages, edges: make(map[int64]map[int64]struct{})}
+		if graph.edges == nil {
+			graph = archiveGraph{languages: set.languages, edges: make(map[int64]map[int64]struct{})}
 			graphs[set.entityType] = graph
 		}
 		if graph.edges[set.sourceOldID] == nil {
@@ -5289,12 +5448,14 @@ func translationEdgeCount(data *ExportData, opts ImportOptions) int {
 
 func (i *Importer) importTranslations(
 	ctx context.Context,
-	queries *store.Queries,
+	work *pagewrite.Tx,
 	data *ExportData,
 	defaultLangCode string,
 	opts ImportOptions,
 	result *ImportResult,
 ) error {
+	queries := work.Q
+
 	sets := buildExportedTranslationSets(data, defaultLangCode, opts)
 
 	now := time.Now()
@@ -5325,6 +5486,9 @@ func (i *Importer) importTranslations(
 			}
 			if _, ok := ids[sourceID]; ok {
 				continue
+			}
+			if err := work.RequireTrackedEntity(set.entityType, sourceID); err != nil {
+				return err
 			}
 			if err := queries.DeleteTranslationsRelatedToEntity(ctx, store.DeleteTranslationsRelatedToEntityParams{
 				EntityType:    set.entityType,
@@ -5406,6 +5570,9 @@ func (i *Importer) importTranslations(
 				return err
 			}
 
+			if err := work.RequireTrackedEntity(set.entityType, sourceID, targetID); err != nil {
+				return err
+			}
 			if _, err := queries.CreateTranslation(ctx, store.CreateTranslationParams{
 				EntityType:    set.entityType,
 				EntityID:      sourceID,
@@ -5658,3 +5825,7 @@ func toNullString(s string) sql.NullString {
 	}
 	return sql.NullString{String: s, Valid: true}
 }
+
+// SetPrincipal binds an authenticated import initiator. Call before Import;
+// archival metadata is never used as the revision's verified actor.
+func (i *Importer) SetPrincipal(principal provenance.Principal) { i.principal = principal }

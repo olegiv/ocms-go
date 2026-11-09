@@ -76,7 +76,10 @@ func TestSidebarCollapseToggleAnnouncesState(t *testing.T) {
 				t.Fatal("sidebar collapse toggle not rendered")
 			}
 			toggle := body[start:]
-			toggle = toggle[:strings.Index(toggle, "</button>")]
+			toggle, _, closed := strings.Cut(toggle, "</button>")
+			if !closed {
+				t.Fatal("sidebar collapse toggle has no closing button")
+			}
 			for _, want := range []string{
 				`data-collapse-label="` + labels[0] + `"`,
 				`data-expand-label="` + labels[1] + `"`,

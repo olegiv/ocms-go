@@ -32,7 +32,7 @@ Most modern CMSs are PHP monoliths (WordPress, Drupal), Node-heavy with build st
 ```bash
 git clone https://github.com/olegiv/ocms-go.git && cd ocms-go
 make install-hooks && make assets
-OCMS_SESSION_SECRET=$(openssl rand -hex 32) OCMS_DO_SEED=true make dev
+OCMS_ENV=development OCMS_SESSION_SECRET=$(openssl rand -hex 32) OCMS_DO_SEED=true make dev
 # → http://localhost:8080/admin   admin@example.com / changeme1234
 ```
 
@@ -129,16 +129,17 @@ Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the [Good f
 ### REST API
 - **Full CRUD API**: Complete REST API for pages, media, tags, and categories
 - **API Key Authentication**: Secure API access with bearer token authentication
-- **Permission-Based Access**: Fine-grained permissions (read/write per resource)
+- **Permission-Based Access**: Fine-grained permissions (read/write per resource); writes also need the key's owner to still be an editor or admin
 - **Rate Limiting**: Per-key and global rate limiting
 - **API Documentation**: Built-in API documentation page
 
 ### MCP Server (AI Agents)
 - **Model Context Protocol endpoint**: AI agents (Claude Code, Cursor, VS Code, Codex) read site content over Streamable HTTP at `/api/mcp`
 - **Official Go SDK**: Built on `modelcontextprotocol/go-sdk`, protocol versions 2024-11-05 through 2026-07-28
-- **Read-only tools**: Search, list and read pages (HTML or Markdown), media, tags and categories, with the same visibility rules as REST v2
+- **Context and draft tools**: Read published context, editorial guidance and existing media; opt-in draft authoring saves owned AI-editable drafts with revisions, retries and linked translations
 - **Opt-in and key-gated**: Inactive until enabled; API keys need the `mcp:access` permission and every API key policy applies
-- **Drafts hidden by default**: Exposed only when the admin allows it and the key holds `pages:read`
+- **Optional OAuth**: Fresh browser sign-in, MFA, scoped consent and revocation for MCP apps; off by default
+- **Draft access is explicit**: General draft reads need the admin policy and `pages:read`; private authoring needs `mcp:drafts`, the authoring toggle and owned AI-editable unscheduled drafts
 - **Discoverable**: Advertised in `/.well-known/mcp/server-card.json` while active
 
 ### SEO
@@ -210,11 +211,10 @@ Prebuilt release binaries have no external runtime dependencies beyond the opera
 Building from source requires:
 
 - Go 1.27.3 or later
-- [Node.js](https://nodejs.org/) (npm) for frontend dependencies
+- [Node.js 24](https://nodejs.org/) with npm for frontend dependencies
 - [sqlc](https://sqlc.dev/) for SQL code generation
 - [templ](https://templ.guide/) for type-safe HTML templates
 - [goose](https://github.com/pressly/goose) for database migrations
-- [Dart Sass](https://sass-lang.com/dart-sass) for SCSS compilation
 
 ## Installation
 
@@ -238,9 +238,12 @@ cd my-site
 `ocms init` creates `my-site/` with a `.env` (including a freshly generated
 `OCMS_SESSION_SECRET` and `OCMS_MFA_KEY`) plus `data/`, `uploads/`, and
 `custom/` directories.
+The development scaffold seeds a default password, so `init -host` accepts
+only loopback addresses or `localhost`.
 `ocms serve` starts the server, reading `./.env` from the current directory.
-Running `ocms` with no command still starts the server, so existing
-systemd/Docker setups are unaffected.
+Running `ocms` with no command is equivalent to `ocms serve`. When
+`OCMS_ENV` is unset or empty after loading the environment file, the server
+uses production mode and requires its production configuration.
 
 The server applies pending database migrations when it starts. To run the
 core ones without starting it, use `ocms migrate [-db <path>]
@@ -252,8 +255,11 @@ goose CLI, which does not know the Go migration and cannot roll it back.
 
 Open `http://localhost:8080/admin/` and log in with
 `admin@example.com` / `changeme1234`. Change the admin email and password
-immediately. Stop the foreground process with `Ctrl+C`, set
-`OCMS_DO_SEED=false` in `my-site/.env`, then run `serve` again for normal runs.
+immediately, then stop the foreground process with `Ctrl+C`. Set
+`OCMS_DO_SEED=false` in `my-site/.env`. Before serving public traffic,
+set `OCMS_ENV=production` and complete the
+[production configuration checklist](#upgrading-sites-with-no-ocms_env)
+before restarting.
 
 Keep `OCMS_SESSION_SECRET` stable; regenerating it invalidates active sessions.
 Keep `OCMS_MFA_KEY` stable too, and back it up with the database: it seals the
@@ -262,8 +268,9 @@ users can sign in only with recovery codes. Someone who lost both their
 authenticator and recovery codes is reset by an administrator on the user page,
 or with `ocms mfa-reset [-db <path>] <email>`, which reads `./.env` like
 `ocms migrate`.
-Do not set `OCMS_ENV=production` for this seeded bootstrap run. Production
-startup rejects default seeded credentials.
+The generated `.env` explicitly sets `OCMS_ENV=development` for the seeded
+bootstrap. An older scaffold without this setting needs it for a local
+bootstrap. Production startup rejects default seeded credentials.
 
 Available release archives:
 
@@ -318,7 +325,62 @@ gh attestation verify ocms-linux-amd64.tar.gz --repo olegiv/ocms-go
    make build-prod
    ```
 
+## Upgrading sites with no `OCMS_ENV`
+
+Set `OCMS_ENV` explicitly before upgrading (I-10). Unset or empty selects
+production. Only `development`, `staging` and `production` are accepted.
+Other values fail startup. Use `development` for local-only sites. The
+checks below apply to staging and production.
+
+- **Page HTML:** The production startup audit rejects suspicious markup in
+  any stored page, including drafts. Remove or replace flagged markup such
+  as legacy iframes or inline SVG before switching modes. The frontend
+  sanitizes legacy bodies at render time. An editor save can persist the
+  sanitized body even when the title is the only field you changed. Review
+  the result and back up the database before saving.
+- **Public forms:** Configure an active CAPTCHA verifier even if the database
+  has no public forms. Each active public form needs a CAPTCHA field.
+  With the production requirement enabled, missing verification or fields
+  cause startup to refuse.
+- **API keys:** Replace keys with no expiry or a lifetime above the
+  production default of 90 days, measured from creation to expiry. Such
+  keys are rejected at authentication. Every key also needs at least one
+  per-key source CIDR. Check all active keys and the global API allowlist.
+- **Sign-in and MFA.** Existing sessions end on upgrade because session
+  tokens are now hashed in storage. Staging and production use a Secure
+  `__Host-session` cookie and HSTS. Set up HTTPS before switching. By default,
+  accounts must pass MFA at sign-in and enroll if needed.
+- **Outbound integrations:** Startup refuses non-HTTPS URLs for active
+  webhooks, scheduled HTTP tasks and embed providers. Set
+  `OCMS_WEBHOOK_FORM_DATA_MODE` to `redacted` or `none`. The production
+  defaults refuse `full` at startup.
+- **Production prerequisites:** Supply a strong session secret and MFA key.
+  Configure `OCMS_TRUSTED_PROXIES`, `OCMS_API_ALLOWED_CIDRS` and the allowlists
+  required by enabled integrations such as webhooks, embeds and migration.
+  Keep seeding disabled and rotate any default admin credentials.
+- **Custom themes (L-7):** Production and staging CSP omit `'unsafe-eval'`.
+  Use the shipped Alpine CSP build, convert unsupported expressions and
+  update any integrity hash pinned to the previous Alpine asset. See
+  [custom theme scripting](docs/custom-themes.md).
+
+## Upgrading Event Log retention
+
+Older releases kept Event Log records indefinitely. After upgrade, recognized
+diagnostics older than 90 days are eligible for deletion on the first cleanup
+run. Security and audit records and unclassified events are kept by default.
+Take a database backup before upgrading if you need the old diagnostics.
+Set `OCMS_EVENT_CLEANUP_ENABLED=false` before restarting to keep all events,
+or set either window to `0` to keep that class. Recovering deleted events
+requires a backup. SQLite reuses the freed pages inside the existing database
+file. See [Event Log retention](docs/scheduler.md#event-log-retention) for
+the policy and how to reclaim disk space.
+
 ## Environment Variables
+
+The R1.7 OAuth retention job has a fixed, bounded
+[maintenance policy](docs/connected-apps.md#retention-policy), with no new
+environment setting. It runs independently of `OCMS_OAUTH_ENABLED`; that flag
+controls the issuer, not cleanup of previously stored evidence.
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
@@ -329,13 +391,27 @@ gh attestation verify ocms-linux-amd64.tar.gz --repo olegiv/ocms-go
 | `OCMS_ENV_FILE` | Env file to read instead of `./.env` (site instance mode; `site.mk` sets it to the site's `.env`). The server and `ocms migrate` refuse to start if it is missing, unreadable or does not parse; a `./.env` that does not parse is refused too, a missing one ignored. Variables already in the environment win over the file | `./.env` | No |
 | `OCMS_SERVER_HOST` | Server host address | `localhost` | No |
 | `OCMS_SERVER_PORT` | Server port number | `8080` | No |
-| `OCMS_ENV` | Environment mode (`development`/`production`) | `development` | No |
+| `OCMS_ENV` | Environment mode (`development`, `staging` or `production`). Unset or empty uses production. An unrecognized value fails startup. `staging` and `production` apply the secure defaults, startup refusals and secret checks | `production` | No |
 | `OCMS_LOG_LEVEL` | Log level (`debug`/`info`/`warn`/`error`) | `info` | No |
 | `OCMS_ERROR_LOG_PATH` | Path for a separate error log file (5xx/ERROR+ also go to stdout) | - | No |
+| `OCMS_EVENT_CLEANUP_ENABLED` | Register automatic and manual Event Log cleanup | `true` | No |
+| `OCMS_EVENT_DIAGNOSTIC_RETENTION_DAYS` | Retain recognized diagnostics for 0–36500 days (0 keeps them indefinitely) | `90` | No |
+| `OCMS_EVENT_AUDIT_RETENTION_DAYS` | Retain classified security and audit records for 0–36500 days (0 keeps them indefinitely) | `0` | No |
 | `OCMS_CUSTOM_DIR` | Directory for custom themes (custom modules are compiled in) | `./custom` | No |
 | `OCMS_ACTIVE_THEME` | Active theme (overrides DB/admin setting) | `default` | No |
 | `OCMS_SITE_URL` | Full site URL written into site config on startup (overrides DB/admin setting). Required for RSS/Atom feeds, the sitemap and agent-discovery documents, which answer 503 while it is unset. Must be scheme and host only, e.g. `https://example.com` — a path, query, fragment, credentials or an out-of-range port fails startup, because routes are served from the root | - | No |
+| `OCMS_OAUTH_ENABLED` | Enable the MCP OAuth server; requires canonical OCMS_SITE_URL (HTTPS outside development loopback) | `false` | No |
+| `OCMS_OAUTH_CIMD_ALLOWED_HOSTS` | Exact HTTPS client metadata host allowlist: bare lowercase hostnames, comma or space separated; unset uses the default, set empty allows no live discovery (pre-registered clients and DCR only) | `claude.ai,chatgpt.com` | No |
+| `OCMS_OAUTH_PRE_REGISTERED_CLIENTS` | JSON array of owner-reviewed public client metadata; at most 20 documents / 64 KiB | Empty | No |
+| `OCMS_OAUTH_ALLOW_DCR` | Allow bounded public-client dynamic registration | `false` | No |
+| `OCMS_OAUTH_DCR_INITIAL_ACCESS_TOKEN` | Require a separate bearer credential for new dynamic client registrations. Generate with `openssl rand -hex 32`. An invalid value fails startup even with OAuth off. | Empty | No |
+| `OCMS_OAUTH_ACCESS_TTL` | OAuth access lifetime in seconds (60–86400) | `3600` | No |
+| `OCMS_OAUTH_REFRESH_TTL_DAYS` | Absolute rotating refresh-family lifetime (1–90 days) | `30` | No |
+| `OCMS_PREVIEW_LINK_TTL_HOURS` | Preview share-link lifetime in hours. Values outside 1–24 fail startup. Issuer credential expiry can shorten the lifetime. | `24` | No |
+| `OCMS_AI_DISABLED` | Disable draft authoring while retaining normal content reads | `false` | No |
 | `OCMS_DO_SEED` | Seed database with default admin and config | `false` | No |
+| `OCMS_SEED_ADMIN_PASSWORD` | Password for the admin `OCMS_DO_SEED` creates instead of the documented default (min 12 characters) | - | No |
+| `OCMS_REQUIRE_SEED_ADMIN_PASSWORD` | Refuse to seed without `OCMS_SEED_ADMIN_PASSWORD` (the Fly staging bootstrap sets it) | `false` | No |
 | `OCMS_CACHE_TTL` | TTL in seconds for the Redis (or fallback) cache, which the caches do not use yet; the in-memory caches have fixed TTLs | `3600` | No |
 | `OCMS_REDIS_URL` | Redis URL; the connection shows in the cache admin, but the caches stay in memory per process | - | No |
 | `OCMS_CACHE_PREFIX` | Redis key prefix | `ocms:` | No |
@@ -380,7 +456,8 @@ gh attestation verify ocms-linux-amd64.tar.gz --repo olegiv/ocms-go
 ### Quick Start
 
 ```bash
-# Set required environment variable
+# Opt into development for local runs
+export OCMS_ENV=development
 export OCMS_SESSION_SECRET="$(openssl rand -base64 32)"
 
 # Install repository-managed git hooks (run once per clone)
@@ -407,7 +484,7 @@ make run
 | `make build-linux-arm64` | Cross-compile no-cgo Linux ARM64 binary |
 | `make build-darwin-arm64` | Cross-compile no-cgo macOS ARM64 binary |
 | `make build-all-platforms` | Build no-cgo Linux AMD64/ARM64 and macOS ARM64 binaries |
-| `make test` | Run all tests |
+| `make test` | Run the project Go suite, excluding the top-level `output/` artifact directory |
 | `make clean` | Remove build artifacts |
 | `make clean-db` | Remove database files |
 | `make migrate-up` | Apply pending migrations (`ocms migrate up`) |
@@ -418,10 +495,10 @@ make run
 | `make sqlc` | Regenerate sqlc code from SQL queries |
 | `make templ` | Regenerate templ Go code from `.templ` files |
 | `make deploy-binary` | Deploy binary to remote server (no custom content) |
-| `make commit-prepare` | Proxy to Claude slash command `/commit-prepare` |
-| `make commit-do` | Proxy to Claude slash command `/commit-do` |
+| `make commit-prepare` | Test the staged tree and draft a message from its diff |
+| `make commit-do` | Recheck the prepared tree and approve the commit in a terminal |
 | `make code-quality` | Proxy to Claude slash command `/code-quality` |
-| `make security-audit` | Proxy to Claude slash command `/security-audit` |
+| `make security-audit` | Run a report-only Claude audit and save it under `.audit/` |
 | `make commit-prepare-local` | Run the test gate, then draft a commit message locally |
 | `make commit-do-local` | Commit the staged files with the drafted message after the test gate |
 | `make code-quality-local` | Run local code quality shell script (`golangci-lint`, `nilaway`, `go test`) |
@@ -434,6 +511,9 @@ make run
 On first run with `OCMS_DO_SEED=true`, the application seeds a default admin user:
 - **Email**: admin@example.com
 - **Password**: changeme1234
+
+Set `OCMS_SEED_ADMIN_PASSWORD` to seed that account with your own password
+instead, for example on a first boot reachable from other hosts.
 
 Change these credentials immediately after first login. Where a second factor
 is required (`OCMS_REQUIRE_MFA`, on by default in production), every account,
@@ -696,7 +776,13 @@ The REST surface is `/api/v2`. The OpenAPI 3.1 spec is generated from Go types v
 
 ## MCP Server
 
-The opt-in **MCP Server** module lets AI agents read site content over the [Model Context Protocol](https://modelcontextprotocol.io). Enable it in **Admin > Modules**, then create an API key with the **MCP** permission (`mcp:access`) in **Admin > API Keys**. The admin page at `/admin/mcp` shows the endpoint, client configuration snippets, the tool catalog, and the drafts and instructions settings.
+The opt-in **MCP Server** module provides content reads and gated draft
+authoring over the [Model Context Protocol](https://modelcontextprotocol.io).
+Enable it in **Admin > Modules** and connect with an API key holding
+`mcp:access` or an OAuth grant with that scope when OAuth is enabled.
+The admin page at `/admin/mcp` shows the endpoint, client snippets, the
+tool catalog, and the draft access, authoring, link policy and instructions
+settings. The command below uses an API key.
 
 ```bash
 claude mcp add --transport http ocms https://example.com/api/mcp \
@@ -712,7 +798,25 @@ claude mcp add --transport http ocms https://example.com/api/mcp \
 | `list_tags` / `get_tag` | Tags with usage counts |
 | `list_categories` / `get_category` | Category tree or flat list |
 
-All tools are read-only. See [docs/mcp-module.md](docs/mcp-module.md) for authentication, visibility rules, limits, logging, and security notes.
+Draft authoring is off by default. Enable it in Admin → MCP Server and grant
+`mcp:access` plus `mcp:drafts` to create/update owned AI-editable drafts or
+linked translations. Writes use stable UUID request IDs, revisions and existing
+taxonomy/media; agents cannot publish or delete. Saves return editor-session
+revision-pinned preview URLs. Explicit expiring share links and review panels
+are available in R1.6; see [editorial review](docs/editorial-review.md) and
+[draft authoring](docs/draft-authoring.md) for contracts and safeguards.
+Set `OCMS_OAUTH_ENABLED=true` and a canonical HTTPS `OCMS_SITE_URL` for browser
+authorization alongside API keys. Manage and revoke connections from
+`/account/connected-apps` or, as an administrator, from `/admin/mcp`.
+The global `OCMS_API_ALLOWED_CIDRS` allowlist and per-key source CIDRs
+apply to API keys. OAuth bearers use separate account and scope checks.
+R1.7 adds [connected-app management and bounded OAuth retention](docs/connected-apps.md),
+plus an [oCMS author workflow](docs/skills/ocms-author/SKILL.md).
+The [staging acceptance record](docs/launch/r17-acceptance.md) identifies the
+latest verified build and the builds used for native Desktop reconnect,
+translation review, demo publication and recording. See the
+[release decisions](docs/launch/release-decisions.md) for sign-off.
+See [docs/mcp-module.md](docs/mcp-module.md) for visibility rules, limits and logging.
 
 ## Theme Development
 
@@ -912,20 +1016,36 @@ for the full rationale.
 
 ## Testing
 
-Run all tests:
+Run all project tests. The package selector skips the top-level `output/`
+directory so local verification artifacts do not enter the test suite.
+
 ```bash
-OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! go test ./...
+OCMS_SESSION_SECRET='test-secret-key-32-bytes-long!!!' ./scripts/with-go-packages.sh go test -count=1
 ```
 
-Run tests with verbose output:
+Add `-v` for verbose output.
+
 ```bash
-OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! go test -v ./...
+OCMS_SESSION_SECRET='test-secret-key-32-bytes-long!!!' ./scripts/with-go-packages.sh go test -count=1 -v
 ```
 
 Run tests for a specific package:
 ```bash
-OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! go test -v ./internal/store/...
+OCMS_SESSION_SECRET='test-secret-key-32-bytes-long!!!' go test -count=1 -v ./internal/store/...
 ```
+
+The Go CI workflow runs the Chrome regressions as part of the test gate.
+To run the same gate locally, install Google Chrome, then run:
+
+```bash
+make assets
+OCMS_TEST_BROWSER=1 ./scripts/test-gate.sh
+```
+
+To test a candidate Git tree, run
+`OCMS_TEST_BROWSER=1 ./scripts/codex/test-snapshot.sh <tree>`. The snapshot
+builds its own assets and uses the CLI bundled with its locked Playwright
+release. The local gate runs browser tests when browser mode is enabled.
 
 Check for vulnerabilities:
 ```bash
@@ -992,16 +1112,16 @@ You can run slash-command equivalents through Claude CLI:
 ./scripts/codex/proxy-claude-command.sh /security-audit
 ```
 
-The proxy runs `claude -p` with `--permission-mode dontAsk` and a per-command
-`--allowedTools` list. Rules for tools that run project or package code are
-exact (`scripts/test-gate.sh`, `go vet ./...`, `golangci-lint run ./...`,
-`npm audit`); git commands are allowed by prefix, so `git commit` runs the
-repository's hooks and `git diff --output=<file>` can write a file. Anything
-else is denied without a prompt, so a check that needs another tool is skipped
-and reported by the command rather than run. This is a best-effort fence, not
-a sandbox. Avoid `--dangerously-skip-permissions`: these
-commands read diffs, logs and scan output, and text in them could otherwise
-steer the session into any shell command.
+Commit preparation tests a fresh snapshot before handing the tested diff to
+a tool-free draft session. Commit execution runs in a terminal and checks
+the staged tree and effective Git hooks before asking for approval.
+
+Quality and audit sessions use `--permission-mode dontAsk` and an explicit
+tool allowlist. Shell rules for project and package checks are exact, such
+as `go vet ./...` and `npm audit`. Git read commands accept arguments, so
+`git diff --output=<file>` can write a file. This is a best-effort fence.
+The audit launcher owns the report destination and saves the session's
+Markdown under `.audit/`.
 
 Codex wrapper commands (Claude proxy by default):
 

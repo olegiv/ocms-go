@@ -207,6 +207,32 @@ func TestTranslationFilesEqualCount(t *testing.T) {
 	}
 }
 
+func TestPageWriteMessagesComplete(t *testing.T) {
+	for _, lang := range []string{"en", "ru"} {
+		t.Run(lang, func(t *testing.T) {
+			data, err := localesFS.ReadFile("locales/" + lang + "/messages.json")
+			if err != nil {
+				t.Fatal(err)
+			}
+			var catalog struct {
+				Messages []struct{ ID, Translation string }
+			}
+			if err = json.Unmarshal(data, &catalog); err != nil {
+				t.Fatal(err)
+			}
+			messages := make(map[string]string)
+			for _, message := range catalog.Messages {
+				messages[message.ID] = message.Translation
+			}
+			for _, key := range []string{"pages.revision_conflict", "pages.revision_conflict_title", "pages.view_latest", "pages.confirm_overwrite", "pages.allow_ai_edits", "versions.legacy"} {
+				if messages[key] == "" {
+					t.Errorf("%s has no translation for %s", lang, key)
+				}
+			}
+		})
+	}
+}
+
 func findMissingKeys(a, b map[string]bool) []string {
 	var missing []string
 	for key := range a {

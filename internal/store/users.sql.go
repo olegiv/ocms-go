@@ -13,32 +13,25 @@ import (
 
 const countUserOwnedContent = `-- name: CountUserOwnedContent :one
 SELECT
-    (SELECT COUNT(*) FROM pages WHERE author_id = ?) +
-    (SELECT COUNT(*) FROM page_versions WHERE changed_by = ?) +
-    (SELECT COUNT(*) FROM media WHERE uploaded_by = ?) +
-    (SELECT COUNT(*) FROM api_keys k WHERE k.created_by = ?) +
-    (SELECT COUNT(*) FROM webhooks w WHERE w.created_by = ?)
+    (SELECT COUNT(*) FROM pages WHERE author_id = ?1) +
+    (SELECT COUNT(*) FROM page_versions WHERE changed_by = ?1) +
+    (SELECT COUNT(*) FROM media WHERE uploaded_by = ?1) +
+    (SELECT COUNT(*) FROM api_keys k WHERE k.created_by = ?1) +
+    (SELECT COUNT(*) FROM webhooks w WHERE w.created_by = ?1) +
+    (SELECT COUNT(*) FROM scheduled_tasks WHERE created_by = ?1) +
+    (SELECT COUNT(*) FROM page_ai_access WHERE set_by = ?1)
 `
-
-type CountUserOwnedContentParams struct {
-	AuthorID    int64 `json:"author_id"`
-	ChangedBy   int64 `json:"changed_by"`
-	UploadedBy  int64 `json:"uploaded_by"`
-	CreatedBy   int64 `json:"created_by"`
-	CreatedBy_2 int64 `json:"created_by_2"`
-}
 
 // Everything that blocks or would be silently re-attributed by deleting a user.
 // pages.author_id and page_versions.changed_by are ON DELETE RESTRICT, and
 // media.uploaded_by has no action clause, which enforces the same way.
-func (q *Queries) CountUserOwnedContent(ctx context.Context, arg CountUserOwnedContentParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countUserOwnedContent,
-		arg.AuthorID,
-		arg.ChangedBy,
-		arg.UploadedBy,
-		arg.CreatedBy,
-		arg.CreatedBy_2,
-	)
+// page_ai_access.set_by is ON DELETE RESTRICT too: the user who last changed a
+// page's AI access cannot be deleted while that row names them. One named
+// parameter serves every count, so a count added here needs no change from
+// callers; TestEveryRestrictingUserForeignKeyIsCountedAsOwnedContent lists the
+// columns that must appear.
+func (q *Queries) CountUserOwnedContent(ctx context.Context, userID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countUserOwnedContent, userID)
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
@@ -200,7 +193,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []User{}
 	for rows.Next() {
 		var i User

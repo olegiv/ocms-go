@@ -19,19 +19,21 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
-// bearerRealm is advertised in WWW-Authenticate on 401 responses (RFC 6750).
-// There is deliberately no resource_metadata parameter: the endpoint takes
-// API keys, not OAuth tokens, so clients must not start an OAuth flow.
+// bearerRealm is the 401 challenge for the API-key branch. When OAuth is
+// enabled, mixedAuthentication advertises resource_metadata on its own branch.
 const bearerRealm = `Bearer realm="oCMS MCP"`
 
 // buildHTTPHandler assembles the endpoint's middleware chain, outermost
 // first:
 //
 //	no-store → POST only → per-IP limit → in-flight cap → cross-origin check
-//	→ stored activation/settings → API key auth (+ WWW-Authenticate on 401)
-//	→ mcp:access → TokenInfo → per-key limit → no batches → request context
+//	→ stored activation/settings
+//	→ API key auth → current account → mcp:access → TokenInfo → per-key limit
+//	  or OAuth bearer verification with mcp:access → per-user limit
+//	→ body cap and batch rejection → OAuth tool scopes → request context
 //	→ SDK Streamable HTTP handler (stateless, JSON responses)
 //
 // Cheap rejections run before API key verification (Argon2), so probing the
@@ -61,7 +63,7 @@ func (m *Module) buildHTTPHandler(db *sql.DB) http.Handler {
 			// DNS rebinding is countered by the cross-origin check and the
 			// mandatory bearer authentication instead.
 			DisableLocalhostProtection:   true,
-			MaxRequestBodyBytes:          maxRequestBodyBytes,
+			MaxRequestBodyBytes:          sdkRequestBodyCeiling,
 			PropagateRequestCancellation: true,
 			Logger:                       sdkLogger(m.logger, "mcp-transport"),
 		},
@@ -69,16 +71,22 @@ func (m *Module) buildHTTPHandler(db *sql.DB) http.Handler {
 
 	var h http.Handler = sdkHandler
 	h = withRequestContext(h)
+	h = m.withOAuthToolScopes(h)
 	h = rejectBatches(maxRequestBodyBytes, h)
 	h = middleware.APIRateLimit(keyRateLimitRPS, keyRateLimitBurst)(h)
+	inner := h
 	h = auth.RequireBearerToken(verifyValidatedKey, &auth.RequireBearerTokenOptions{
 		// Keys without an expiry are valid unless OCMS_REQUIRE_API_KEY_EXPIRY
 		// says otherwise, which middleware.APIKeyAuth already enforced.
 		AllowMissingExpiration: true,
 	})(h)
 	h = requireMCPAccess(m.logger, h)
+	h = m.keyAccountGuard(h)
 	h = middleware.APIKeyAuth(db)(h)
 	h = withBearerChallenge(h)
+	if m.ctx.OAuth != nil {
+		h = m.mixedAuthentication(h, inner)
+	}
 	h = m.withStoredState(h)
 	h = crossOriginGuard(m.logger, h)
 	h = limitInFlight(m.logger, maxInFlightRequests, h)
@@ -216,8 +224,8 @@ func crossOriginGuard(logger *slog.Logger, next http.Handler) http.Handler {
 	protection.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		logger.Warn("MCP request rejected: cross-origin browser request",
 			"ip", middleware.GetClientIP(r),
-			"origin", r.Header.Get("Origin"),
-			"sec_fetch_site", r.Header.Get("Sec-Fetch-Site"))
+			"origin", util.BoundedLogField(r.Header.Get("Origin")),
+			"sec_fetch_site", util.BoundedLogField(r.Header.Get("Sec-Fetch-Site")))
 		middleware.WriteAPIError(w, http.StatusForbidden, codeForbidden,
 			"Cross-origin requests are not allowed", nil)
 	}))

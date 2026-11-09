@@ -60,6 +60,36 @@ func (q *Queries) CountEventsByLevelAndCategory(ctx context.Context, arg CountEv
 	return count, err
 }
 
+const countExpiredEvents = `-- name: CountExpiredEvents :one
+SELECT COUNT(*) FROM (
+    SELECT expired.id FROM events AS expired
+    CROSS JOIN (SELECT CAST(?1 AS TEXT) AS messages) AS producer_filter
+    WHERE expired.category = ?2 AND expired.created_at < CAST(?3 AS TEXT)
+      AND (producer_filter.messages = 'null'
+           OR expired.message IN (SELECT value FROM json_each(producer_filter.messages)))
+    LIMIT ?4
+)
+`
+
+type CountExpiredEventsParams struct {
+	Messages   string `json:"messages"`
+	Category   string `json:"category"`
+	Cutoff     string `json:"cutoff"`
+	CountLimit int64  `json:"count_limit"`
+}
+
+func (q *Queries) CountExpiredEvents(ctx context.Context, arg CountExpiredEventsParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countExpiredEvents,
+		arg.Messages,
+		arg.Category,
+		arg.Cutoff,
+		arg.CountLimit,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createEvent = `-- name: CreateEvent :one
 INSERT INTO events (level, category, message, user_id, metadata, ip_address, request_url, created_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -103,13 +133,37 @@ func (q *Queries) CreateEvent(ctx context.Context, arg CreateEventParams) (Event
 	return i, err
 }
 
-const deleteOldEvents = `-- name: DeleteOldEvents :exec
-DELETE FROM events WHERE created_at < ?
+const deleteExpiredEvents = `-- name: DeleteExpiredEvents :execrows
+DELETE FROM events
+WHERE id IN (
+    SELECT expired.id FROM events AS expired
+    CROSS JOIN (SELECT CAST(?1 AS TEXT) AS messages) AS producer_filter
+    WHERE expired.category = ?2 AND expired.created_at < CAST(?3 AS TEXT)
+      AND (producer_filter.messages = 'null'
+           OR expired.message IN (SELECT value FROM json_each(producer_filter.messages)))
+    ORDER BY expired.created_at, expired.id
+    LIMIT ?4
+)
 `
 
-func (q *Queries) DeleteOldEvents(ctx context.Context, createdAt time.Time) error {
-	_, err := q.db.ExecContext(ctx, deleteOldEvents, createdAt)
-	return err
+type DeleteExpiredEventsParams struct {
+	Messages   string `json:"messages"`
+	Category   string `json:"category"`
+	Cutoff     string `json:"cutoff"`
+	BatchLimit int64  `json:"batch_limit"`
+}
+
+func (q *Queries) DeleteExpiredEvents(ctx context.Context, arg DeleteExpiredEventsParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteExpiredEvents,
+		arg.Messages,
+		arg.Category,
+		arg.Cutoff,
+		arg.BatchLimit,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const getEvent = `-- name: GetEvent :one
@@ -149,7 +203,7 @@ func (q *Queries) ListEvents(ctx context.Context, arg ListEventsParams) ([]Event
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Event{}
 	for rows.Next() {
 		var i Event
@@ -195,7 +249,7 @@ func (q *Queries) ListEventsByCategory(ctx context.Context, arg ListEventsByCate
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Event{}
 	for rows.Next() {
 		var i Event
@@ -241,7 +295,7 @@ func (q *Queries) ListEventsByLevel(ctx context.Context, arg ListEventsByLevelPa
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Event{}
 	for rows.Next() {
 		var i Event
@@ -293,7 +347,7 @@ func (q *Queries) ListEventsByLevelAndCategory(ctx context.Context, arg ListEven
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Event{}
 	for rows.Next() {
 		var i Event
@@ -354,7 +408,7 @@ func (q *Queries) ListEventsWithUser(ctx context.Context, arg ListEventsWithUser
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []ListEventsWithUserRow{}
 	for rows.Next() {
 		var i ListEventsWithUserRow
@@ -419,7 +473,7 @@ func (q *Queries) ListEventsWithUserByCategory(ctx context.Context, arg ListEven
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []ListEventsWithUserByCategoryRow{}
 	for rows.Next() {
 		var i ListEventsWithUserByCategoryRow
@@ -484,7 +538,7 @@ func (q *Queries) ListEventsWithUserByLevel(ctx context.Context, arg ListEventsW
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []ListEventsWithUserByLevelRow{}
 	for rows.Next() {
 		var i ListEventsWithUserByLevelRow
@@ -555,7 +609,7 @@ func (q *Queries) ListEventsWithUserByLevelAndCategory(ctx context.Context, arg 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []ListEventsWithUserByLevelAndCategoryRow{}
 	for rows.Next() {
 		var i ListEventsWithUserByLevelAndCategoryRow

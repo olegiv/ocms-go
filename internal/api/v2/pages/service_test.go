@@ -353,3 +353,67 @@ func TestCreateAndUpdateRejectApplicationRouteSlugs(t *testing.T) {
 		t.Fatalf("Update() with the unchanged legacy slug: %v", err)
 	}
 }
+
+// TestSlugAndImageChecksSeparateRefusalsFromFaults checks that a slug or
+// featured-image check answers 422 only for a refusal the caller can fix, and
+// an internal error for a storage fault. A fault was a 422 carrying the
+// driver's text, which the AI create path then retried as a taken slug
+// (2026-11-03 review R2-1/B-6).
+//
+// Bug state: return v2.NewValidationError for every SlugAvailable or
+// FeaturedImageSize error again and this fails.
+func TestSlugAndImageChecksSeparateRefusalsFromFaults(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+	queries := store.New(db)
+	svc := pages.NewService(db, queries, nil, nil, pages.Policy{})
+	ctx := context.Background()
+	now := time.Now()
+	author, err := queries.CreateUser(ctx, store.CreateUserParams{
+		Email: "api@example.com", PasswordHash: "x", Role: model.RoleAdmin, Name: "API", CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	writer := v2.Actor{APIKey: &store.ApiKey{ID: 1, CreatedBy: author.ID}, Permissions: []string{model.PermissionPagesWrite}}
+	kind := func(err error) v2.ErrorKind {
+		t.Helper()
+		var de *v2.Error
+		if !errors.As(err, &de) {
+			t.Fatalf("want *v2.Error, got %T: %v", err, err)
+		}
+		return de.Kind
+	}
+
+	if _, err = svc.Create(ctx, writer, pages.CreatePageBody{Title: "Taken", Slug: "taken", Body: "b"}); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if _, err = svc.Create(ctx, writer, pages.CreatePageBody{Title: "Again", Slug: "taken", Body: "b"}); kind(err) != v2.ErrValidation {
+		t.Errorf("taken slug: %v, want a validation error", err)
+	}
+	missing := int64(999)
+	if _, err = svc.Create(ctx, writer, pages.CreatePageBody{Title: "Image", Slug: "image", Body: "b", FeaturedImageID: &missing}); kind(err) != v2.ErrValidation {
+		t.Errorf("missing featured image: %v, want a validation error", err)
+	}
+
+	if _, err = db.ExecContext(ctx, `ALTER TABLE page_aliases RENAME TO page_aliases_unavailable`); err != nil {
+		t.Fatal(err)
+	}
+	_, err = svc.Create(ctx, writer, pages.CreatePageBody{Title: "Fault", Slug: "fault", Body: "b"})
+	if _, renameErr := db.ExecContext(ctx, `ALTER TABLE page_aliases_unavailable RENAME TO page_aliases`); renameErr != nil {
+		t.Fatal(renameErr)
+	}
+	if kind(err) != v2.ErrInternal {
+		t.Errorf("slug check during storage fault: %v, want an internal error", err)
+	}
+	if _, err = db.ExecContext(ctx, `ALTER TABLE media RENAME TO media_unavailable`); err != nil {
+		t.Fatal(err)
+	}
+	_, err = svc.Create(ctx, writer, pages.CreatePageBody{Title: "Image fault", Slug: "image-fault", Body: "b", FeaturedImageID: &missing})
+	if _, renameErr := db.ExecContext(ctx, `ALTER TABLE media_unavailable RENAME TO media`); renameErr != nil {
+		t.Fatal(renameErr)
+	}
+	if kind(err) != v2.ErrInternal {
+		t.Errorf("image check during storage fault: %v, want an internal error", err)
+	}
+}

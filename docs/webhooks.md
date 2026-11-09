@@ -47,7 +47,7 @@ For local testing, consider using:
 | `user.created` | When a new user is created |
 | `user.deleted` | When a user is deleted |
 
-Events are dispatched by the admin UI handlers (pages, media, users and public form submissions), by the REST API for page and media writes (`page.created`, `page.updated`, `page.deleted`, `media.uploaded`, `media.deleted`), and by scheduled publishing (`page.published`). Creating or editing a page, a status change in the edit form or the REST API included, sends only `page.created` or `page.updated`; `page.published` comes from the publish toggle and scheduled publishing, `page.unpublished` only from the publish toggle. When the toggle and scheduled publishing publish a page at the same moment, only the first sends `page.published`. `media.deleted` is sent once the media's records are deleted, even when its files could not be removed from disk; the server logs the leftover files as an error, which the Event Log also records. Restoring a page version, creating a translation and content imports send no events. `author_email` is the email of the user who made the change, which can differ from `author_id`'s user; events from the REST API and the scheduler carry none.
+Events are dispatched by the admin UI handlers (pages, media, users and public form submissions), by the REST API for page and media writes (`page.created`, `page.updated`, `page.deleted`, `media.uploaded`, `media.deleted`), and by scheduled publishing (`page.published`). Creating or editing a page, a status change in the edit form or the REST API included, sends only `page.created` or `page.updated`; `page.published` comes from the publish toggle and scheduled publishing, `page.unpublished` only from the publish toggle. When the toggle and scheduled publishing publish a page at the same moment, only the first sends `page.published`. `media.deleted` is sent once the media's records are deleted, even when its files could not be removed from disk; the server logs the leftover files as an error, which the Event Log also records. Deleting media also clears it from the pages that use it as featured or Open Graph image, which gives each of those pages a new revision, so the same delete, in the admin UI (single or bulk) or through the REST API, sends `page.updated` once for each such page, ahead of `media.deleted`. Restoring a page version, creating a translation and content imports send no events. `author_email` is the email of the user who made the change, which can differ from `author_id`'s user; events from the REST API and the scheduler carry none.
 
 ## Payload Format
 
@@ -241,6 +241,11 @@ Each delivery shows:
 - Attempt count
 - Timestamps
 
+The dispatcher rejects events submitted while it is stopped. Dispatch errors
+appear in the server log with the event type and, when available, its entity ID
+(the submission ID for form events). Manual retry applies to deliveries already
+recorded in Delivery History.
+
 ### Webhook Health
 
 The webhook list shows:
@@ -264,6 +269,8 @@ To prevent webhook floods from rapid updates, oCMS includes event debouncing:
 - Maximum 5-second wait before dispatch
 
 This means if a page is updated 10 times in 2 seconds, only 1 webhook is sent with the final state.
+On shutdown, the dispatcher closes the debounce queue to new events and flushes
+the events it already accepted before stopping the delivery workers.
 
 ## Best Practices
 

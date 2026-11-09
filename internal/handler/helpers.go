@@ -8,7 +8,6 @@ import (
 	"database/sql"
 	"errors"
 	"log/slog"
-	"strconv"
 
 	"github.com/olegiv/ocms-go/internal/store"
 )
@@ -155,24 +154,6 @@ func ListAndCount[T any](
 // =============================================================================
 // BATCH ASSOCIATION HELPERS
 // =============================================================================
-
-// saveBatchAssociations saves associations from a list of string IDs.
-// It parses each ID string and calls the save function.
-func saveBatchAssociations(
-	idStrs []string,
-	saveFn func(id int64) error,
-	logContext string,
-) {
-	for _, idStr := range idStrs {
-		id, err := strconv.ParseInt(idStr, 10, 64)
-		if err != nil {
-			continue
-		}
-		if err = saveFn(id); err != nil {
-			slog.Error("failed to save association", "error", err, "context", logContext, "id", id)
-		}
-	}
-}
 
 // =============================================================================
 // BATCH ENTITY FETCHING HELPERS

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"slices"
 	"strconv"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -27,8 +28,14 @@ const identityKey = "ocms.identity"
 
 // identity is the authenticated caller of one MCP request.
 type identity struct {
-	key    store.ApiKey
-	scopes []string // permissions granted to the key
+	key       store.ApiKey
+	scopes    []string // permissions granted to the key
+	userID    int64
+	grantID   string
+	clientID  string
+	expiresAt time.Time
+	tokenID   string
+	sourceIP  string
 }
 
 // verifyValidatedKey is the auth.TokenVerifier for the endpoint. It does not
@@ -46,7 +53,7 @@ func verifyValidatedKey(_ context.Context, token string, r *http.Request) (*auth
 	info := &auth.TokenInfo{
 		Scopes: scopes,
 		UserID: "apikey:" + strconv.FormatInt(key.ID, 10),
-		Extra:  map[string]any{identityKey: &identity{key: *key, scopes: scopes}},
+		Extra:  map[string]any{identityKey: &identity{key: *key, scopes: scopes, userID: key.CreatedBy, sourceIP: middleware.GetClientIP(r)}},
 	}
 	if key.ExpiresAt.Valid {
 		info.Expiration = key.ExpiresAt.Time
@@ -85,7 +92,10 @@ func actorFor(id *identity, s Settings) v2.Actor {
 		})
 	}
 	key := id.key
-	return v2.Actor{APIKey: &key, Permissions: perms}
+	if id.grantID != "" {
+		return v2.Actor{UserID: id.userID, OAuthGrantID: id.grantID, OAuthClientID: id.clientID, Transport: "mcp", Permissions: perms}
+	}
+	return v2.Actor{APIKey: &key, Transport: "mcp", Permissions: perms}
 }
 
 // draftsVisible reports whether the actor may see unpublished pages.

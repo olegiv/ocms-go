@@ -4,6 +4,9 @@
 package main
 
 import (
+	"crypto/sha256"
+	"database/sql"
+	"encoding/hex"
 	"errors"
 	"os"
 	"os/exec"
@@ -13,17 +16,16 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestDeployBinaryCommands runs the commands scripts/deploy/helper.sh builds
 // for the deploy scripts. install_binary_command must replace the
 // destination's content, leave it executable and leave no copy behind: it
-// copies beside the destination and renames over it, so a running binary is
-// replaced instead of failing the copy with "Text file busy".
+// renames the staged upload over the destination, which leaves the old inode
+// alone even when a process still runs it.
 // backup_binary_command must copy the binary to .backup, and succeed with a
-// note when there is no binary yet. remote_upload_path must move an upload
-// whose name is a file the deploy uses (ocms, its staging copies, the backup,
-// ocmsctl) to ocms.upload. wait_healthy_command must succeed once ocmsctl
+// note when there is no binary yet. wait_healthy_command must succeed once ocmsctl
 // health does, and fail after the given number of attempts when it never does.
 func TestDeployBinaryCommands(t *testing.T) {
 	bash, err := exec.LookPath("bash")
@@ -78,29 +80,11 @@ func TestDeployBinaryCommands(t *testing.T) {
 		if string(data) != "new binary" || info.Mode().Perm() != 0o755 {
 			t.Errorf("installed %q with mode %v, want the new binary with mode 0755", data, info.Mode().Perm())
 		}
-		if _, err := os.Stat(dst + ".new"); err == nil {
-			t.Error("the copy beside the destination was left behind")
+		if _, err := os.Stat(src); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("staged upload still exists after install: %v", err)
 		}
 		if os.SameFile(before, info) {
 			t.Error("the install wrote into the existing file, as cp onto a running binary would, instead of renaming a new one over it")
-		}
-	})
-
-	t.Run("upload path", func(t *testing.T) {
-		const dir = "/opt/ocms/bin"
-		for name, want := range map[string]string{
-			"ocms-linux-amd64": dir + "/ocms-linux-amd64",
-			"ocms":             dir + "/ocms.upload",
-			"./ocms":           dir + "/ocms.upload",
-			"ocms.new":         dir + "/ocms.upload",
-			"ocms.backup":      dir + "/ocms.upload",
-			"ocms.backup.new":  dir + "/ocms.upload",
-			"ocmsctl":          dir + "/ocms.upload",
-		} {
-			out, err := exec.Command(bash, "-c", `source "$1" && remote_upload_path "$2" "$3"`, "bash", helper, dir, name).CombinedOutput() // #nosec G204 -- fixed script, test values
-			if err != nil || string(out) != want {
-				t.Errorf("remote_upload_path %s %s = %q, %v; want %s", dir, name, out, err, want)
-			}
 		}
 	})
 
@@ -120,16 +104,18 @@ func TestDeployBinaryCommands(t *testing.T) {
 			t.Error("a backup was made of a binary that does not exist")
 		}
 
-		// A backup that cannot be written fails the command, so set -e stops
-		// the deploy before anything is replaced.
-		locked := t.TempDir()
-		write(t, filepath.Join(locked, "ocms"), "running binary")
-		if err := os.Chmod(locked, 0o555); err != nil {
+		// cp treats an existing destination directory as a target directory.
+		// Make the resulting file path a directory too, so cp fails even as root.
+		blocked := filepath.Join(binary+".backup.new", filepath.Base(binary))
+		if err := os.MkdirAll(blocked, 0o750); err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { _ = os.Chmod(locked, 0o750) }) // #nosec G302 -- test directory
-		if out, err := try("backup_binary_command", filepath.Join(locked, "ocms")); err == nil {
-			t.Errorf("backing up into a read-only directory succeeded:\n%s", out)
+		write(t, binary, "replacement binary")
+		if out, err := try("backup_binary_command", binary); err == nil {
+			t.Errorf("backing up over a directory succeeded:\n%s", out)
+		}
+		if data, err := os.ReadFile(binary + ".backup"); err != nil || string(data) != "running binary" { // #nosec G304 -- test path
+			t.Errorf("backup after failed copy = %q, %v; want the previous backup", data, err)
 		}
 	})
 
@@ -177,21 +163,14 @@ func TestDeployBinaryCommands(t *testing.T) {
 }
 
 // TestDeployScriptsInstallTheUpload fails when a deploy script visibly copies
-// a binary straight onto the path ocmsctl and ocms@.service run, when deploy.sh or
-// deploy-binary.sh restart the instances without installing the upload
-// there, or when deploy-multi.sh stops only the systemd units. Copying onto a
+// a binary straight onto the path ocmsctl and ocms@.service run, or when
+// deploy-multi.sh stops only the systemd units. Copying onto a
 // running binary fails with "Text file busy", which aborted deploy-multi.sh
 // after it had stopped the units; a site started with ocmsctl kept serving
-// on its port; and deploy.sh and deploy-binary.sh uploaded to
-// ocms-linux-amd64, then restarted the instances on the old binary (review
-// of the 2026-10-17 audit fixes).
+// on its port. The SSH scripts' backup and install order is checked by
+// TestDeployScriptsDryRunOrder.
 //
-// The scripts must also back up the running binary in a way that fails
-// loudly, and install the upload before stopping any instance, so a failed
-// install leaves them running.
-//
-// Bug state: drop the install step from deploy-binary.sh, move it after the
-// stop, have deploy-multi.sh cp "$NEW_BINARY" "$BINARY_PATH", or stop its
+// Bug state: have deploy-multi.sh cp "$NEW_BINARY" "$BINARY_PATH", or stop its
 // sites with systemctl stop, and this fails.
 func TestDeployScriptsInstallTheUpload(t *testing.T) {
 	dir := filepath.Join("..", "..", "scripts", "deploy")
@@ -211,30 +190,17 @@ func TestDeployScriptsInstallTheUpload(t *testing.T) {
 			t.Errorf("scripts/deploy/%s copies onto the running binary (%q); copy beside it and rename", name, strings.TrimSpace(m))
 		}
 	}
-	for _, name := range []string{"deploy.sh", "deploy-binary.sh"} {
-		src := read(name)
-		install := strings.Index(src, `install_binary_command "${REMOTE_UPLOAD}" "${REMOTE_RUN_BINARY}"`)
-		stop := strings.Index(src, "ocmsctl stop")
-		switch {
-		case install < 0:
-			t.Errorf("scripts/deploy/%s does not install the upload as ${REMOTE_RUN_BINARY}, so the instances restart on the old binary", name)
-		case stop < 0:
-			t.Errorf("scripts/deploy/%s stops no instance; the script changed and this test is vacuous", name)
-		case install > stop:
-			t.Errorf("scripts/deploy/%s installs the upload only after stopping the instances, so a failed install leaves them down", name)
-		}
-		if !strings.Contains(src, `backup_binary_command "${REMOTE_RUN_BINARY}"`) {
-			t.Errorf("scripts/deploy/%s does not back up ${REMOTE_RUN_BINARY} with backup_binary_command", name)
-		}
-	}
 	multi := read("deploy-multi.sh")
-	if !regexp.MustCompile(`mv -f "\$\{BINARY_PATH\}\.new" "\$BINARY_PATH"`).MatchString(multi) {
+	if !strings.Contains(multi, "iflag=nonblock,nofollow,count_bytes") {
+		t.Error("deploy-multi must avoid blocking on substituted uploads or following their symlinks")
+	}
+	if !strings.Contains(multi, `mv -f -- "$STAGED_BINARY" "$BINARY_PATH"`) {
 		t.Error("scripts/deploy/deploy-multi.sh no longer renames the new binary over $BINARY_PATH")
 	}
 	if !strings.Contains(multi, `"$OCMSCTL" stop "$site_id"`) || regexp.MustCompile(`(?m)^\s*systemctl stop`).MatchString(multi) {
 		t.Error("scripts/deploy/deploy-multi.sh does not stop its sites with ocmsctl stop, which also reaches a site started without systemd")
 	}
-	if strings.Index(multi, `mv -f "${BINARY_PATH}.new"`) > strings.Index(multi, `"$OCMSCTL" stop`) {
+	if strings.Index(multi, `mv -f -- "$STAGED_BINARY"`) > strings.Index(multi, `"$OCMSCTL" stop`) {
 		t.Error("scripts/deploy/deploy-multi.sh installs the binary only after stopping the sites, so a failed install leaves them down")
 	}
 }
@@ -259,11 +225,15 @@ func TestDeployScriptsDryRunOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	order := func(upload, retries, interval string) []string {
+	order := func(name, retries, interval string) []string {
+		stage := "/opt/ocms/bin/.ocms-upload.DRYRUN00"
+		upload := stage + "/" + name
 		return []string{
 			"cp -p '/opt/ocms/bin/ocms' '/opt/ocms/bin/ocms.backup.new'",
+			"mktemp -d -- '/opt/ocms/bin/.ocms-upload.XXXXXXXX'",
 			"scp bin/ocms-linux-amd64 root@server.example.com:" + upload,
-			"cp '" + upload + "' '/opt/ocms/bin/ocms.new' && chmod 755 '/opt/ocms/bin/ocms.new' && mv -f '/opt/ocms/bin/ocms.new' '/opt/ocms/bin/ocms'",
+			"chmod 755 '" + upload + "' && mv -f '" + upload + "' '/opt/ocms/bin/ocms'",
+			"rm -rf -- '" + stage + "'",
 			"/opt/ocms/bin/ocmsctl stop site_a",
 			"/opt/ocms/bin/ocmsctl start site_a",
 			"'/opt/ocms/bin/ocmsctl' health 'site_a' 2>&1); do [ \"$n\" -lt " + retries + " ] || { echo \"$out\"; exit 1; }; n=$((n + 1)); sleep " + interval + "; done",
@@ -276,11 +246,9 @@ func TestDeployScriptsDryRunOrder(t *testing.T) {
 		env  []string
 		want []string
 	}{
-		{"default upload name", nil, order("/opt/ocms/bin/ocms-linux-amd64", "15", "2")},
-		// The upload happens while the instance runs: scp onto the running
-		// binary failed with "Text file busy" (local Codex review).
-		{"REMOTE_BINARY=ocms", []string{"REMOTE_BINARY=ocms"}, order("/opt/ocms/bin/ocms.upload", "15", "2")},
-		{"health settings", []string{"HEALTH_RETRIES=1", "HEALTH_INTERVAL=0"}, order("/opt/ocms/bin/ocms-linux-amd64", "1", "0")},
+		{"default upload name", nil, order("ocms-linux-amd64", "15", "2")},
+		{"REMOTE_BINARY=ocms", []string{"REMOTE_BINARY=./ocms"}, order("ocms", "15", "2")},
+		{"health settings", []string{"HEALTH_RETRIES=1", "HEALTH_INTERVAL=0"}, order("ocms-linux-amd64", "1", "0")},
 	}
 	for _, tc := range cases {
 		for _, script := range []string{"deploy.sh", "deploy-binary.sh"} {
@@ -333,6 +301,8 @@ case "$SIGNAL_ON:$2" in
     fi ;;
 esac
 case "$2" in
+  "mktemp -d -- "*) echo /opt/ocms/bin/.ocms-upload.TEST0000 ;;
+  *"wal_checkpoint(TRUNCATE)"*) printf '%s\n' "${CHECKPOINT_RESULT:-0|0|0}" ;;
   *"health 'site_bad'"*) echo "FAILED (HTTP 503)"; exit 1 ;;
   *"health 'site_lost'"*) exit 255 ;;
   "/opt/ocms/bin/ocmsctl health site_flaky" | "/opt/ocms/bin/ocmsctl start site_nostart" | "/opt/ocms/bin/ocmsctl stop site_nostop") exit 1 ;;
@@ -365,6 +335,81 @@ func remoteCommands(t *testing.T, path string) (string, []string) {
 		t.Fatal(err)
 	}
 	return string(logged), strings.Split(strings.TrimSuffix(string(logged), "\n"), "\n")
+}
+
+func TestDeployScriptsStageAwayFromSymlinkTarget(t *testing.T) {
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash is not installed")
+	}
+	for _, script := range []string{"deploy.sh", "deploy-binary.sh"} {
+		for _, fault := range []string{"", "backup", "upload", "install"} {
+			t.Run(script+"/fault="+fault, func(t *testing.T) {
+				dir := t.TempDir()
+				bin := filepath.Join(dir, "bin")
+				if err := os.Mkdir(bin, 0o750); err != nil {
+					t.Fatal(err)
+				}
+				source := filepath.Join(dir, "release")
+				target := filepath.Join(bin, "ocms-linux-amd64")
+				installed := filepath.Join(bin, "ocms")
+				backup := installed + ".backup"
+				for path, content := range map[string]string{source: "new", target: "old", backup: "prior backup"} {
+					if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if err := os.Symlink(filepath.Base(target), installed); err != nil {
+					t.Fatal(err)
+				}
+				if fault == "backup" {
+					if err := os.MkdirAll(filepath.Join(backup+".new", "ocms"), 0o750); err != nil {
+						t.Fatal(err)
+					}
+				}
+				writeStubs(t, dir, map[string]string{
+					"ssh": `#!/bin/sh
+case "$DEPLOY_FAULT:$2" in install:chmod\ *) exit 25;; esac
+exec sh -c "$2"
+`,
+					"scp": `#!/bin/sh
+dest=${2#*:}
+if [ "$DEPLOY_FAULT" = upload ]; then printf partial > "$dest"; exit 23; fi
+cp "$1" "$dest"
+`,
+				})
+				calls := filepath.Join(dir, "calls.log")
+				writeStubs(t, bin, map[string]string{"ocmsctl": "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$CALLS\"\n"})
+				cmd := exec.Command(bash, filepath.Join("..", "..", "scripts", "deploy", script), "server.example.com", "site_a", "--skip-build") // #nosec G204 -- fixed repository script
+				cmd.Env = []string{
+					"PATH=" + dir + string(os.PathListSeparator) + os.Getenv("PATH"), "HOME=" + dir,
+					"LOCAL_BINARY=" + source, "REMOTE_BIN_DIR=" + bin, "CALLS=" + calls, "DEPLOY_FAULT=" + fault,
+				}
+				out, err := cmd.CombinedOutput()
+				if (err == nil) != (fault == "") {
+					t.Fatalf("deploy with fault %q: %v\n%s", fault, err, out)
+				}
+				wantInstalled, wantBackup, wantCalls := "old", "old", ""
+				switch fault {
+				case "":
+					wantInstalled, wantCalls = "new", "stop site_a\nstart site_a\nhealth site_a\nstatus site_a\nhealth site_a\n"
+				case "backup":
+					wantBackup = "prior backup"
+				}
+				for path, want := range map[string]string{installed: wantInstalled, target: "old", backup: wantBackup} {
+					if got, err := os.ReadFile(path); err != nil || string(got) != want { // #nosec G304 -- test path
+						t.Errorf("%s = %q, %v; want %q", path, got, err, want)
+					}
+				}
+				if got, _ := remoteCommands(t, calls); got != wantCalls {
+					t.Errorf("ocmsctl calls = %q, want %q", got, wantCalls)
+				}
+				if leftovers, err := filepath.Glob(filepath.Join(bin, ".ocms-upload.*")); err != nil || len(leftovers) != 0 {
+					t.Errorf("upload directories left behind: %v, %v", leftovers, err)
+				}
+			})
+		}
+	}
 }
 
 // TestDeployScriptsFailOnUnhealthyInstance runs deploy.sh and deploy-binary.sh
@@ -525,8 +570,8 @@ func TestDeployScriptsFailOnUnhealthyInstance(t *testing.T) {
 // moved to a temporary directory and stubs for systemctl, ocmsctl, curl,
 // sleep and file, over three sites: site_a fails to start and site_c fails
 // to stop. The script must still start site_b, leave site_c alone, report
-// both failures and exit 1. Under set -e alone, the first failure ended the
-// script, leaving every site it had stopped but not yet started down.
+// both failures and exit 1. It also checks that aliased sources are rejected
+// before any deployment work and that a successful deploy cleans up the upload.
 //
 // Bug state: drop the `if !` around `systemctl start` or `"$OCMSCTL" stop`
 // and this fails.
@@ -539,6 +584,25 @@ func TestDeployMultiKeepsGoingAfterAFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The Ubuntu script uses GNU dd's nonblocking and no-follow flags.
+	dd, err := exec.LookPath("gdd")
+	if err != nil {
+		dd, err = exec.LookPath("dd")
+		if err != nil {
+			t.Skip("GNU dd is unavailable")
+		}
+	}
+	if err := exec.Command(dd, "if=/dev/null", "of=/dev/null", "iflag=nonblock,nofollow,count_bytes", "count=1", "status=none").Run(); err != nil { // #nosec G204 -- harmless tool capability probe
+		t.Skip("dd does not support the deployment flags")
+	}
+	timeout, err := exec.LookPath("gtimeout")
+	if err != nil {
+		timeout, err = exec.LookPath("timeout")
+		if err != nil {
+			t.Skip("timeout is unavailable")
+		}
+	}
+
 	tmp := t.TempDir()
 	scripts, stubs, bin := filepath.Join(tmp, "scripts"), filepath.Join(tmp, "stubs"), filepath.Join(tmp, "bin")
 	for _, dir := range []string{scripts, stubs, bin} {
@@ -563,6 +627,7 @@ func TestDeployMultiKeepsGoingAfterAFailure(t *testing.T) {
 		`OCMSCTL="/opt/ocms/bin/ocmsctl"`:         `OCMSCTL="` + filepath.Join(stubs, "ocmsctl") + `"`,
 		`SITES_CONF="/etc/ocms/sites.conf"`:       `SITES_CONF="` + filepath.Join(tmp, "sites.conf") + `"`,
 		`HEALTH_RETRIES=10`:                       `HEALTH_RETRIES=1`,
+		`MAX_BINARY_BYTES=$((256 * 1024 * 1024))`: `MAX_BINARY_BYTES=1024`,
 		`if [ "$EUID" -ne 0 ]; then`:              `if false; then`,
 	} {
 		if strings.Count(script, old) != 1 {
@@ -588,15 +653,76 @@ echo "ocmsctl $*" >> "`+calls+`"
 `, 0o755)
 	write(filepath.Join(stubs, "curl"), "#!/bin/sh\nexit 0\n", 0o755)
 	write(filepath.Join(stubs, "sleep"), "#!/bin/sh\nexit 0\n", 0o755)
-	write(filepath.Join(stubs, "file"), "#!/bin/sh\necho \"$1: ELF 64-bit LSB executable\"\n", 0o755)
+	write(filepath.Join(stubs, "dd"), `#!/bin/sh
+if [ -n "$SWAP_FIFO" ]; then
+    mv "$SWAP_FIFO" "$SWAP_FIFO.old"
+    mkfifo "$SWAP_FIFO"
+    exec "$REAL_TIMEOUT" 2 "$REAL_DD" "$@"
+fi
+exec "$REAL_DD" "$@"
+`, 0o755)
+	write(filepath.Join(stubs, "file"), `#!/bin/sh
+case "$1" in */.ocms-deploy.*/ocms) ;; *) exit 1 ;; esac
+if [ -n "$SWAP_UPLOAD" ]; then printf tampered > "$SWAP_UPLOAD"; fi
+printf 'ELF 64-bit executable\n'
+`, 0o755)
 	write(filepath.Join(tmp, "sites.conf"), "site_a /srv/a ocms 8001\nsite_b /srv/b ocms 8002\nsite_c /srv/c ocms 8003\n", 0o644)
-	write(filepath.Join(bin, "ocms"), "old", 0o755)
+	installed := filepath.Join(bin, "ocms")
+	backup := installed + ".backup"
+	write(installed, "old", 0o755)
+	write(backup, "prior backup", 0o755)
+	write(installed+".new", "prior staging", 0o755)
 	newBinary := filepath.Join(tmp, "ocms-new")
 	write(newBinary, "new", 0o755)
 
-	cmd := exec.Command(bash, filepath.Join(scripts, "deploy-multi.sh"), newBinary) // #nosec G204 -- copy of a repository script
-	cmd.Env = []string{"PATH=" + stubs + string(os.PathListSeparator) + os.Getenv("PATH"), "HOME=" + tmp}
-	out, err := cmd.CombinedOutput()
+	digest := sha256.Sum256([]byte("new"))
+	trustedHash := hex.EncodeToString(digest[:])
+	run := func(source, checksum, swap, fifo string) ([]byte, error) {
+		cmd := exec.Command(bash, filepath.Join(scripts, "deploy-multi.sh"), source, checksum) // #nosec G204 -- copy of a repository script
+		cmd.Env = []string{"PATH=" + stubs + string(os.PathListSeparator) + os.Getenv("PATH"), "HOME=" + tmp, "SWAP_UPLOAD=" + swap, "SWAP_FIFO=" + fifo, "REAL_DD=" + dd, "REAL_TIMEOUT=" + timeout}
+		return cmd.CombinedOutput()
+	}
+	symlink, hardlink := filepath.Join(tmp, "symlink"), filepath.Join(tmp, "hardlink")
+	if linkErr := os.Symlink(installed, symlink); linkErr != nil {
+		t.Fatal(linkErr)
+	}
+	if linkErr := os.Link(installed, hardlink); linkErr != nil {
+		t.Fatal(linkErr)
+	}
+	for _, source := range []string{installed, symlink, hardlink, backup, installed + ".new"} {
+		out, deployErr := run(source, trustedHash, "", "")
+		if deployErr == nil || !strings.Contains(string(out), "New binary must be separate from") {
+			t.Errorf("aliased source %s: %v, want refusal\n%s", source, deployErr, out)
+		}
+	}
+	for _, hash := range []string{"", strings.Repeat("0", 64)} {
+		if out, err := run(newBinary, hash, "", ""); err == nil || !strings.Contains(strings.ReplaceAll(strings.ToLower(string(out)), "-", ""), "sha256") {
+			t.Errorf("missing or incorrect checksum was not rejected: %v\n%s", err, out)
+		}
+	}
+	oversize := filepath.Join(tmp, "oversize")
+	write(oversize, strings.Repeat("x", 1025), 0o755)
+	if out, err := run(oversize, trustedHash, "", ""); err == nil || !strings.Contains(string(out), "deployment limit") {
+		t.Fatalf("oversized upload was not refused: %v\n%s", err, out)
+	}
+	fifo := filepath.Join(tmp, "fifo-source")
+	write(fifo, "new", 0o755)
+	fifoOut, err := run(fifo, trustedHash, "", fifo)
+	var copyErr *exec.ExitError
+	if !errors.As(err, &copyErr) || copyErr.ExitCode() != 1 {
+		t.Fatalf("FIFO substitution did not fail promptly: %v\n%s", err, fifoOut)
+	}
+
+	if _, statErr := os.Stat(calls); !errors.Is(statErr, os.ErrNotExist) {
+		t.Errorf("deployment touched services for an aliased source: %v", statErr)
+	}
+	for path, want := range map[string]string{installed: "old", backup: "prior backup", installed + ".new": "prior staging"} {
+		if got, readErr := os.ReadFile(path); readErr != nil || string(got) != want { // #nosec G304 -- test path
+			t.Errorf("%s after refusal = %q, %v; want %q", path, got, readErr, want)
+		}
+	}
+
+	out, err := run(newBinary, trustedHash, newBinary, "")
 	var exitErr *exec.ExitError
 	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 {
 		t.Fatalf("deploy-multi.sh: %v, want exit status 1\n%s", err, out)
@@ -618,8 +744,23 @@ echo "ocmsctl $*" >> "`+calls+`"
 			t.Errorf("the failure report does not list %s:\n%s", site, out)
 		}
 	}
-	if installed, err := os.ReadFile(filepath.Join(bin, "ocms")); err != nil || string(installed) != "new" {
-		t.Errorf("installed binary = %q, %v; want the new one", installed, err)
+	if got, err := os.ReadFile(installed); err != nil || string(got) != "new" {
+		t.Errorf("installed binary = %q, %v; want the new one", got, err)
+	}
+	if got, err := os.ReadFile(newBinary); err != nil || string(got) != "tampered" {
+		t.Fatalf("upload substitution did not occur: %q, %v", got, err)
+	}
+	write(newBinary, "new", 0o755)
+	// Retry the retained upload with only a healthy site registered.
+	write(filepath.Join(tmp, "sites.conf"), "site_b /srv/b ocms 8002\n", 0o644)
+	if out, err := run(newBinary, trustedHash, "", ""); err != nil || !strings.Contains(string(out), "deployed successfully") {
+		t.Fatalf("retry with a separate source: %v\n%s", err, out)
+	}
+	if got, err := os.ReadFile(installed); err != nil || string(got) != "new" {
+		t.Errorf("installed binary after retry = %q, %v; want the new one", got, err)
+	}
+	if got, err := os.ReadFile(newBinary); err != nil || string(got) != "new" {
+		t.Errorf("caller upload was changed after successful deploy: %q, %v", got, err)
 	}
 }
 
@@ -670,16 +811,17 @@ func TestSyncProdToDevRestartsProduction(t *testing.T) {
 	}
 	const anyFailure = -1
 	cases := []struct {
-		name     string
-		instance string
-		answer   string
-		rsync    string // the stub's exit status, or "term" to send SIGTERM to the script
-		signalOn string // sshStub's $SIGNAL_ON
-		exit     int    // 0, an exit status, or anyFailure
-		starts   int
-		copied   bool
-		out      []string
-		notOut   []string
+		name       string
+		instance   string
+		answer     string
+		rsync      string // the stub's exit status, or "term" to send SIGTERM to the script
+		signalOn   string // sshStub's $SIGNAL_ON
+		checkpoint string
+		exit       int // 0, an exit status, or anyFailure
+		starts     int
+		copied     bool
+		out        []string
+		notOut     []string
 	}{
 		{name: "synced", instance: "site_ok", answer: "y", rsync: "0", exit: 0, starts: 1, copied: true,
 			out: []string{"Sync complete!"}},
@@ -691,9 +833,12 @@ func TestSyncProdToDevRestartsProduction(t *testing.T) {
 		{name: "interrupted", instance: "site_ok", answer: "y", rsync: "term", exit: anyFailure, starts: 1, copied: true,
 			out:    []string{"The sync stopped before it finished", "Instance 'site_ok' is healthy"},
 			notOut: []string{"Sync complete!"}},
-		{name: "unhealthy after the sync", instance: "site_bad", answer: "y", rsync: "0", exit: 1, starts: 1, copied: true,
-			out:    []string{"FAILED (HTTP 503)", "The data was synced, but the remote instance 'site_bad' is not healthy"},
+		{name: "unhealthy after capture", instance: "site_bad", answer: "y", rsync: "0", exit: 1, starts: 1, copied: true,
+			out:    []string{"FAILED (HTTP 503)", "The remote instance 'site_bad' is not healthy; the local snapshot was not published"},
 			notOut: []string{"Sync complete!", "stopped before it finished"}},
+		{name: "checkpoint busy", instance: "site_ok", answer: "y", rsync: "0", checkpoint: "1|3|0", exit: 1, starts: 1,
+			out:    []string{"Remote database checkpoint did not finish successfully", "Instance 'site_ok' is healthy"},
+			notOut: []string{"checkpoint succeeded", "Sync complete!"}},
 		{name: "copy failed, then unhealthy", instance: "site_bad", answer: "y", rsync: "23", exit: 23, starts: 1, copied: true,
 			out:    []string{"The sync stopped before it finished (status 23)", "The remote instance 'site_bad' did not come back"},
 			notOut: []string{"Sync complete!"}},
@@ -717,9 +862,17 @@ func TestSyncProdToDevRestartsProduction(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			work, stubs := t.TempDir(), t.TempDir()
 			writeStubs(t, stubs, map[string]string{
-				"ssh":   sshStub,
-				"rsync": "#!/bin/sh\necho rsync >> \"$SSH_LOG\"\nif [ \"$RSYNC_EXIT\" = term ]; then kill -TERM \"$PPID\"; exit 0; fi\nexit \"$RSYNC_EXIT\"\n",
-				"lsof":  "#!/bin/sh\nexit 1\n",
+				"ssh": sshStub,
+				"rsync": `#!/bin/sh
+echo rsync >> "$SSH_LOG"
+case "$*" in *:/srv/site/logs/*) echo copy-logs >> "$SSH_LOG";; esac
+if [ "$RSYNC_EXIT" = term ]; then kill -TERM "$PPID"; exit 0; fi
+if [ "$RSYNC_EXIT" != 0 ]; then exit "$RSYNC_EXIT"; fi
+for dest do :; done
+case "$dest" in */data/) printf 'SQLite format 3\000' > "$dest/ocms.db";; esac
+`,
+				"lsof":    "#!/bin/sh\nexit 1\n",
+				"sqlite3": "#!/bin/sh\nexit 0\n",
 			})
 			sshLog := filepath.Join(work, "ssh.log")
 
@@ -727,7 +880,8 @@ func TestSyncProdToDevRestartsProduction(t *testing.T) {
 			cmd.Dir = work
 			cmd.Stdin = strings.NewReader(tc.answer)
 			cmd.Env = []string{"PATH=" + stubs + string(os.PathListSeparator) + os.Getenv("PATH"), "HOME=" + work,
-				"SSH_LOG=" + sshLog, "RSYNC_EXIT=" + tc.rsync, "SIGNAL_ON=" + tc.signalOn, "HEALTH_RETRIES=1", "HEALTH_INTERVAL=0"}
+				"SSH_LOG=" + sshLog, "RSYNC_EXIT=" + tc.rsync, "SIGNAL_ON=" + tc.signalOn, "CHECKPOINT_RESULT=" + tc.checkpoint,
+				"HEALTH_RETRIES=1", "HEALTH_INTERVAL=0"}
 			out, err := cmd.CombinedOutput()
 			logged, commands := remoteCommands(t, sshLog)
 
@@ -766,7 +920,280 @@ func TestSyncProdToDevRestartsProduction(t *testing.T) {
 			if !slices.ContainsFunc(commands[start:], func(c string) bool { return strings.Contains(c, waitFor(tc.instance)) }) {
 				t.Errorf("the sync never waited for %s after starting it; it ran:\n%s", tc.instance, logged)
 			}
+			if logCopy := slices.Index(commands, "copy-logs"); logCopy >= 0 && logCopy < start {
+				t.Errorf("logs were copied before production restarted:\n%s", logged)
+			}
+			if tc.name == "unhealthy after capture" {
+				for _, name := range []string{"data", "uploads", "logs"} {
+					if _, err := os.Stat(filepath.Join(work, name)); !errors.Is(err, os.ErrNotExist) {
+						t.Errorf("%s was published before a successful health check: %v", name, err)
+					}
+				}
+			}
 		})
+	}
+}
+
+func TestSyncProdToDevScrubsDatabaseBeforePublishing(t *testing.T) {
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash is not installed")
+	}
+	requireTool := func(name string) string {
+		t.Helper()
+		path, err := exec.LookPath(name)
+		if err != nil {
+			if os.Getenv("CI") == "true" {
+				t.Fatalf("%s is required for the production-copy test in CI: %v", name, err)
+			}
+			t.Skipf("%s is not installed", name)
+		}
+		return path
+	}
+	sqlite, rsync := requireTool("sqlite3"), requireTool("rsync")
+	script, err := filepath.Abs(filepath.Join("..", "..", "scripts", "deploy", "sync-prod-to-dev.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqliteQuery := func(path, query string) string {
+		t.Helper()
+		out, err := exec.Command(sqlite, "-batch", "-bail", "-init", "/dev/null", path, query).CombinedOutput() // #nosec G204 -- fixed SQLite tool and fixture
+		if err != nil {
+			t.Fatalf("sqlite fixture: %v: %s", err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	for _, scenario := range []string{"current schema", "legacy schema", "custom database with WAL", "scrub failure", "uploads capture failure", "--no-db", "--dry-run"} {
+		t.Run(scenario, func(t *testing.T) {
+			work, stubs, source := t.TempDir(), t.TempDir(), t.TempDir()
+			remoteUploads := t.TempDir()
+			data := filepath.Join(work, "data")
+			if err := os.Mkdir(data, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			name := "ocms.db"
+			if scenario == "custom database with WAL" {
+				name = "site.db"
+			}
+			dst, src := filepath.Join(data, name), filepath.Join(source, name)
+			uploads := filepath.Join(work, "uploads")
+			if err := os.Mkdir(uploads, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			for dir, contents := range map[string]string{uploads: "local version", remoteUploads: "snapshot data"} {
+				file := filepath.Join(dir, "asset.bin")
+				if err := os.WriteFile(file, []byte(contents), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				stamp := time.Unix(1700000000, 0)
+				if err := os.Chtimes(file, stamp, stamp); err != nil {
+					t.Fatal(err)
+				}
+			}
+			sqliteQuery(dst, "CREATE TABLE content(value); INSERT INTO content VALUES ('local');")
+			sqliteQuery(src, "CREATE TABLE content(value); INSERT INTO content VALUES ('production');")
+			tables := []string{"sessions"}
+			if scenario != "legacy schema" {
+				tables = append(tables, "oauth_tokens", "oauth_codes", "preview_links")
+			}
+			for _, table := range tables {
+				sqliteQuery(src, "CREATE TABLE "+table+"(token); INSERT INTO "+table+" VALUES ('synthetic-credential-fixture');")
+			}
+			sqliteQuery(src, `
+				CREATE TABLE webhooks (url, secret, is_active);
+				INSERT INTO webhooks VALUES ('https://example.test/synthetic-hook-target', 'synthetic-hook-secret', 1);
+				CREATE TABLE scheduled_tasks (url, is_active);
+				INSERT INTO scheduled_tasks VALUES ('https://example.test/synthetic-task-target', 1);
+				CREATE TABLE users (password_hash);
+				INSERT INTO users VALUES ('synthetic-retained-verifier');
+			`)
+			if scenario != "legacy schema" {
+				sqliteQuery(src, `
+					ALTER TABLE webhooks ADD COLUMN headers;
+					UPDATE webhooks SET headers='{"Authorization":"synthetic-hook-header"}';
+					CREATE TABLE hcaptcha_settings (enabled, site_key, secret_key);
+					INSERT INTO hcaptcha_settings VALUES (1, 'public-site-key', 'synthetic-captcha-secret');
+					CREATE TABLE embed_settings (provider, settings, is_enabled);
+					INSERT INTO embed_settings VALUES ('dify', '{"api_key":"synthetic-embed-key"}', 0);
+				`)
+			}
+			if scenario == "scrub failure" {
+				sqliteQuery(src, "CREATE TRIGGER prevent_scrub BEFORE DELETE ON sessions BEGIN SELECT RAISE(ABORT, 'scrub fault'); END;")
+			}
+			wantContent := "production"
+			if scenario == "custom database with WAL" {
+				// Keep the source connection open so these writes only exist in the WAL.
+				walDB, err := sql.Open("sqlite3", src)
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = walDB.Close() })
+				if _, err := walDB.Exec(`PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0;
+					UPDATE content SET value='from WAL';
+					UPDATE sessions SET token='synthetic-wal-credential';`); err != nil {
+					t.Fatal(err)
+				}
+				wantContent = "from WAL"
+			}
+			writeStubs(t, stubs, map[string]string{
+				"ssh": strings.Replace(sshStub, "case \"$2\" in\n", `case "$2" in
+  "/opt/ocms/bin/ocmsctl start site_ok") printf '%s\n' 'live asset after restart' > "$UPLOAD_FIXTURE/asset.bin" ;;
+`, 1),
+				"lsof": "#!/bin/sh\nexit 1\n",
+				"sqlite3": `#!/bin/sh
+echo scrub >> "$SSH_LOG"
+exec "$REAL_SQLITE" "$@"
+`,
+				"rsync": `#!/bin/bash
+# Apple's openrsync invokes a local sender via PATH even for a local copy.
+if [[ "$1" == --server ]]; then exec "$REAL_RSYNC" "$@"; fi
+args=("$@")
+src=$(($# - 2))
+dst=$(($# - 1))
+case "${args[src]}" in
+    ./uploads/) echo seed-uploads >> "$SSH_LOG" ;;
+    *:/srv/site/data/) echo capture-data >> "$SSH_LOG"; args[src]="$FIXTURE/" ;;
+    *:/srv/site/uploads/)
+        echo capture-uploads >> "$SSH_LOG"
+        [[ "$SCENARIO" != "uploads capture failure" ]] || exit 23
+        if [[ $(cat "${args[dst]}/asset.bin") != "local version" ]]; then
+            echo 'capture has no private uploads basis' >&2
+            exit 91
+        fi
+        args[src]="$UPLOAD_FIXTURE/" ;;
+    */ocms-sync.*/data/) echo publish-data >> "$SSH_LOG" ;;
+    */ocms-sync.*/uploads/) echo publish-uploads >> "$SSH_LOG" ;;
+    *) printf 'unexpected fixture rsync arguments: %s\n' "$*" >&2; exit 90 ;;
+esac
+exec "$REAL_RSYNC" "${args[@]}"
+`,
+			})
+			args := []string{script, "server.example.com", "site_ok", "-v", "/srv/site", "--no-logs"}
+			if strings.HasPrefix(scenario, "--") {
+				args = append(args, scenario)
+			}
+			if scenario == "--no-db" {
+				args = append(args, "--no-uploads")
+			}
+			checkpoint := "0|0|0"
+			if scenario == "custom database with WAL" {
+				checkpoint = "missing"
+			}
+			sshLog := filepath.Join(work, "ssh.log")
+			cmd := exec.Command(bash, args...) // #nosec G204 -- fixed repository script, mocked production commands
+			cmd.Dir = work
+			cmd.Stdin = strings.NewReader("y")
+			cmd.Env = []string{"PATH=" + stubs + string(os.PathListSeparator) + os.Getenv("PATH"), "HOME=" + work,
+				"TMPDIR=" + work, "SSH_LOG=" + sshLog, "HEALTH_RETRIES=1", "HEALTH_INTERVAL=0",
+				"REAL_RSYNC=" + rsync, "REAL_SQLITE=" + sqlite, "FIXTURE=" + source,
+				"UPLOAD_FIXTURE=" + remoteUploads, "SCENARIO=" + scenario, "CHECKPOINT_RESULT=" + checkpoint}
+			out, err := cmd.CombinedOutput()
+			switch scenario {
+			case "scrub failure":
+				if err == nil || !strings.Contains(string(out), "scrub fault") || !strings.Contains(string(out), "Instance 'site_ok' is healthy") {
+					t.Fatalf("scrub failure did not restore the remote instance and fail the sync: %v\n%s", err, out)
+				}
+			case "uploads capture failure":
+				var exitErr *exec.ExitError
+				if !errors.As(err, &exitErr) || exitErr.ExitCode() != 23 || !strings.Contains(string(out), "Instance 'site_ok' is healthy") {
+					t.Fatalf("failed uploads capture did not restore production: %v\n%s", err, out)
+				}
+			default:
+				if err != nil {
+					t.Fatalf("sync: %v\n%s", err, out)
+				}
+			}
+			if staging, err := filepath.Glob(filepath.Join(work, "ocms-sync.*")); err != nil || len(staging) != 0 {
+				t.Fatalf("private copy remained after exit: %v, %v", staging, err)
+			}
+			wantUpload := "snapshot data"
+			noPublish := scenario == "scrub failure" || scenario == "uploads capture failure" || strings.HasPrefix(scenario, "--")
+			if noPublish {
+				wantUpload = "local version"
+			}
+			gotUpload, err := os.ReadFile(filepath.Join(uploads, "asset.bin"))
+			if err != nil || string(gotUpload) != wantUpload {
+				t.Fatalf("local uploads = %q, want %q: %v", gotUpload, wantUpload, err)
+			}
+			logged, commands := remoteCommands(t, sshLog)
+			if !strings.HasPrefix(scenario, "--") {
+				assertSyncOrder(t, logged, commands, scenario)
+			}
+			if noPublish {
+				if got := sqliteQuery(dst, "SELECT value FROM content;"); got != "local" {
+					t.Fatalf("local database was replaced: %s", got)
+				}
+				return
+			}
+			if scenario == "custom database with WAL" &&
+				(!strings.Contains(string(out), "Default remote database not found") || strings.Contains(string(out), "checkpoint succeeded")) {
+				t.Fatal("skipped checkpoint reported as a success")
+			}
+			checks := map[string]string{
+				"SELECT url, secret, is_active FROM webhooks": "||0",
+				"SELECT url, is_active FROM scheduled_tasks":  "|0",
+				"SELECT password_hash FROM users":             "synthetic-retained-verifier",
+			}
+			if scenario != "legacy schema" {
+				checks["SELECT headers FROM webhooks"] = "{}"
+				checks["SELECT enabled, site_key, secret_key FROM hcaptcha_settings"] = "0|public-site-key|"
+				checks["SELECT provider, settings, is_enabled FROM embed_settings"] = "dify|{}|0"
+			}
+			for query, want := range checks {
+				if got := sqliteQuery(dst, query); got != want {
+					t.Errorf("scrubbed result for %q = %q, want %q", query, got, want)
+				}
+			}
+			if got := sqliteQuery(dst, "SELECT value FROM content;"); got != wantContent {
+				t.Fatalf("copied content = %s", got)
+			}
+			for _, table := range tables {
+				if got := sqliteQuery(dst, "SELECT COUNT(*) FROM "+table+";"); got != "0" {
+					t.Errorf("synced %s contains %s credential rows", table, got)
+				}
+				if got := sqliteQuery(src, "SELECT COUNT(*) FROM "+table+";"); got != "1" {
+					t.Errorf("production fixture %s was modified", table)
+				}
+			}
+			b, err := os.ReadFile(dst) // #nosec G304 -- local fixture path
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, marker := range []string{"synthetic-credential-fixture", "synthetic-wal-credential",
+				"synthetic-hook-secret", "synthetic-hook-header", "synthetic-hook-target", "synthetic-task-target",
+				"synthetic-captcha-secret", "synthetic-embed-key"} {
+				if strings.Contains(string(b), marker) {
+					t.Fatal("credential fixture is still present in the copied database bytes")
+				}
+			}
+			if _, err := os.Stat(dst + "-wal"); !os.IsNotExist(err) {
+				t.Fatalf("published database retained a WAL: %v", err)
+			}
+		})
+	}
+}
+
+func assertSyncOrder(t *testing.T, logged string, commands []string, scenario string) {
+	t.Helper()
+	want := []string{"seed-uploads", ctl("stop", "site_ok"), "capture-data", "capture-uploads", ctl("start", "site_ok")}
+	if scenario != "uploads capture failure" {
+		want = append(want, "scrub")
+	}
+	if scenario != "scrub failure" && scenario != "uploads capture failure" {
+		want = append(want, "publish-data", "publish-uploads")
+	}
+	previous := -1
+	for _, step := range want {
+		pos := slices.Index(commands, step)
+		if pos <= previous {
+			t.Fatalf("expected %q after prior stages, got:\n%s", step, logged)
+		}
+		previous = pos
+	}
+	if scenario == "scrub failure" || scenario == "uploads capture failure" {
+		if slices.Contains(commands, "publish-data") || slices.Contains(commands, "publish-uploads") {
+			t.Fatalf("failed snapshot was published:\n%s", logged)
+		}
 	}
 }
 
@@ -928,8 +1355,10 @@ fi
 
 	// Other users must not reach the state: in /tmp, a planted .down marker
 	// or count silenced a site's alerts and restarts.
-	if info, err := os.Stat(stateDir); err != nil || info.Mode().Perm() != 0o700 {
-		t.Errorf("state directory mode = %v, %v; want 0700", info.Mode().Perm(), err)
+	if info, err := os.Stat(stateDir); err != nil || info == nil {
+		t.Fatalf("state directory is unavailable: %v", err)
+	} else if info.Mode().Perm() != 0o700 {
+		t.Errorf("state directory mode = %v; want 0700", info.Mode().Perm())
 	}
 	linked := filepath.Join(tmp, "linked-state")
 	if err := os.Symlink(stateDir, linked); err != nil {

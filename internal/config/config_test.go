@@ -23,9 +23,10 @@ func setEnv(t *testing.T, key, value string) {
 	t.Setenv(key, value)
 }
 
-func TestLoad_Defaults(t *testing.T) {
-	// Clear environment and set only required var
+func TestLoad_DevelopmentDefaults(t *testing.T) {
+	// Use the defaults for an explicit development run.
 	os.Clearenv()
+	setEnv(t, "OCMS_ENV", "development")
 	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 
 	cfg, err := Load()
@@ -48,6 +49,10 @@ func TestLoad_Defaults(t *testing.T) {
 	}
 	if cfg.LogLevel != "info" {
 		t.Errorf("LogLevel = %q, want %q", cfg.LogLevel, "info")
+	}
+	if !cfg.EventCleanupEnabled || cfg.EventDiagnosticDays != 90 || cfg.EventAuditDays != 0 {
+		t.Errorf("event retention defaults = %v/%d/%d, want true/90/0",
+			cfg.EventCleanupEnabled, cfg.EventDiagnosticDays, cfg.EventAuditDays)
 	}
 	if cfg.HCaptchaDisabled {
 		t.Error("HCaptchaDisabled = true, want false")
@@ -120,6 +125,37 @@ func TestLoad_Defaults(t *testing.T) {
 	}
 	if cfg.RequireBlockSuspiciousPageHTML {
 		t.Error("RequireBlockSuspiciousPageHTML = true, want false")
+	}
+}
+
+func TestLoad_EventRetention(t *testing.T) {
+	t.Setenv("OCMS_ENV", "development")
+	t.Setenv("OCMS_SESSION_SECRET", testSessionSecret)
+	t.Setenv("OCMS_EVENT_CLEANUP_ENABLED", "false")
+	t.Setenv("OCMS_EVENT_DIAGNOSTIC_RETENTION_DAYS", "45")
+	t.Setenv("OCMS_EVENT_AUDIT_RETENTION_DAYS", "365")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.EventCleanupEnabled || cfg.EventDiagnosticDays != 45 || cfg.EventAuditDays != 365 {
+		t.Errorf("event retention settings = %v/%d/%d, want false/45/365",
+			cfg.EventCleanupEnabled, cfg.EventDiagnosticDays, cfg.EventAuditDays)
+	}
+	for _, tc := range []struct{ key, value, errorField string }{
+		{"OCMS_EVENT_DIAGNOSTIC_RETENTION_DAYS", "-1", "OCMS_EVENT_DIAGNOSTIC_RETENTION_DAYS"},
+		{"OCMS_EVENT_DIAGNOSTIC_RETENTION_DAYS", "36501", "OCMS_EVENT_DIAGNOSTIC_RETENTION_DAYS"},
+		{"OCMS_EVENT_AUDIT_RETENTION_DAYS", "-1", "OCMS_EVENT_AUDIT_RETENTION_DAYS"},
+		{"OCMS_EVENT_AUDIT_RETENTION_DAYS", "36501", "OCMS_EVENT_AUDIT_RETENTION_DAYS"},
+		{"OCMS_EVENT_CLEANUP_ENABLED", "typo", "EventCleanupEnabled"},
+	} {
+		t.Run(tc.key+"/"+tc.value, func(t *testing.T) {
+			t.Setenv(tc.key, tc.value)
+			if _, err := Load(); err == nil || !strings.Contains(err.Error(), tc.errorField) {
+				t.Errorf("Load() error = %v, want error for %s", err, tc.key)
+			}
+		})
 	}
 }
 
@@ -261,6 +297,7 @@ func TestLoad_CustomValues(t *testing.T) {
 
 func TestLoad_HCaptchaDisabled(t *testing.T) {
 	os.Clearenv()
+	setEnv(t, "OCMS_ENV", "development")
 	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 	setEnv(t, "OCMS_HCAPTCHA_DISABLED", "true")
 
@@ -274,15 +311,14 @@ func TestLoad_HCaptchaDisabled(t *testing.T) {
 	}
 }
 
-func TestLoad_RejectSeedInProduction(t *testing.T) {
+func TestLoad_UnsetEnvRejectsSeeding(t *testing.T) {
 	os.Clearenv()
 	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
-	setEnv(t, "OCMS_ENV", "production")
 	setEnv(t, "OCMS_DO_SEED", "true")
 
 	_, err := Load()
-	if err == nil {
-		t.Fatal("Load() should fail when OCMS_DO_SEED=true in production")
+	if err == nil || !strings.Contains(err.Error(), "OCMS_DO_SEED must be false outside development") {
+		t.Fatalf("Load() with unset OCMS_ENV and seeding enabled: %v, want the seeding refusal", err)
 	}
 }
 
@@ -350,6 +386,7 @@ func TestLoad_AllowsHexSecretInProduction(t *testing.T) {
 // production-only: development keeps the advisory-warning behavior.
 func TestLoad_AllowsLowEntropySecretInDevelopment(t *testing.T) {
 	os.Clearenv()
+	setEnv(t, "OCMS_ENV", "development")
 	setEnv(t, "OCMS_SESSION_SECRET", "abababababababababababababababab")
 
 	if _, err := Load(); err != nil {
@@ -416,7 +453,6 @@ func TestLoad_AllowSeedInProductionWithDemoMode(t *testing.T) {
 func TestLoad_ProductionSecureDefaultsWhenUnset(t *testing.T) {
 	os.Clearenv()
 	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
-	setEnv(t, "OCMS_ENV", "production")
 	setEnv(t, "OCMS_TRUSTED_PROXIES", "127.0.0.1/32")
 	setEnv(t, "OCMS_API_ALLOWED_CIDRS", "203.0.113.10/32")
 	setEnv(t, "OCMS_EMBED_ALLOWED_ORIGINS", "https://example.com")
@@ -429,6 +465,9 @@ func TestLoad_ProductionSecureDefaultsWhenUnset(t *testing.T) {
 		t.Fatalf("Load() error: %v", err)
 	}
 
+	if cfg.Env != "production" || !cfg.IsProductionLike() {
+		t.Errorf("unset OCMS_ENV resolved to %q, want production", cfg.Env)
+	}
 	if !cfg.RequireFormCaptcha {
 		t.Error("RequireFormCaptcha = false, want true in production when unset")
 	}
@@ -493,7 +532,7 @@ func TestLoad_ProductionSecureDefaultsWhenUnset(t *testing.T) {
 func TestLoad_ProductionSecureDefaultsWhenEmpty(t *testing.T) {
 	os.Clearenv()
 	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
-	setEnv(t, "OCMS_ENV", "production")
+	setEnv(t, "OCMS_ENV", "")
 	setEnv(t, "OCMS_TRUSTED_PROXIES", "127.0.0.1/32")
 	setEnv(t, "OCMS_API_ALLOWED_CIDRS", "203.0.113.10/32")
 	setEnv(t, "OCMS_EMBED_ALLOWED_ORIGINS", "https://example.com")
@@ -507,6 +546,9 @@ func TestLoad_ProductionSecureDefaultsWhenEmpty(t *testing.T) {
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.Env != "production" {
+		t.Errorf("empty OCMS_ENV resolved to %q, want production", cfg.Env)
 	}
 	if !cfg.RequireFormCaptcha || !cfg.RequireAPIKeyExpiry {
 		t.Errorf("RequireFormCaptcha = %t, RequireAPIKeyExpiry = %t; want both true when set empty in production", cfg.RequireFormCaptcha, cfg.RequireAPIKeyExpiry)
@@ -616,6 +658,7 @@ func TestLoad_RequireEmbedProxyTokenInProduction(t *testing.T) {
 
 func TestLoad_InvalidWebhookFormDataMode(t *testing.T) {
 	os.Clearenv()
+	setEnv(t, "OCMS_ENV", "development")
 	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 	setEnv(t, "OCMS_WEBHOOK_FORM_DATA_MODE", "invalid")
 
@@ -627,6 +670,7 @@ func TestLoad_InvalidWebhookFormDataMode(t *testing.T) {
 
 func TestLoad_InvalidAPIMaxTTLDays(t *testing.T) {
 	os.Clearenv()
+	setEnv(t, "OCMS_ENV", "development")
 	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 	setEnv(t, "OCMS_API_KEY_MAX_TTL_DAYS", "-1")
 
@@ -638,6 +682,7 @@ func TestLoad_InvalidAPIMaxTTLDays(t *testing.T) {
 
 func TestLoad_APIMaxTTLDaysTooLarge(t *testing.T) {
 	os.Clearenv()
+	setEnv(t, "OCMS_ENV", "development")
 	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 	setEnv(t, "OCMS_API_KEY_MAX_TTL_DAYS", "366")
 
@@ -683,6 +728,7 @@ func TestLoad_SessionSecretTooShort(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			os.Clearenv()
+			setEnv(t, "OCMS_ENV", "development")
 			setEnv(t, "OCMS_SESSION_SECRET", tt.secret)
 
 			_, err := Load()
@@ -695,6 +741,7 @@ func TestLoad_SessionSecretTooShort(t *testing.T) {
 
 func TestLoad_SessionSecretMinimumLength(t *testing.T) {
 	os.Clearenv()
+	setEnv(t, "OCMS_ENV", "development")
 	// Exactly 32 bytes should work
 	secret32 := "12345678901234567890123456789012"
 	setEnv(t, "OCMS_SESSION_SECRET", secret32)
@@ -716,6 +763,7 @@ func TestLoad_RejectsKnownWeakSecrets(t *testing.T) {
 	} {
 		t.Run(weak[:16], func(t *testing.T) {
 			os.Clearenv()
+			setEnv(t, "OCMS_ENV", "development")
 			setEnv(t, "OCMS_SESSION_SECRET", weak)
 
 			_, err := Load()
@@ -739,6 +787,7 @@ func TestLoad_RejectsPlaceholderSecretsInEveryEnvironment(t *testing.T) {
 	} {
 		t.Run(secret, func(t *testing.T) {
 			os.Clearenv()
+			setEnv(t, "OCMS_ENV", "development")
 			setEnv(t, "OCMS_SESSION_SECRET", secret)
 			if _, err := Load(); err == nil {
 				t.Fatalf("Load() accepted placeholder secret %q", secret)
@@ -774,6 +823,7 @@ func TestHasAnyPrefixFoldIgnoresCaseOnBothSides(t *testing.T) {
 
 func TestLoad_AllowsPublicTestSecretInDevelopment(t *testing.T) {
 	os.Clearenv()
+	setEnv(t, "OCMS_ENV", "development")
 	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
 	if _, err := Load(); err != nil {
 		t.Fatalf("Load() in development must keep accepting the test-suite secret: %v", err)
@@ -784,6 +834,7 @@ func TestLoad_RejectsPlaceholderEmbedProxyToken(t *testing.T) {
 	for _, token := range []string{"replace-with-embed-proxy-token", "changeme", "Your-Secret-Token"} {
 		t.Run(token, func(t *testing.T) {
 			os.Clearenv()
+			setEnv(t, "OCMS_ENV", "development")
 			setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 			setEnv(t, "OCMS_EMBED_PROXY_TOKEN", token)
 			_, err := Load()
@@ -793,6 +844,7 @@ func TestLoad_RejectsPlaceholderEmbedProxyToken(t *testing.T) {
 		})
 	}
 	os.Clearenv()
+	setEnv(t, "OCMS_ENV", "development")
 	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 	setEnv(t, "OCMS_EMBED_PROXY_TOKEN", "Xq7LmP2vR9sT4wY6zB1nC3dF5gH8jK0a")
 	if _, err := Load(); err != nil {
@@ -886,6 +938,7 @@ func TestConfig_GeoIPEnabled(t *testing.T) {
 
 func TestLoad_GeoIPDBPath(t *testing.T) {
 	os.Clearenv()
+	setEnv(t, "OCMS_ENV", "development")
 	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 	setEnv(t, "OCMS_GEOIP_DB_PATH", "/path/to/GeoLite2-Country.mmdb")
 
@@ -905,6 +958,7 @@ func TestLoad_GeoIPDBPath(t *testing.T) {
 func TestLoad_SiteURL(t *testing.T) {
 	t.Run("unset", func(t *testing.T) {
 		os.Clearenv()
+		setEnv(t, "OCMS_ENV", "development")
 		setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 
 		cfg, err := Load()
@@ -918,6 +972,7 @@ func TestLoad_SiteURL(t *testing.T) {
 
 	t.Run("set", func(t *testing.T) {
 		os.Clearenv()
+		setEnv(t, "OCMS_ENV", "development")
 		setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 		setEnv(t, "OCMS_SITE_URL", "https://ocms-demo.fly.dev")
 
@@ -934,6 +989,7 @@ func TestLoad_SiteURL(t *testing.T) {
 func TestLoad_UploadsDir(t *testing.T) {
 	t.Run("default", func(t *testing.T) {
 		os.Clearenv()
+		setEnv(t, "OCMS_ENV", "development")
 		setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 
 		cfg, err := Load()
@@ -948,6 +1004,7 @@ func TestLoad_UploadsDir(t *testing.T) {
 
 	t.Run("custom_value", func(t *testing.T) {
 		os.Clearenv()
+		setEnv(t, "OCMS_ENV", "development")
 		setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 		setEnv(t, "OCMS_UPLOADS_DIR", "/var/www/uploads")
 
@@ -965,6 +1022,7 @@ func TestLoad_UploadsDir(t *testing.T) {
 func TestLoad_CustomDir(t *testing.T) {
 	t.Run("default", func(t *testing.T) {
 		os.Clearenv()
+		setEnv(t, "OCMS_ENV", "development")
 		setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 
 		cfg, err := Load()
@@ -979,6 +1037,7 @@ func TestLoad_CustomDir(t *testing.T) {
 
 	t.Run("custom_value", func(t *testing.T) {
 		os.Clearenv()
+		setEnv(t, "OCMS_ENV", "development")
 		setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 		setEnv(t, "OCMS_CUSTOM_DIR", "/var/www/custom")
 
@@ -1010,6 +1069,7 @@ func TestLoad_RequireMFAWithoutKey(t *testing.T) {
 	})
 	t.Run("development opt-in", func(t *testing.T) {
 		os.Clearenv()
+		setEnv(t, "OCMS_ENV", "development")
 		setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 		setEnv(t, "OCMS_REQUIRE_MFA", "true")
 		if _, err := Load(); err == nil {
@@ -1018,6 +1078,7 @@ func TestLoad_RequireMFAWithoutKey(t *testing.T) {
 	})
 	t.Run("demo mode", func(t *testing.T) {
 		os.Clearenv()
+		setEnv(t, "OCMS_ENV", "development")
 		setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 		setEnv(t, "OCMS_REQUIRE_MFA", "true")
 		setEnv(t, "OCMS_DEMO_MODE", "true")
@@ -1060,6 +1121,7 @@ func TestLoad_ValidatesMFAKey(t *testing.T) {
 	}
 	t.Run("blank is unset", func(t *testing.T) {
 		os.Clearenv()
+		setEnv(t, "OCMS_ENV", "development")
 		setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 		setEnv(t, "OCMS_MFA_KEY", "   ")
 		cfg, err := Load()
@@ -1067,4 +1129,99 @@ func TestLoad_ValidatesMFAKey(t *testing.T) {
 			t.Fatalf("Load() = %v, MFAKey %q; want a blank key treated as unset", err, cfg.MFAKey)
 		}
 	})
+}
+
+// TestLoad_RejectsUnknownEnv checks that OCMS_ENV accepts only the known
+// environments. Production hardening keys on the exact value "production",
+// so a typo used to start silently with the development posture (2026-11-03
+// audit C-1).
+//
+// Bug state: drop the validEnvs check from Load and this fails.
+func TestLoad_RejectsUnknownEnv(t *testing.T) {
+	for _, value := range []string{"prod", "Production", "PRODUCTION", "production ", "test", "dev", "stage"} {
+		t.Run(value, func(t *testing.T) {
+			os.Clearenv()
+			setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
+			setEnv(t, "OCMS_ENV", value)
+			if _, err := Load(); err == nil || !strings.Contains(err.Error(), "OCMS_ENV must be one of") {
+				t.Fatalf("Load() accepted OCMS_ENV=%q: %v", value, err)
+			}
+		})
+	}
+	os.Clearenv()
+	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
+	setEnv(t, "OCMS_ENV", "development")
+	if _, err := Load(); err != nil {
+		t.Fatalf("Load() rejected OCMS_ENV=development: %v", err)
+	}
+	for _, value := range []string{"staging", "production"} {
+		os.Clearenv()
+		setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
+		setProductionRequiredEnv(t)
+		setEnv(t, "OCMS_ENV", value)
+		if _, err := Load(); err != nil {
+			t.Fatalf("Load() rejected OCMS_ENV=%q: %v", value, err)
+		}
+	}
+}
+
+// TestLoad_StagingGetsProductionHardening checks that OCMS_ENV=staging gets
+// the production secure defaults, startup refusals and secret checks
+// (2026-11-03 audit C-1): staging serves the public Internet too.
+//
+// Bug state: make Config.IsProductionLike true only for "production" and
+// this fails.
+func TestLoad_StagingGetsProductionHardening(t *testing.T) {
+	os.Clearenv()
+	setProductionRequiredEnv(t)
+	setEnv(t, "OCMS_ENV", "staging")
+	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if !cfg.IsProductionLike() || !cfg.RequireTrustedProxies || !cfg.RequireAPIAllowedCIDRs || !cfg.RequireFormCaptcha || cfg.APIMaxTTLDays != DefaultProductionAPIMaxTTLDays {
+		t.Errorf("staging did not get the production defaults: %+v", cfg)
+	}
+	for key, value := range map[string]string{
+		"OCMS_DO_SEED":         "true",
+		"OCMS_SESSION_SECRET":  "test-secret-key-32-bytes-long!!!",
+		"OCMS_TRUSTED_PROXIES": "",
+	} {
+		t.Run(key, func(t *testing.T) {
+			setEnv(t, key, value)
+			if _, loadErr := Load(); loadErr == nil {
+				t.Errorf("staging starts with %s=%q", key, value)
+			}
+		})
+	}
+	setEnv(t, "OCMS_ENV", "development")
+	if cfg, err = Load(); err != nil || cfg.IsProductionLike() {
+		t.Errorf("development is production-like: %v", err)
+	}
+}
+
+// TestLoad_SeedAdminPassword checks OCMS_SEED_ADMIN_PASSWORD: a short value is
+// refused, and OCMS_REQUIRE_SEED_ADMIN_PASSWORD refuses to seed without one
+// (2026-11-03 audit C-2).
+func TestLoad_SeedAdminPassword(t *testing.T) {
+	os.Clearenv()
+	setEnv(t, "OCMS_ENV", "development")
+	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
+	setEnv(t, "OCMS_DO_SEED", "true")
+	if _, err := Load(); err != nil {
+		t.Fatalf("seeding with the default password in development: %v", err)
+	}
+	setEnv(t, "OCMS_REQUIRE_SEED_ADMIN_PASSWORD", "true")
+	if _, err := Load(); err == nil {
+		t.Error("OCMS_REQUIRE_SEED_ADMIN_PASSWORD seeds without OCMS_SEED_ADMIN_PASSWORD")
+	}
+	setEnv(t, "OCMS_SEED_ADMIN_PASSWORD", "short")
+	if _, err := Load(); err == nil {
+		t.Error("a short OCMS_SEED_ADMIN_PASSWORD is accepted")
+	}
+	setEnv(t, "OCMS_SEED_ADMIN_PASSWORD", "Owner-chosen bootstrap passphrase")
+	if cfg, err := Load(); err != nil || cfg.SeedAdminPassword == "" {
+		t.Errorf("a valid OCMS_SEED_ADMIN_PASSWORD is refused: %v", err)
+	}
 }

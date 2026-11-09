@@ -66,6 +66,7 @@ templ ModulesPage(pc *PageContext, data ModulesViewData) {
 					}
 				</div>
 				@dialog.Script()
+				@moduleToggleScript()
 			} else {
 				@card.Card(card.Props{}) {
 					@card.Content() {
@@ -129,7 +130,12 @@ templ moduleCard(pc *PageContext, mod ModuleViewItem) {
 		class="contents"
 		data-activate-title={ pc.T("modules.activate_to_access") }
 		data-deactivate-title={ pc.T("modules.click_to_deactivate") }
-		x-data={ moduleToggleData(mod) }
+		x-data="moduleToggle"
+		data-active={ fmt.Sprint(mod.Active) }
+		data-show-in-sidebar={ fmt.Sprint(mod.ShowInSidebar) }
+		data-module-name={ mod.Name }
+		data-needs-password={ fmt.Sprint(mod.ActivationNeedsPassword) }
+		data-dialog-id={ activationDialogID(mod) }
 	>
 		<div
 			class={ "module-card", templ.KV("module-inactive", !mod.Active) }
@@ -281,94 +287,103 @@ templ hookRow(pc *PageContext, hook HookViewItem) {
 	}
 }
 
-// moduleToggleData returns the Alpine.js x-data JSON for a module card.
-func moduleToggleData(mod ModuleViewItem) string {
-	return fmt.Sprintf(`{
-		isActive: %t,
-		showInSidebar: %t,
-		moduleName: '%s',
-		needsPassword: %t,
-		dialogID: '%s',
-		password: '',
-		passwordError: '',
-		pending: false,
-		activateTitle: '',
-		deactivateTitle: '',
-		init() {
-			this.activateTitle = this.$el.dataset.activateTitle || '';
-			this.deactivateTitle = this.$el.dataset.deactivateTitle || '';
-		},
-		toggleActive() {
-			if (this.isActive && this.needsPassword) {
-				// Stays off until the password is confirmed.
-				this.isActive = false;
-				this.password = '';
-				this.passwordError = '';
-				window.tui.dialog.open(this.dialogID);
-				return;
-			}
-			this.sendActive(this.isActive, '');
-		},
-		confirmActivation() {
-			this.sendActive(true, this.password);
-		},
-		sendActive(active, password) {
-			const card = this.$refs.card;
-			const confirming = password !== '';
-			this.pending = true;
-			fetch('/admin/modules/' + encodeURIComponent(this.moduleName) + '/toggle', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ active: active, password: password })
-			})
-			.then(r => r.json())
-			.then(data => {
-				if (data.success) {
-					this.isActive = data.active;
-					if (data.active) {
-						card.classList.remove('module-inactive');
+templ moduleToggleScript() {
+	<script nonce={ templ.GetNonce(ctx) }>
+	document.addEventListener('alpine:init', () => {
+		Alpine.data('moduleToggle', () => ({
+			isActive: false,
+			showInSidebar: false,
+			moduleName: '',
+			needsPassword: false,
+			dialogID: '',
+			password: '',
+			passwordError: '',
+			pending: false,
+			activateTitle: '',
+			deactivateTitle: '',
+			init() {
+				const data = this.$el.dataset;
+				this.isActive = data.active === 'true';
+				this.showInSidebar = data.showInSidebar === 'true';
+				this.moduleName = data.moduleName;
+				this.needsPassword = data.needsPassword === 'true';
+				this.dialogID = data.dialogId;
+				this.activateTitle = data.activateTitle;
+				this.deactivateTitle = data.deactivateTitle;
+			},
+			toggleActive() {
+				if (this.isActive && this.needsPassword) {
+					// Stays off until the password is confirmed.
+					this.isActive = false;
+					this.password = '';
+					this.passwordError = '';
+					window.tui.dialog.open(this.dialogID);
+					return;
+				}
+				this.sendActive(this.isActive, '');
+			},
+			confirmActivation() {
+				this.sendActive(true, this.password);
+			},
+			sendActive(active, password) {
+				const card = this.$refs.card;
+				const confirming = password !== '';
+				this.pending = true;
+				fetch('/admin/modules/' + encodeURIComponent(this.moduleName) + '/toggle', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ active: active, password: password })
+				})
+				.then(r => r.json())
+				.then(data => {
+					if (data.success) {
+						this.isActive = data.active;
+						if (data.active) {
+							card.classList.remove('module-inactive');
+						} else {
+							card.classList.add('module-inactive');
+							this.showInSidebar = false;
+						}
+						if (confirming) {
+							this.password = '';
+							window.tui.dialog.close(this.dialogID);
+						}
+					} else if (confirming) {
+						this.passwordError = data.error || data.message || 'Failed to toggle module';
 					} else {
-						card.classList.add('module-inactive');
-						this.showInSidebar = false;
+						this.isActive = !active;
+						alert('Error: ' + (data.error || data.message || 'Failed to toggle module'));
 					}
+				})
+				.catch(() => {
 					if (confirming) {
-						this.password = '';
-						window.tui.dialog.close(this.dialogID);
+						this.passwordError = 'Error toggling module';
+					} else {
+						this.isActive = !active;
+						alert('Error toggling module');
 					}
-				} else if (confirming) {
-					this.passwordError = data.error || data.message || 'Failed to toggle module';
-				} else {
-					this.isActive = !active;
-					alert('Error: ' + (data.error || data.message || 'Failed to toggle module'));
-				}
-			})
-			.catch(() => {
-				if (confirming) {
-					this.passwordError = 'Error toggling module';
-				} else {
-					this.isActive = !active;
-					alert('Error toggling module');
-				}
-			})
-			.finally(() => { this.pending = false; });
-		},
-		toggleSidebar() {
-			fetch('/admin/modules/' + encodeURIComponent(this.moduleName) + '/toggle-sidebar', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ show: this.showInSidebar })
-			})
-			.then(r => r.json())
-			.then(data => {
-				if (!data.success) {
+				})
+				.finally(() => { this.pending = false; });
+			},
+			toggleSidebar() {
+				fetch('/admin/modules/' + encodeURIComponent(this.moduleName) + '/toggle-sidebar', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ show: this.showInSidebar })
+				})
+				.then(r => r.json())
+				.then(data => {
+					if (!data.success) {
+						this.showInSidebar = !this.showInSidebar;
+						alert('Error: ' + (data.error || data.message || 'Failed to toggle sidebar visibility'));
+					}
+				})
+				.catch(() => {
 					this.showInSidebar = !this.showInSidebar;
-					alert('Error: ' + (data.error || data.message || 'Failed to toggle sidebar visibility'));
-				}
-			})
-			.catch(() => {
-				this.showInSidebar = !this.showInSidebar;
-				alert('Error toggling sidebar visibility');
-			});
-		}
-	}`, mod.Active, mod.ShowInSidebar, mod.Name, mod.ActivationNeedsPassword, activationDialogID(mod))
+					alert('Error toggling sidebar visibility');
+				});
+			}
+		}));
+	});
+	</script>
 }

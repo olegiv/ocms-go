@@ -34,7 +34,7 @@ fi
 echo
 echo "== golangci-lint =="
 if command -v golangci-lint >/dev/null 2>&1; then
-  if ! golangci-lint run ./...; then
+  if ! ./scripts/with-go-packages.sh golangci-lint run; then
     failures=1
   fi
 else
@@ -44,7 +44,12 @@ fi
 echo
 echo "== nilaway =="
 if command -v nilaway >/dev/null 2>&1; then
-  if ! nilaway ./...; then
+  # NilAway recommends first-party analysis: inferring the entire standard
+  # library and dependencies adds non-actionable diagnostics and model noise.
+  # node_modules contains third-party Go examples under our module path.
+  module_path="$(go list -m)"
+  if ! ./scripts/with-go-packages.sh nilaway -include-pkgs="$module_path" \
+    -exclude-pkgs="$module_path/node_modules/"; then
     failures=1
   fi
 else
@@ -56,7 +61,7 @@ echo "== go test =="
 if [[ -z "${OCMS_SESSION_SECRET:-}" ]]; then
   export OCMS_SESSION_SECRET="test-secret-key-32-bytes-long!!!"
 fi
-if ! go test ./...; then
+if ! ./scripts/with-go-packages.sh go test; then
   failures=1
 fi
 

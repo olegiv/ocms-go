@@ -243,9 +243,13 @@ func productionGates(t *testing.T) []string {
 // one `KEY = 'value'` pair per line, so a full TOML parser would be a
 // dependency bought for nothing.
 func flyEnv(t *testing.T) map[string]string {
+	return readFlyEnv(t, "fly.toml")
+}
+
+func readFlyEnv(t *testing.T, name string) map[string]string {
 	t.Helper()
 
-	path := filepath.Join("..", "..", "fly.toml")
+	path := filepath.Join("..", "..", name)
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("reading %s: %v", path, err)

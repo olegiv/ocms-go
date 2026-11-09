@@ -8,12 +8,13 @@ package middleware
 import (
 	"context"
 	"database/sql"
-	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/olegiv/ocms-go/internal/contentpath"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
 )
@@ -27,6 +28,9 @@ const (
 
 // LanguageCookieName is the cookie name for language preference.
 const LanguageCookieName = "ocms_lang"
+
+// AdminLanguageCookieName stores the login UI preference independently of site content.
+const AdminLanguageCookieName = "ocms_admin_lang"
 
 // secureCookies controls whether cookies are set with the Secure flag.
 // In production mode (HTTPS), this should be true.
@@ -96,7 +100,7 @@ func Language(db *sql.DB) func(http.Handler) http.Handler {
 			// the original request URL for logging and canonical URL handling.
 			routePath := r.URL.Path
 			if routeCtx := chi.RouteContext(ctx); routeCtx != nil && routeCtx.RoutePath != "" {
-				routePath = routeCtx.RoutePath
+				routePath = contentpath.RoutingPath(r.URL.Path, routeCtx.RoutePath)
 			}
 			if lang, strippedPath, ok := matchLanguagePrefix(routePath, langMap); ok {
 				if routeCtx := chi.RouteContext(ctx); routeCtx != nil {
@@ -158,41 +162,11 @@ func Language(db *sql.DB) func(http.Handler) http.Handler {
 // activeLanguageMap returns only codes that are safe to expose as URL
 // prefixes. Invalid and reserved legacy rows stay manageable in the admin UI,
 // but cannot shadow application routes.
-func activeLanguageMap(activeLangs []store.Language) map[string]store.Language {
-	langMap := make(map[string]store.Language, len(activeLangs))
-	for _, lang := range activeLangs {
-		code := lang.Code
-		if !util.IsValidLangCode(code) {
-			slog.Warn("ignoring active language with invalid code", "language_id", lang.ID, "code", lang.Code)
-			continue
-		}
-		if util.IsReservedLanguageCode(code) {
-			slog.Warn("ignoring active language with reserved route prefix", "language_id", lang.ID, "code", lang.Code)
-			continue
-		}
-		langMap[code] = lang
-	}
-	return langMap
+func activeLanguageMap(languages []store.Language) map[string]store.Language {
+	return contentpath.ActiveLanguages(languages)
 }
-
-// matchLanguagePrefix matches the first path segment against the active
-// language map and returns the path to route after removing that prefix.
-func matchLanguagePrefix(path string, langMap map[string]store.Language) (store.Language, string, bool) {
-	path = strings.TrimPrefix(path, "/")
-	code, remainder, hasRemainder := strings.Cut(path, "/")
-	if !util.IsValidLangCode(code) {
-		return store.Language{}, "", false
-	}
-
-	lang, ok := langMap[code]
-	if !ok {
-		return store.Language{}, "", false
-	}
-
-	if !hasRemainder || remainder == "" {
-		return lang, "/", true
-	}
-	return lang, "/" + remainder, true
+func matchLanguagePrefix(path string, languages map[string]store.Language) (store.Language, string, bool) {
+	return contentpath.MatchLanguagePrefix(path, languages)
 }
 
 // matchAcceptLanguage finds the best matching language from Accept-Language header.
@@ -258,14 +232,29 @@ func GetLanguagePrefix(r *http.Request) string {
 // SetLanguageCookie sets the language preference cookie.
 // The Secure flag is set based on the configuration from InitLanguageCookies.
 func SetLanguageCookie(w http.ResponseWriter, langCode string) {
-	cookie := &http.Cookie{
-		Name:     LanguageCookieName,
+	writeLanguageCookie(w, LanguageCookieName, langCode, 365*secondsPerDay)
+}
+
+// SetAdminLanguageCookie remembers the UI language before sign-in for up to one day.
+func SetAdminLanguageCookie(w http.ResponseWriter, langCode string) {
+	writeLanguageCookie(w, AdminLanguageCookieName, langCode, secondsPerDay)
+}
+
+const secondsPerDay = int(24 * time.Hour / time.Second)
+
+// ClearAdminLanguageCookie lets a new signed-in preference take precedence.
+func ClearAdminLanguageCookie(w http.ResponseWriter) {
+	writeLanguageCookie(w, AdminLanguageCookieName, "", -1)
+}
+
+func writeLanguageCookie(w http.ResponseWriter, name, langCode string, maxAge int) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     name,
 		Value:    langCode,
 		Path:     "/",
-		MaxAge:   365 * 24 * 60 * 60, // 1 year
+		MaxAge:   maxAge,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		Secure:   secureCookies,
-	}
-	http.SetCookie(w, cookie)
+	})
 }

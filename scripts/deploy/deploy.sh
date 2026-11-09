@@ -70,9 +70,6 @@ LOCAL_CUSTOM_DIR="custom/"
 REMOTE_BIN_DIR="${REMOTE_BIN_DIR:-/opt/ocms/bin}"
 REMOTE_BINARY="${REMOTE_BINARY:-${BINARY_NAME}-linux-amd64}"
 REMOTE_RUN_BINARY="${REMOTE_BIN_DIR}/ocms"
-# Where the upload lands: never on the running binary or another file the
-# deploy uses (remote_upload_path in helper.sh).
-REMOTE_UPLOAD="$(remote_upload_path "${REMOTE_BIN_DIR}" "${REMOTE_BINARY}")"
 
 # How long the instance gets to answer /health after the restart.
 HEALTH_RETRIES="${HEALTH_RETRIES:-15}"
@@ -445,25 +442,8 @@ fi
 if [[ "$SKIP_BINARY" == true ]]; then
     echo_warn "Skipping binary backup and transfer (--skip-binary)"
 else
-    # Step 2: Backup current binary on server
-    echo_step "Backing up current binary on server..."
-    ssh_cmd "$(backup_binary_command "${REMOTE_RUN_BINARY}")"
-    echo_ok "Backup complete"
-
-    # Step 3: Transfer and install the binary while the instance still runs:
-    # the install renames the new binary into place, which leaves a running
-    # one alone, so a failed upload or install stops nothing.
-    # Name the destination explicitly: scp to a bare directory would land the
-    # file under basename "$LOCAL_BINARY", so overriding only one of the two
-    # names would leave the install below reading a path the upload never
-    # wrote.
-    echo_step "Transferring binary to server..."
-    scp_cmd "${LOCAL_BINARY}" "${SSH_USER}@${SERVER}:${REMOTE_UPLOAD}"
-    echo_ok "Binary transferred"
-
-    echo_step "Installing binary as ${REMOTE_RUN_BINARY}..."
-    ssh_cmd "$(install_binary_command "${REMOTE_UPLOAD}" "${REMOTE_RUN_BINARY}")"
-    echo_ok "Binary installed"
+    # Steps 2–3: Back up and install the binary while the instance still runs.
+    deploy_binary
 fi
 
 # --skip-binary makes no backup, so the one on the server is not this deploy's.

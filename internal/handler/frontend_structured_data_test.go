@@ -250,8 +250,8 @@ func TestFrontendStructuredDataLayouts(t *testing.T) {
 			w := httptest.NewRecorder()
 			f.router.ServeHTTP(w, withUser(httptest.NewRequest(http.MethodGet, "/ru/luna-ru", nil), user))
 			schemas, _ := decodeStructuredResponse(t, w)
-			if len(schemas) != 1 || schemas["Article"] == nil {
-				t.Errorf("draft must retain only existing Article markup: %v", schemas)
+			if len(schemas) != 0 {
+				t.Errorf("isolated preview must not emit publication structured data: %v", schemas)
 			}
 			for _, origin := range []string{"", "javascript:alert(1)", "https://feeds.example/subsite"} {
 				f.exec(t, `UPDATE config SET value = ? WHERE key = 'site_url'`, origin)

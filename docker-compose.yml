@@ -73,6 +73,9 @@ services:
       - OCMS_ACTIVE_THEME=${OCMS_ACTIVE_THEME:-default}
       # Seeding (set to true for fresh installs)
       - OCMS_DO_SEED=${OCMS_DO_SEED:-false}
+      # Password for the seeded admin instead of the documented default
+      - OCMS_SEED_ADMIN_PASSWORD
+      - OCMS_REQUIRE_SEED_ADMIN_PASSWORD
       # Cache configuration (optional - uses in-memory by default)
       - OCMS_REDIS_URL=${OCMS_REDIS_URL:-}
       - OCMS_CACHE_PREFIX=${OCMS_CACHE_PREFIX:-ocms:}
@@ -87,6 +90,10 @@ services:
       # or the .env file beside this file, and leaves it unset in the container
       # when neither has it, so production's secure defaults still apply.
       # TestComposeForwardsEveryVariable keeps the list complete.
+      # Event Log retention
+      - OCMS_EVENT_CLEANUP_ENABLED
+      - OCMS_EVENT_DIAGNOSTIC_RETENTION_DAYS
+      - OCMS_EVENT_AUDIT_RETENTION_DAYS
       #
       # Required in production: startup fails without them unless the matching
       # OCMS_REQUIRE_* flag is set to false.
@@ -94,6 +101,15 @@ services:
       - OCMS_API_ALLOWED_CIDRS
       # Site and modes
       - OCMS_SITE_URL
+      - OCMS_AI_DISABLED
+      - OCMS_PREVIEW_LINK_TTL_HOURS
+      - OCMS_OAUTH_ENABLED
+      - OCMS_OAUTH_CIMD_ALLOWED_HOSTS
+      - OCMS_OAUTH_PRE_REGISTERED_CLIENTS
+      - OCMS_OAUTH_ALLOW_DCR
+      - OCMS_OAUTH_DCR_INITIAL_ACCESS_TOKEN
+      - OCMS_OAUTH_ACCESS_TTL
+      - OCMS_OAUTH_REFRESH_TTL_DAYS
       - OCMS_DEMO_MODE
       - OCMS_HCAPTCHA_DISABLED
       - OCMS_HSTS_PRELOAD
@@ -148,7 +164,7 @@ services:
   # Optional Redis service for distributed caching
   # Enable with: docker compose --profile redis up -d
   redis:
-    image: redis:7-alpine
+    image: redis:7-alpine@sha256:c5d34a98396a4775e223c74e929162c35c5a2182901ba26b50ade939941ce14b
     container_name: ocms-redis
     profiles:
       - redis

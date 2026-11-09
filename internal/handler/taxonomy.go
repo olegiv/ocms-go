@@ -22,6 +22,8 @@ import (
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/pagewrite"
+	"github.com/olegiv/ocms-go/internal/provenance"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
@@ -41,6 +43,7 @@ var tagsSortableFields = map[string]SortConfig{
 
 // TaxonomyHandler handles tag and category management routes.
 type TaxonomyHandler struct {
+	db             *sql.DB
 	queries        *store.Queries
 	renderer       *render.Renderer
 	sessionManager *scs.SessionManager
@@ -48,7 +51,7 @@ type TaxonomyHandler struct {
 	cacheManager   *cache.Manager
 }
 
-// SetCacheManager enables translation-cache invalidation after taxonomy writes.
+// SetCacheManager enables cache invalidation after taxonomy writes.
 func (h *TaxonomyHandler) SetCacheManager(cm *cache.Manager) {
 	h.cacheManager = cm
 }
@@ -56,6 +59,7 @@ func (h *TaxonomyHandler) SetCacheManager(cm *cache.Manager) {
 // NewTaxonomyHandler creates a new TaxonomyHandler.
 func NewTaxonomyHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager) *TaxonomyHandler {
 	return &TaxonomyHandler{
+		db:             db,
 		queries:        store.New(db),
 		renderer:       renderer,
 		sessionManager: sm,
@@ -214,6 +218,7 @@ func (h *TaxonomyHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
 	formValues := map[string]string{
 		"name":          name,
 		"slug":          slug,
+		"slug_edited":   r.PostFormValue("slug_edited"),
 		"language_code": languageCode,
 	}
 
@@ -270,6 +275,7 @@ func (h *TaxonomyHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.cacheManager.InvalidateSitemap()
 	slog.Info("tag created", "tag_id", newTag.ID, "slug", newTag.Slug, "created_by", middleware.GetUserID(r))
 	_ = h.eventService.LogTagEvent(r.Context(), model.EventLevelInfo, "Tag created", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"tag_id": newTag.ID, "name": newTag.Name, "slug": newTag.Slug})
 	flashSuccess(w, r, h.renderer, redirectAdminTags, "Tag created successfully")
@@ -384,6 +390,7 @@ func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.cacheManager.InvalidateSitemap()
 	slog.Info("tag updated", "tag_id", updatedTag.ID, "slug", updatedTag.Slug, "updated_by", middleware.GetUserID(r))
 	_ = h.eventService.LogTagEvent(r.Context(), model.EventLevelInfo, "Tag updated", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"tag_id": updatedTag.ID, "name": updatedTag.Name, "slug": updatedTag.Slug})
 	flashSuccess(w, r, h.renderer, redirectAdminTags, "Tag updated successfully")
@@ -399,7 +406,9 @@ func (h *TaxonomyHandler) DeleteTag(w http.ResponseWriter, r *http.Request) {
 
 	params := deleteEntityParams[store.Tag]{EntityName: "tag", IDField: "tag_id", RedirectURL: redirectAdminTags, SuccessMessage: "Tag deleted successfully"}
 	params.RequireFn = func(id int64) (store.Tag, bool) { return h.requireTagWithError(w, r, id) }
-	params.DeleteFn = h.queries.DeleteTag
+	params.DeleteFn = func(ctx context.Context, id int64) error {
+		return h.deleteTermAtomic(ctx, middleware.GetUserID(r), "tag", id)
+	}
 	params.GetSlug = func(t store.Tag) string { return t.Slug }
 	handleDeleteEntity(w, r, h.renderer, params)
 }
@@ -431,7 +440,7 @@ func (h *TaxonomyHandler) BulkDeleteTags(w http.ResponseWriter, r *http.Request)
 			continue
 		}
 
-		if err := h.queries.DeleteTag(r.Context(), id); err != nil {
+		if err := h.deleteTermAtomic(r.Context(), middleware.GetUserID(r), "tag", id); err != nil {
 			slog.Error("failed to bulk delete tag", "error", err, "tag_id", id)
 			failed = append(failed, bulkActionFailedItem{ID: id, Reason: "Error deleting tag"})
 			continue
@@ -462,7 +471,7 @@ func (h *TaxonomyHandler) SearchTags(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		slog.Error("failed to search tags", "error", err, "query", query)
+		slog.Error("failed to search tags", "error", err, "query", util.BoundedLogField(query))
 		writeJSONError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
@@ -528,6 +537,7 @@ func (h *TaxonomyHandler) TranslateTag(w http.ResponseWriter, r *http.Request) {
 	} else if h.cacheManager != nil {
 		h.cacheManager.Translation.InvalidateType(model.EntityTypeTag)
 	}
+	h.cacheManager.InvalidateSitemap()
 
 	slog.Info("tag translation created",
 		"source_tag_id", id,
@@ -791,6 +801,7 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 	formValues := map[string]string{
 		"name":          name,
 		"slug":          slug,
+		"slug_edited":   r.PostFormValue("slug_edited"),
 		"description":   description,
 		"parent_id":     parentIDStr,
 		"position":      positionStr,
@@ -862,6 +873,7 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	h.cacheManager.InvalidateSitemap()
 	slog.Info("category created", "category_id", newCategory.ID, "slug", newCategory.Slug, "created_by", middleware.GetUserID(r))
 	_ = h.eventService.LogCategoryEvent(r.Context(), model.EventLevelInfo, "Category created", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"category_id": newCategory.ID, "name": newCategory.Name, "slug": newCategory.Slug})
 	flashSuccess(w, r, h.renderer, redirectAdminCategories, "Category created successfully")
@@ -1013,6 +1025,7 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	h.cacheManager.InvalidateSitemap()
 	slog.Info("category updated", "category_id", updatedCategory.ID, "slug", updatedCategory.Slug, "updated_by", middleware.GetUserID(r))
 	_ = h.eventService.LogCategoryEvent(r.Context(), model.EventLevelInfo, "Category updated", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"category_id": updatedCategory.ID, "name": updatedCategory.Name, "slug": updatedCategory.Slug})
 	flashSuccess(w, r, h.renderer, redirectAdminCategories, "Category updated successfully")
@@ -1032,8 +1045,10 @@ func (h *TaxonomyHandler) DeleteCategory(w http.ResponseWriter, r *http.Request)
 		RedirectURL:    redirectAdminCategories,
 		SuccessMessage: "Category deleted successfully",
 		RequireFn:      func(id int64) (store.Category, bool) { return h.requireCategoryWithError(w, r, id) },
-		DeleteFn:       h.queries.DeleteCategory,
-		GetSlug:        func(c store.Category) string { return c.Slug },
+		DeleteFn: func(ctx context.Context, id int64) error {
+			return h.deleteTermAtomic(ctx, middleware.GetUserID(r), "category", id)
+		},
+		GetSlug: func(c store.Category) string { return c.Slug },
 	})
 }
 
@@ -1094,6 +1109,7 @@ func (h *TaxonomyHandler) TranslateCategory(w http.ResponseWriter, r *http.Reque
 	} else if h.cacheManager != nil {
 		h.cacheManager.Translation.InvalidateType(model.EntityTypeCategory)
 	}
+	h.cacheManager.InvalidateSitemap()
 
 	slog.Info("category translation created",
 		"source_category_id", id,
@@ -1368,7 +1384,7 @@ func (h *TaxonomyHandler) SearchCategories(w http.ResponseWriter, r *http.Reques
 	}
 
 	if err != nil {
-		slog.Error("failed to search categories", "error", err, "query", query)
+		slog.Error("failed to search categories", "error", err, "query", util.BoundedLogField(query))
 		writeJSONError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
@@ -1378,4 +1394,25 @@ func (h *TaxonomyHandler) SearchCategories(w http.ResponseWriter, r *http.Reques
 	if err := json.NewEncoder(w).Encode(categories); err != nil {
 		slog.Error("failed to encode categories response", "error", err)
 	}
+}
+
+func (h *TaxonomyHandler) deleteTermAtomic(ctx context.Context, userID int64, kind string, id int64) error {
+	work, err := pagewrite.InTx(ctx, h.db, provenance.Principal{UserID: userID, Source: "human", Transport: "admin"}, func(work *pagewrite.Tx) error {
+		if err := pagewrite.RequireEditor(ctx, work.Q, userID); err != nil {
+			return err
+		}
+		return work.DeleteTerm(ctx, kind, id)
+	})
+	if err != nil {
+		return err
+	}
+	if h.cacheManager != nil {
+		if len(work.Pages) == 0 {
+			h.cacheManager.InvalidateSitemap()
+		}
+		for pageID := range work.Pages {
+			h.cacheManager.InvalidatePage(pageID)
+		}
+	}
+	return nil
 }

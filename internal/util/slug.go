@@ -115,9 +115,9 @@ func IsValidLangCode(s string) bool {
 // the router.
 func IsReservedRouteSegment(s string) bool {
 	switch s {
-	case "admin", "api", "blog", "uploads", "static", "themes", "health",
+	case "admin", "api", "blog", "uploads", "static", "themes", "health", "preview",
 		"login", "logout", "language", "forms", "search", "tag", "category",
-		"page", "session", "account", "csp-report", "analytics", "embed", "example":
+		"page", "session", "account", "oauth", "csp-report", "analytics", "embed", "example":
 		return true
 	default:
 		return false
@@ -130,7 +130,7 @@ func IsReservedRouteSegment(s string) bool {
 // Segments that own only deeper paths (forms/{slug}, uploads/...) or other
 // methods (POST /logout) stay free for pages. TestExactRoutesReservePageSlugs
 // (cmd/ocms) keeps the list equal to the router's exact routes.
-var reservedPageSlugs = []string{"account", "admin", "blog", "example", "health", "login", "search"}
+var reservedPageSlugs = []string{"account", "admin", "blog", "example", "health", "login", "preview", "search"}
 
 // IsReservedPageSlug reports whether a page slug or single-segment alias equals
 // the exact URL of an application route, which answers it instead of the page.
@@ -156,6 +156,7 @@ func ReservedPageSlugs() []string {
 // TestRoutePathsReserveAliases (cmd/ocms) keeps the list equal to the
 // router's registrations.
 var reservedRoutePaths = []string{
+	"account/connected-apps",
 	"account/security",
 	"account/security/totp",
 	"admin/**",
@@ -169,6 +170,8 @@ var reservedRoutePaths = []string{
 	"health/ready",
 	"login/mfa",
 	"login/mfa/setup",
+	"oauth/authorize",
+	"preview/**",
 	"session/get",
 	"session/set",
 	"static/dist/*/**",
@@ -208,6 +211,34 @@ func ReservedRoutePaths() []string {
 	return slices.Clone(reservedRoutePaths)
 }
 
+// previewSegment names the preview routes (/preview/... and
+// /{lang}/preview/...).
+const previewSegment = "preview"
+
+// ShadowsPreviewRoute reports whether a page at the slash-separated path,
+// such as a slug or alias, would collide with the preview routes: its first
+// segment is "preview", or its second is and the first has the shape of a
+// language code. The preview middleware recognizes /preview/ and one
+// language-prefix segment followed by /preview/ before the active languages
+// are known, so a first segment that merely looks like a language code
+// ("docs") would make a page at docs/preview/x answer as a preview
+// (no-store, noindex, no scripts; below docs/preview/share a request
+// rewritten to a 404), and an active prefix is stripped before routing, so
+// ru/preview reaches the /preview router. A "preview" segment deeper in the
+// path (blog/preview/x, a/b/preview/c) is ordinary content and stays
+// allowed, so existing aliases keep saving. Page writes refuse the colliding
+// paths (pagewrite.RouteConflict). The check stays out of
+// reservedRoutePaths because that list must equal the router's
+// registrations (TestRoutePathsReserveAliases), and these paths are no
+// registration.
+func ShadowsPreviewRoute(path string) bool {
+	segments := strings.Split(strings.Trim(path, "/"), "/")
+	if segments[0] == previewSegment {
+		return true
+	}
+	return len(segments) >= 2 && segments[1] == previewSegment && IsRoutableLanguageCode(segments[0])
+}
+
 // IsReservedLanguageCode reports whether a language code conflicts with a
 // top-level route owned by the application. Reserved codes must not be used as
 // language URL prefixes, even when legacy data marks them as active.
@@ -215,14 +246,16 @@ func IsReservedLanguageCode(s string) bool {
 	return IsReservedRouteSegment(s)
 }
 
-// IsPrivateRoutePath reports whether path belongs to the admin UI, the API or
-// the signed-in account area. Content redirects and first-party analytics
-// leave these paths alone. TestAuthenticatedRoutesArePrivate (cmd/ocms) fails
-// when a session-authenticated top-level route is missing here.
+// IsPrivateRoutePath reports whether path belongs to the admin UI, the API, the
+// signed-in account area or the OAuth endpoints (whose consent screen checks
+// the session itself instead of sitting behind middleware.Auth). Content
+// redirects and first-party analytics leave these paths alone.
+// TestAuthenticatedRoutesArePrivate (cmd/ocms) fails when a
+// session-authenticated top-level route is missing here.
 func IsPrivateRoutePath(path string) bool {
 	first, _, _ := strings.Cut(strings.TrimPrefix(path, "/"), "/")
 	switch first {
-	case "admin", "api", "account":
+	case "admin", "api", "account", "preview", "oauth":
 		return true
 	default:
 		return false

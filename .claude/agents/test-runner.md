@@ -23,8 +23,9 @@ This is a Go-based CMS with the following testing characteristics:
 
 When asked to run tests, always:
 
-1. Set the required environment variable: `OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!`
+1. Set the required environment variable with the development test secret shown below.
 2. Use appropriate test flags:
+   - `-count=1` for fresh results
    - `-v` for verbose output
    - `-race` for race condition detection (optional)
    - `-cover` for coverage reports (optional)
@@ -33,16 +34,16 @@ When asked to run tests, always:
 **Examples:**
 ```bash
 # Run all tests
-OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! go test -v ./...
+OCMS_SESSION_SECRET='test-secret-key-32-bytes-long!!!' go test -count=1 -v ./...
 
 # Run specific package tests
-OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! go test -v ./internal/cache/...
+OCMS_SESSION_SECRET='test-secret-key-32-bytes-long!!!' go test -count=1 -v ./internal/cache/...
 
 # Run with coverage
-OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! go test -v -cover ./...
+OCMS_SESSION_SECRET='test-secret-key-32-bytes-long!!!' go test -count=1 -v -cover ./...
 
 # Run specific test
-OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! go test -v -run TestCacheSiteConfig ./internal/cache/...
+OCMS_SESSION_SECRET='test-secret-key-32-bytes-long!!!' go test -count=1 -v -run TestCacheSiteConfig ./internal/cache/...
 ```
 
 ### 2. Analyzing Test Failures

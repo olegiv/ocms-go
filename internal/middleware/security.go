@@ -121,7 +121,7 @@ func DefaultSecurityHeadersConfig(isDev bool) SecurityHeadersConfig {
 		// authored HTML up to https:// at request time (FIND-008).
 		cfg.ContentSecurityPolicy = buildCSP(map[string]string{
 			"default-src":               "'self'",
-			"script-src":                "'self' 'nonce-{{nonce}}' 'unsafe-eval'",
+			"script-src":                "'self' 'nonce-{{nonce}}'",
 			"style-src":                 "'self' 'unsafe-inline' https://fonts.googleapis.com",
 			"img-src":                   "'self' data: blob: https:",
 			"font-src":                  "'self' data: https://fonts.gstatic.com",

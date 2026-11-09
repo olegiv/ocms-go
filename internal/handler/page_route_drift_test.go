@@ -21,6 +21,8 @@ import (
 // API refuse the collision outright, the migrator suffixes around it, and the
 // transfer import rejects the archive in preflight.
 var pageRouteGuards = []string{
+	"RouteConflict",
+	"SlugAvailable",
 	"PageRouteConflict",                    // internal/handler, shared with the v2 API
 	"pageRouteConflict",                    // its PagesHandler wrapper
 	"ensureSlugAvailable",                  // internal/api/v2/pages

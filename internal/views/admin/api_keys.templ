@@ -347,14 +347,15 @@ templ apiKeyGeneratedPage(pc *PageContext, data APIKeyFormData) {
 				@label.Label(label.Props{For: "generated-key", Class: "block mb-1"}) {
 					{ pc.T("api_keys.your_key") }
 				}
-				<div class="key-container" x-data="{ copied: false }">
+				<div class="key-container" x-data="copyInput">
 					@input.Input(input.Props{
 						ID:       "generated-key",
 						Value:    data.GeneratedKey,
 						Readonly: true,
 						Class:    "key-input",
+						Attributes: templ.Attributes{"x-ref": "copyValue"},
 					})
-					@button.Button(button.Props{Class: "copy-btn", Attributes: templ.Attributes{"@click": "navigator.clipboard.writeText(document.getElementById('generated-key').value); copied = true; setTimeout(() => copied = false, 2000)"}}) {
+					@button.Button(button.Props{Class: "copy-btn", Attributes: templ.Attributes{"@click": "copy()"}}) {
 						<span x-show="!copied">
 							@icon.Copy(icon.Props{Size: 16})
 							{ pc.T("btn.copy") }

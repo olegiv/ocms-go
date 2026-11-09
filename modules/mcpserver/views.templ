@@ -6,12 +6,14 @@ package mcpserver
 import (
 	"fmt"
 	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
+	accountviews "github.com/olegiv/ocms-go/internal/views/account"
 	"github.com/olegiv/ocms-go/internal/views/components/alert"
 	"github.com/olegiv/ocms-go/internal/views/components/badge"
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/card"
 	"github.com/olegiv/ocms-go/internal/views/components/checkbox"
 	"github.com/olegiv/ocms-go/internal/views/components/label"
+	"github.com/olegiv/ocms-go/internal/views/components/selectbox"
 	"github.com/olegiv/ocms-go/internal/views/components/table"
 	"github.com/olegiv/ocms-go/internal/views/components/textarea"
 )
@@ -36,8 +38,29 @@ type DashboardData struct {
 	ClaudeCodeCommand string
 	ClientConfigJSON  string
 	Tools             []ToolRow
-	Keys              []KeyRow
-	KeysError         bool
+	OAuthEnabled      bool
+	DraftToolsEnabled bool
+	ExternalLinks     string
+	Connections       *accountviews.ConnectionsData
+	// AgentShareLinks is the create_preview_link policy; ShareLinks lists the
+	// usable links AI clients issued, ShareLinksError that they could not be
+	// read.
+	AgentShareLinks bool
+	ShareLinks      []ShareLinkRow
+	ShareLinksError bool
+}
+
+// ShareLinkRow is one usable share link an AI client issued.
+type ShareLinkRow struct {
+	ID           int64
+	PageID       int64
+	PageTitle    string
+	Revision     int64
+	Creator      string
+	CreatorEmail string
+	ViaOAuth     bool
+	Created      string
+	Expires      string
 }
 
 // ToolRow is one tool in the catalog table.
@@ -45,18 +68,6 @@ type ToolRow struct {
 	Name        string
 	Title       string
 	Description string
-}
-
-// KeyRow is one API key holding the mcp:access permission.
-type KeyRow struct {
-	ID          int64
-	Name        string
-	Prefix      string
-	Permissions []string
-	Active      bool
-	Expired     bool
-	LastUsed    string
-	Expires     string
 }
 
 // DashboardPage renders /admin/mcp.
@@ -90,8 +101,11 @@ templ DashboardPage(pc *adminviews.PageContext, data DashboardData) {
 			@endpointCard(pc, data)
 			@connectCard(pc, data)
 			@settingsCard(pc, data)
+			@shareLinksCard(pc, data)
 			@toolsCard(pc, data)
-			@keysCard(pc, data)
+			if data.Connections != nil {
+				@accountviews.ConnectionsPanel(pc, *data.Connections)
+			}
 		</div>
 	}
 }
@@ -113,7 +127,11 @@ templ endpointCard(pc *adminviews.PageContext, data DashboardData) {
 				<dt class="text-muted-foreground">{ pc.T("mcp.mode_label") }</dt>
 				<dd>
 					@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
-						{ pc.T("mcp.read_only") }
+						if data.DraftToolsEnabled {
+							{ pc.T("mcp.authoring_enabled") }
+						} else {
+							{ pc.T("mcp.read_only") }
+						}
 					}
 				</dd>
 				<dt class="text-muted-foreground">{ pc.T("mcp.protocol_versions") }</dt>
@@ -137,6 +155,9 @@ templ connectCard(pc *adminviews.PageContext, data DashboardData) {
 		}
 		@card.Content() {
 			<div class="space-y-4">
+				if data.OAuthEnabled {
+					<p>{ pc.T("mcp.oauth_connect") } <a class="underline" href="/account/connected-apps">{ pc.T("connected.title") }</a></p>
+				}
 				<div class="space-y-2">
 					<h3 class="text-sm font-medium">{ pc.T("mcp.connect_claude_code") }</h3>
 					<pre class="overflow-x-auto rounded-md bg-muted p-3 text-xs"><code>{ data.ClaudeCodeCommand }</code></pre>
@@ -170,6 +191,46 @@ templ settingsCard(pc *adminviews.PageContext, data DashboardData) {
 			}
 			<form method="POST" action="/admin/mcp" class="space-y-6">
 				<div class="flex items-start gap-3">
+					@checkbox.Checkbox(checkbox.Props{ID: "draft_tools_enabled", Name: "draft_tools_enabled", Value: "1", Checked: data.DraftToolsEnabled, Disabled: data.SettingsError})
+					<div class="grid gap-1">
+						@label.Label(label.Props{For: "draft_tools_enabled"}) {
+							{ pc.T("mcp.draft_tools_enabled") }
+						}
+						<p class="text-sm text-muted-foreground">{ pc.T("mcp.draft_tools_help") }</p>
+					</div>
+				</div>
+				<div class="flex items-start gap-3">
+					@checkbox.Checkbox(checkbox.Props{ID: "agent_share_links", Name: "agent_share_links", Value: "1", Checked: data.AgentShareLinks, Disabled: data.SettingsError})
+					<div class="grid gap-1">
+						@label.Label(label.Props{For: "agent_share_links"}) {
+							{ pc.T("mcp.agent_share_links") }
+						}
+						<p class="text-sm text-muted-foreground">{ pc.T("mcp.agent_share_links_help") }</p>
+					</div>
+				</div>
+				<div class="grid gap-2">
+					@label.Label(label.Props{For: "external_links"}) {
+						{ pc.T("mcp.external_links") }
+					}
+					@selectbox.SelectBox() {
+						@selectbox.Trigger(selectbox.TriggerProps{ID: "external_links", Name: "external_links", Disabled: data.SettingsError}) {
+							@selectbox.Value()
+						}
+						@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+							@selectbox.Item(selectbox.ItemProps{Value: "keep", Selected: data.ExternalLinks == "keep"}) {
+								{ pc.T("mcp.links_keep") }
+							}
+							@selectbox.Item(selectbox.ItemProps{Value: "nofollow", Selected: data.ExternalLinks == "nofollow"}) {
+								{ pc.T("mcp.links_nofollow") }
+							}
+							@selectbox.Item(selectbox.ItemProps{Value: "strip", Selected: data.ExternalLinks == "strip"}) {
+								{ pc.T("mcp.links_strip") }
+							}
+						}
+					}
+					<p class="text-sm text-muted-foreground">{ pc.T("mcp.external_links_help") }</p>
+				</div>
+				<div class="flex items-start gap-3">
 					@checkbox.Checkbox(checkbox.Props{ID: "allow_drafts", Name: "allow_drafts", Value: "1", Checked: data.AllowDrafts, Disabled: data.SettingsError})
 					<div class="grid gap-1">
 						@label.Label(label.Props{For: "allow_drafts"}) {
@@ -197,6 +258,82 @@ templ settingsCard(pc *adminviews.PageContext, data DashboardData) {
 					{ pc.T("mcp.save_button") }
 				}
 			</form>
+		}
+	}
+}
+
+templ shareLinksCard(pc *adminviews.PageContext, data DashboardData) {
+	@card.Card(card.Props{ID: "mcp-share-links"}) {
+		@card.Header() {
+			@card.Title() {
+				{ pc.T("mcp.share_links_title") }
+			}
+			@card.Description() {
+				{ pc.T("mcp.share_links_description") }
+			}
+		}
+		@card.Content() {
+			if data.ShareLinksError {
+				@alert.Alert(alert.Props{Variant: alert.VariantDestructive}) {
+					@alert.Description() {
+						{ pc.T("mcp.share_links_error") }
+					}
+				}
+			} else if len(data.ShareLinks) == 0 {
+				<p class="text-sm text-muted-foreground">{ pc.T("mcp.share_links_empty") }</p>
+			} else {
+				@table.Table() {
+					@table.Header() {
+						@table.Row() {
+							@table.Head() {
+								{ pc.T("mcp.share_links_page") }
+							}
+							@table.Head() {
+								{ pc.T("mcp.share_links_issued_by") }
+							}
+							@table.Head() {
+								{ pc.T("mcp.share_links_expires") }
+							}
+							@table.Head() {
+							}
+						}
+					}
+					@table.Body() {
+						for _, link := range data.ShareLinks {
+							@table.Row() {
+								@table.Cell() {
+									<a class="underline" href={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d", link.PageID)) }>{ link.PageTitle }</a>
+									<span class="text-xs text-muted-foreground">{ pc.T("mcp.share_links_revision", link.Revision) }</span>
+								}
+								@table.Cell() {
+									{ link.Creator }
+									<span class="text-xs text-muted-foreground">{ link.CreatorEmail }</span>
+									if link.ViaOAuth {
+										@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+											OAuth
+										}
+									} else {
+										@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+											{ pc.T("mcp.share_links_api_key") }
+										}
+									}
+								}
+								@table.Cell() {
+									{ link.Expires }
+								}
+								@table.Cell() {
+									<form method="POST" action={ templ.SafeURL(fmt.Sprintf("/admin/mcp/share-links/%d/revoke", link.ID)) }>
+										@adminviews.CSRFField()
+										@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDestructive, Size: button.SizeSm}) {
+											{ pc.T("mcp.share_links_revoke") }
+										}
+									</form>
+								}
+							}
+						}
+					}
+				}
+			}
 		}
 	}
 }
@@ -239,111 +376,6 @@ templ toolsCard(pc *adminviews.PageContext, data DashboardData) {
 					}
 				}
 			</div>
-		}
-	}
-}
-
-templ keysCard(pc *adminviews.PageContext, data DashboardData) {
-	@card.Card(card.Props{ID: "mcp-keys"}) {
-		@card.Header() {
-			@card.Title() {
-				{ pc.T("mcp.keys_title") }
-			}
-			@card.Description() {
-				{ pc.T("mcp.keys_description") }
-			}
-		}
-		@card.Content() {
-			if data.KeysError {
-				@alert.Alert(alert.Props{Variant: alert.VariantDestructive}) {
-					@alert.Description() {
-						{ pc.T("mcp.keys_error") }
-					}
-				}
-			} else if len(data.Keys) == 0 {
-				<p class="text-sm text-muted-foreground">{ pc.T("mcp.keys_empty") }</p>
-			} else {
-				<div class="overflow-x-auto">
-					@table.Table() {
-						@table.Header() {
-							@table.Row() {
-								@table.Head() {
-									{ pc.T("label.name") }
-								}
-								@table.Head() {
-									{ pc.T("api_keys.key_prefix") }
-								}
-								@table.Head() {
-									{ pc.T("api_keys.permissions") }
-								}
-								@table.Head() {
-									{ pc.T("label.status") }
-								}
-								@table.Head() {
-									{ pc.T("api_keys.last_used") }
-								}
-								@table.Head() {
-									{ pc.T("api_keys.expires") }
-								}
-							}
-						}
-						@table.Body() {
-							for _, key := range data.Keys {
-								@table.Row() {
-									@table.Cell() {
-										<a href={ templ.SafeURL(fmt.Sprintf("/admin/api-keys/%d", key.ID)) } class="font-medium hover:underline">{ key.Name }</a>
-									}
-									@table.Cell() {
-										<code class="font-mono text-xs">{ key.Prefix }…</code>
-									}
-									@table.Cell() {
-										<div class="flex flex-wrap gap-1">
-											for _, perm := range key.Permissions {
-												@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
-													{ perm }
-												}
-											}
-										</div>
-									}
-									@table.Cell() {
-										@keyStatusBadge(pc, key)
-									}
-									@table.Cell() {
-										if key.LastUsed != "" {
-											{ key.LastUsed }
-										} else {
-											<span class="text-muted-foreground">{ pc.T("mcp.never") }</span>
-										}
-									}
-									@table.Cell() {
-										if key.Expires != "" {
-											{ key.Expires }
-										} else {
-											<span class="text-muted-foreground">{ pc.T("mcp.never") }</span>
-										}
-									}
-								}
-							}
-						}
-					}
-				</div>
-			}
-		}
-	}
-}
-
-templ keyStatusBadge(pc *adminviews.PageContext, key KeyRow) {
-	if !key.Active {
-		@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
-			{ pc.T("label.inactive") }
-		}
-	} else if key.Expired {
-		@badge.Badge(badge.Props{Variant: badge.VariantDestructive}) {
-			{ pc.T("api_keys.expired") }
-		}
-	} else {
-		@badge.Badge() {
-			{ pc.T("label.active") }
 		}
 	}
 }

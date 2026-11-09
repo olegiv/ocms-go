@@ -564,6 +564,10 @@ func TestGeneratePages(t *testing.T) {
 	if len(tracked) != len(pageIDs) {
 		t.Errorf("tracked pages = %d, generated = %d", len(tracked), len(pageIDs))
 	}
+	for _, id := range pageIDs {
+		testutil.AssertPageRevision(t, q, id, 1)
+	}
+
 }
 
 func TestGenerateMenuItems(t *testing.T) {

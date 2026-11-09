@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/olegiv/ocms-go/internal/preview"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/modules/migrator/sources/shared"
 )
@@ -28,7 +29,7 @@ func TestRedirectHandlerSkipsApplicationSegments(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
-	handler := rm.Handler(next)
+	handler := preview.RedactRequest(rm.Handler(next))
 
 	tests := []struct {
 		path       string
@@ -44,6 +45,8 @@ func TestRedirectHandlerSkipsApplicationSegments(t *testing.T) {
 		{path: "/administrator", wantStatus: http.StatusMovedPermanently},
 		{path: "/apiary", wantStatus: http.StatusMovedPermanently},
 		{path: "/accounting", wantStatus: http.StatusMovedPermanently},
+		{path: "/docs/preview/share/synthetic-legacy-bearer", wantStatus: http.StatusNoContent},
+		{path: "/docs/public-alias", wantStatus: http.StatusMovedPermanently},
 	}
 
 	for _, tt := range tests {

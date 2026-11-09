@@ -4,9 +4,31 @@
 package security
 
 import (
+	"html"
 	"strings"
 	"testing"
 )
+
+func TestPageHTMLPreservesImageAltText(t *testing.T) {
+	for _, alt := range []string{
+		"Workflow diagram: AI draft, editorial review, then human publication.",
+		"Схема: черновик ИИ → редакционная проверка → публикация человеком.",
+		"Ablauf: KI-Entwurf → Prüfung & Veröffentlichung durch einen Menschen.",
+		`A "quoted" label <with brackets>`,
+		"", // A deliberately decorative image still needs an empty alt.
+	} {
+		t.Run(alt, func(t *testing.T) {
+			attr := `alt="` + html.EscapeString(alt) + `"`
+			got := SanitizePageHTML(`<img src="/uploads/test.png" ` + attr + ` onerror="alert(1)">`)
+			if !strings.Contains(got, attr) || strings.Contains(got, "onerror") {
+				t.Fatalf("image description lost or handler retained: %s", got)
+			}
+			if twice := SanitizePageHTML(got); twice != got {
+				t.Fatalf("render sanitization changed the saved image: %s", twice)
+			}
+		})
+	}
+}
 
 func TestJavascriptURIPattern(t *testing.T) {
 	tests := []struct {
@@ -156,12 +178,17 @@ func TestSanitizePageHTML(t *testing.T) {
 
 // TestPageHTMLKeepsLinkTargetBlank checks "open in new tab" survives the page
 // policy, always with rel="noopener", and that no other target value does.
+// The page policy does not force nofollow (an author's reviewed link policy
+// survives re-sanitizing), so noopener is added after sanitizing and allowed
+// rel values are kept.
 func TestPageHTMLKeepsLinkTargetBlank(t *testing.T) {
 	for _, tc := range []struct{ in, want string }{
-		{`<a href="https://example.com/x" target="_blank" rel="noopener noreferrer">ext</a>`, `<a href="https://example.com/x" target="_blank" rel="nofollow noopener">ext</a>`},
-		{`<a href="/local" target="_blank">local</a>`, `<a href="/local" target="_blank" rel="nofollow noopener">local</a>`},
-		{`<a href="/local" target="_top">top</a>`, `<a href="/local" rel="nofollow">top</a>`},
-		{`<a href="/local" target="evil">named</a>`, `<a href="/local" rel="nofollow">named</a>`},
+		{`<a href="https://example.com/x" target="_blank" rel="noopener noreferrer">ext</a>`, `<a href="https://example.com/x" target="_blank" rel="noopener noreferrer">ext</a>`},
+		{`<a href="https://example.com/x" target="_blank" rel="nofollow">ext</a>`, `<a href="https://example.com/x" target="_blank" rel="nofollow noopener">ext</a>`},
+		{`<a href="/local" target="_blank">local</a>`, `<a href="/local" target="_blank" rel="noopener">local</a>`},
+		{`<a href="/local" target="_top">top</a>`, `<a href="/local">top</a>`},
+		{`<a href="/local" target="evil">named</a>`, `<a href="/local">named</a>`},
+		{`<p>No links here</p>`, `<p>No links here</p>`},
 	} {
 		if got := SanitizePageHTML(tc.in); got != tc.want {
 			t.Errorf("SanitizePageHTML(%q)\n got %q\nwant %q", tc.in, got, tc.want)

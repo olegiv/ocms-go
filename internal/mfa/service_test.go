@@ -23,7 +23,7 @@ const (
 	otherTestKey = "Zp8Lq3Wn6Rx1Tc9Vb4Ym7Kd2Hf5Gj0Sa8Ne3Ux6Qi="
 )
 
-func newTestService(t *testing.T, key string) (*Service, *sql.DB) {
+func newTestService(t *testing.T) (*Service, *sql.DB) {
 	t.Helper()
 	db, err := store.NewDB(filepath.Join(t.TempDir(), "mfa.db"))
 	if err != nil {
@@ -33,7 +33,7 @@ func newTestService(t *testing.T, key string) (*Service, *sql.DB) {
 	if err := store.Migrate(db); err != nil {
 		t.Fatal(err)
 	}
-	s, err := NewService(db, key, false)
+	s, err := NewService(db, testKey, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +158,7 @@ func TestRecoveryCodesFormatAndNormalize(t *testing.T) {
 
 func TestServiceEnrollVerifyAndDisable(t *testing.T) {
 	ctx := context.Background()
-	s, db := newTestService(t, testKey)
+	s, db := newTestService(t)
 	userID := createUser(t, db, "user@example.com")
 	now := time.Unix(1_800_000_000, 0)
 	s.now = func() time.Time { return now }
@@ -265,7 +265,7 @@ func TestServiceEnrollVerifyAndDisable(t *testing.T) {
 // and recovery codes keep working so the user can still sign in.
 func TestServiceWithChangedKey(t *testing.T) {
 	ctx := context.Background()
-	s, db := newTestService(t, testKey)
+	s, db := newTestService(t)
 	userID := createUser(t, db, "user@example.com")
 	now := time.Unix(1_800_000_000, 0)
 	secret, codes := enroll(t, s, userID, now)
@@ -315,7 +315,7 @@ func TestGroupSecret(t *testing.T) {
 //
 // Bug state: have ConfirmEnrollmentAt use s.now() instead of at.
 func TestConfirmEnrollmentAtTheCheckedMoment(t *testing.T) {
-	s, db := newTestService(t, testKey)
+	s, db := newTestService(t)
 	userID := createUser(t, db, "user@example.com")
 	checked := time.Unix(1_800_000_000/totpPeriod*totpPeriod+totpPeriod-1, 0) // last second of a period
 	s.now = func() time.Time { return checked }
@@ -342,7 +342,7 @@ func TestConfirmEnrollmentAtTheCheckedMoment(t *testing.T) {
 // count, so its account is not sent to a code nobody can check, and
 // nothing can be enrolled.
 func TestOffServiceIgnoresEnrollments(t *testing.T) {
-	s, db := newTestService(t, testKey)
+	s, db := newTestService(t)
 	userID := createUser(t, db, "enrolled@example.com")
 	enroll(t, s, userID, time.Now())
 
@@ -363,7 +363,7 @@ func TestOffServiceIgnoresEnrollments(t *testing.T) {
 // authenticator that opens under the current key. After the key changes
 // and the last recovery code is spent, no current code exists.
 func TestHasCurrentCode(t *testing.T) {
-	s, db := newTestService(t, testKey)
+	s, db := newTestService(t)
 	userID := createUser(t, db, "current@example.com")
 	if has, err := s.HasCurrentCode(t.Context(), userID); err != nil || has {
 		t.Fatalf("without an authenticator = %t, %v; want false", has, err)

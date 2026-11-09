@@ -70,7 +70,11 @@ func TestSaveProviderSettingsKeepsStoredSecretWhenBlank(t *testing.T) {
 func TestDifyAPIKeyIsPasswordField(t *testing.T) {
 	m, cleanup := testModuleDB(t)
 	defer cleanup()
-	for _, field := range m.getProvider("dify").SettingsSchema() {
+	provider := m.getProvider("dify")
+	if provider == nil {
+		t.Fatal("Dify provider is not registered")
+	}
+	for _, field := range provider.SettingsSchema() {
 		if field.ID == "api_key" && field.Type != "password" {
 			t.Fatalf("api_key field type = %q, want password", field.Type)
 		}
@@ -85,7 +89,11 @@ func TestDifyAPIKeyIsPasswordField(t *testing.T) {
 func TestStoredSecretNeverReachesTheView(t *testing.T) {
 	m, cleanup := testModuleDB(t)
 	defer cleanup()
-	schema := schemaWithStoredValues(m.getProvider("dify").SettingsSchema(), map[string]string{"api_key": "app-secret-9", "bot_name": "Bot"})
+	provider := m.getProvider("dify")
+	if provider == nil {
+		t.Fatal("Dify provider is not registered")
+	}
+	schema := schemaWithStoredValues(provider.SettingsSchema(), map[string]string{"api_key": "app-secret-9", "bot_name": "Bot"})
 	var keyField *providers.SettingField
 	for i := range schema {
 		if schema[i].ID == "api_key" {

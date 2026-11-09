@@ -6,12 +6,73 @@ package service
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"net/netip"
+	"strings"
 	"testing"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/olegiv/ocms-go/internal/model"
 )
+
+func TestLogEventCapsMetadataAndPreservesStructuredFields(t *testing.T) {
+	db := setupEventTestDB(t)
+	t.Cleanup(func() { _ = db.Close() })
+	metadata := map[string]any{
+		"count": 3, "allowed": true, "nested": []any{"read", 7},
+		"oversized_array": []string{strings.Repeat("x", 5000)},
+		"multibyte":       strings.Repeat("界", 5000),
+	}
+	for _, name := range []string{"x", "y", "z"} {
+		metadata[name] = strings.Repeat("<\x00", 5000)
+	}
+	if err := NewEventService(db).LogSecurityEvent(t.Context(), model.EventLevelWarning,
+		"request rejected", nil, "192.0.2.1", "/"+strings.Repeat("x", 10000), metadata); err != nil {
+		t.Fatal(err)
+	}
+	var raw, path string
+	if err := db.QueryRow("SELECT metadata, request_url FROM events").Scan(&raw, &path); err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(raw), &got); err != nil || len(raw) > 4096 || len(path) != 256 {
+		t.Fatalf("invalid or oversized audit row: metadata=%d path=%d err=%v", len(raw), len(path), err)
+	}
+	if string(got["count"]) != "3" || string(got["allowed"]) != "true" ||
+		string(got["nested"]) != `["read",7]` || got["oversized_array"] != nil {
+		t.Fatalf("structured fields changed")
+	}
+	var value string
+	if err := json.Unmarshal(got["multibyte"], &value); err != nil || value != strings.Repeat("界", 341) {
+		t.Fatal("multibyte field was lost or corrupted")
+	}
+}
+
+func TestAnonymousEventBudgetIsScopedAndBounded(t *testing.T) {
+	var limiter anonymousEventLimiter
+	now := time.Now()
+	if !limiter.allow("rejected", "::ffff:192.0.2.1", now) ||
+		limiter.allow("rejected", "192.0.2.1", now) ||
+		!limiter.allow("different", "192.0.2.1", now) ||
+		!limiter.allow("rejected", "2001:db8::1", now) ||
+		limiter.allow("rejected", "2001:db8::2", now) ||
+		!limiter.allow("rejected", "2001:db8:0:1::1", now) {
+		t.Fatal("sampling did not distinguish the message and canonical address")
+	}
+	ip := netip.MustParseAddr("198.18.0.0")
+	for len(limiter.seen) < maxAnonymousEventSources {
+		if !limiter.allow("rejected", ip.String(), now) {
+			t.Fatal("source suppressed before capacity")
+		}
+		ip = ip.Next()
+	}
+	if limiter.allow("rejected", ip.String(), now) ||
+		!limiter.allow("rejected", ip.String(), now.Add(anonymousEventWindow)) {
+		t.Fatal("saturated limiter did not recover after expiry")
+	}
+}
 
 func setupEventTestDB(t *testing.T) *sql.DB {
 	t.Helper()
@@ -285,53 +346,5 @@ func TestLogCategoryEvents(t *testing.T) {
 			defer func() { _ = db.Close() }()
 			testEventField(t, db, tt.logFn, "category", tt.expected)
 		})
-	}
-}
-
-func TestDeleteOldEvents(t *testing.T) {
-	db := setupEventTestDB(t)
-	defer func() { _ = db.Close() }()
-
-	svc := NewEventService(db)
-	ctx := context.Background()
-
-	// Insert an old event directly
-	_, err := db.Exec(`
-		INSERT INTO events (level, category, message, metadata, created_at)
-		VALUES ('info', 'test', 'Old event', '{}', datetime('now', '-31 days'))
-	`)
-	if err != nil {
-		t.Fatalf("failed to insert old event: %v", err)
-	}
-
-	// Insert a recent event
-	err = svc.LogInfo(ctx, "test", "Recent event", nil, "", "", nil)
-	if err != nil {
-		t.Fatalf("LogInfo failed: %v", err)
-	}
-
-	// Verify we have 2 events
-	var count int
-	err = db.QueryRow("SELECT COUNT(*) FROM events").Scan(&count)
-	if err != nil {
-		t.Fatalf("failed to count events: %v", err)
-	}
-	if count != 2 {
-		t.Errorf("event count = %d, want 2", count)
-	}
-
-	// Delete events older than 30 days
-	err = svc.DeleteOldEvents(ctx, 30*24*60*60*1e9) // 30 days in nanoseconds
-	if err != nil {
-		t.Fatalf("DeleteOldEvents failed: %v", err)
-	}
-
-	// Verify only 1 event remains
-	err = db.QueryRow("SELECT COUNT(*) FROM events").Scan(&count)
-	if err != nil {
-		t.Fatalf("failed to count events: %v", err)
-	}
-	if count != 1 {
-		t.Errorf("event count after delete = %d, want 1", count)
 	}
 }

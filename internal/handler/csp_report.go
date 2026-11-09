@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 const (
@@ -18,8 +20,6 @@ const (
 	maxCSPReportBytes = 16 << 10
 	// maxCSPReportsPerRequest bounds how many reports one request can log.
 	maxCSPReportsPerRequest = 10
-	// maxCSPReportField bounds each logged field.
-	maxCSPReportField = 256
 )
 
 // CSPReport handles POST /csp-report, where browsers send
@@ -43,10 +43,10 @@ func CSPReport(w http.ResponseWriter, r *http.Request) {
 
 	for _, report := range cspReports(raw) {
 		slog.Warn("csp violation",
-			"document", cspReportField(report, "document-uri", "documentURL"),
+			"document", cspReportURL(report, "document-uri", "documentURL"),
 			"directive", cspReportField(report, "effective-directive", "effectiveDirective", "violated-directive"),
-			"blocked", cspReportField(report, "blocked-uri", "blockedURL"),
-			"source", cspReportField(report, "source-file", "sourceFile"),
+			"blocked", cspReportURL(report, "blocked-uri", "blockedURL"),
+			"source", cspReportURL(report, "source-file", "sourceFile"),
 			"line", cspReportField(report, "line-number", "lineNumber"),
 			"disposition", cspReportField(report, "disposition"),
 		)
@@ -84,8 +84,19 @@ func cspReports(raw json.RawMessage) []map[string]any {
 	return reports
 }
 
+// cspReportURL is cspReportField for URL-valued fields, without the query
+// and fragment: a page such as /oauth/authorize carries OAuth state and PKCE
+// values in its URL, and those must not reach the logs.
+func cspReportURL(report map[string]any, keys ...string) string {
+	value := cspReportField(report, keys...)
+	if i := strings.IndexAny(value, "?#"); i >= 0 {
+		value = value[:i]
+	}
+	return value
+}
+
 // cspReportField returns the first of keys present in report as a string
-// without control characters, truncated to maxCSPReportField runes.
+// without control characters, truncated to the shared log field limit.
 func cspReportField(report map[string]any, keys ...string) string {
 	for _, key := range keys {
 		var value string
@@ -97,19 +108,7 @@ func cspReportField(report map[string]any, keys ...string) string {
 		default:
 			continue
 		}
-		var b strings.Builder
-		kept := 0
-		for _, c := range value {
-			if c < 0x20 || c == 0x7f || (c >= 0x80 && c < 0xa0) {
-				continue
-			}
-			if kept == maxCSPReportField {
-				break
-			}
-			b.WriteRune(c)
-			kept++
-		}
-		return b.String()
+		return util.BoundedLogField(value)
 	}
 	return ""
 }

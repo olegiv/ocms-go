@@ -47,7 +47,7 @@ func TestSettingsRoundTrip(t *testing.T) {
 		t.Errorf("defaults = %+v, want drafts off and no instructions", got)
 	}
 
-	want := Settings{AllowDrafts: true, Instructions: "Be concise."}
+	want := Settings{AllowDrafts: true, Instructions: "Be concise.", ExternalLinks: "keep"}
 	if err := saveSettings(context.Background(), db, want); err != nil {
 		t.Fatalf("saveSettings: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestLoadSettingsMissingRow(t *testing.T) {
 		t.Fatalf("delete: %v", err)
 	}
 	got, err := loadSettings(context.Background(), db)
-	if err != nil || got != (Settings{}) {
+	if err != nil || got != (Settings{ExternalLinks: "keep", AgentShareLinks: true}) {
 		t.Errorf("missing row: %+v, %v; want defaults", got, err)
 	}
 	// Saving recreates the row.
@@ -185,7 +185,10 @@ func TestSchemaConstraintsFromHumaTags(t *testing.T) {
 		t.Fatalf("schemaFor: %v", err)
 	}
 	perPage := s.Properties["per_page"]
-	if perPage == nil || perPage.Minimum == nil || *perPage.Minimum != 1 || perPage.Maximum == nil || *perPage.Maximum != 100 {
+	if perPage == nil {
+		t.Fatal("list pages schema has no per_page property")
+	}
+	if perPage.Minimum == nil || *perPage.Minimum != 1 || perPage.Maximum == nil || *perPage.Maximum != 100 {
 		t.Errorf("per_page = %+v, want minimum 1 maximum 100", perPage)
 	}
 	if string(perPage.Default) != "20" {
@@ -427,6 +430,9 @@ func TestWrapToolLogsInternalErrors(t *testing.T) {
 		return SiteInfo{}, errors.New("database exploded at /var/lib/ocms")
 	})
 	_, _, err := handler(context.Background(), requestWithIdentity(model.PermissionMCPAccess), IDInput{})
+	if err == nil {
+		t.Fatal("failing handler returned no error")
+	}
 	if strings.Contains(err.Error(), "/var/lib") {
 		t.Errorf("internal detail leaked: %v", err)
 	}
@@ -472,7 +478,7 @@ func TestNormalizePaging(t *testing.T) {
 
 func TestServerInstructions(t *testing.T) {
 	hidden := serverInstructions(Settings{})
-	if !strings.Contains(hidden, "not returned over MCP") || strings.Contains(hidden, "Guidance from the site administrator") {
+	if !strings.Contains(hidden, "General content reads return published pages only") || strings.Contains(hidden, "Guidance from the site administrator") {
 		t.Errorf("default instructions:\n%s", hidden)
 	}
 	shown := serverInstructions(Settings{AllowDrafts: true, Instructions: "Prefer recent posts."})
@@ -554,11 +560,11 @@ func TestMigrationsUpDown(t *testing.T) {
 	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 	migrations := New().Migrations()
-	moduleutil.AssertMigrations(t, migrations, 1)
+	moduleutil.AssertMigrations(t, migrations, 3)
 	moduleutil.RunMigrations(t, db, migrations)
-	var allow int
-	if err := db.QueryRow(`SELECT allow_drafts FROM mcp_settings WHERE id = 1`).Scan(&allow); err != nil || allow != 0 {
-		t.Errorf("seeded row: allow_drafts=%d err=%v, want 0", allow, err)
+	var allow, share int
+	if err := db.QueryRow(`SELECT allow_drafts, agent_share_links FROM mcp_settings WHERE id = 1`).Scan(&allow, &share); err != nil || allow != 0 || share != 1 {
+		t.Errorf("seeded row: allow_drafts=%d agent_share_links=%d err=%v, want 0 and 1", allow, share, err)
 	}
 	moduleutil.RunMigrationsDown(t, db, migrations)
 	moduleutil.AssertTableNotExists(t, db, "mcp_settings")

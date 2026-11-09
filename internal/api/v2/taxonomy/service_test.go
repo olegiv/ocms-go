@@ -5,9 +5,11 @@ package taxonomy_test
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	v2 "github.com/olegiv/ocms-go/internal/api/v2"
 	"github.com/olegiv/ocms-go/internal/api/v2/taxonomy"
@@ -16,19 +18,51 @@ import (
 	"github.com/olegiv/ocms-go/internal/testutil"
 )
 
+// writerUserID is the editor that newTestService creates as the first user;
+// writerActor's key belongs to it, as every real key belongs to an account.
+const writerUserID = 1
+
 func newTestService(t *testing.T) (*taxonomy.Service, func()) {
 	t.Helper()
+	_, svc, cleanup := newTestFixture(t)
+	return svc, cleanup
+}
+
+// newTestFixture returns the database too, for tests that change accounts.
+func newTestFixture(t *testing.T) (*sql.DB, *taxonomy.Service, func()) {
+	t.Helper()
 	db, cleanup := testutil.TestDB(t)
-	return taxonomy.NewService(db, store.New(db), nil), cleanup
+	queries := store.New(db)
+	if id := createUser(t, queries, "editor@example.test", model.RoleEditor); id != writerUserID {
+		t.Fatalf("editor user id = %d, want %d", id, writerUserID)
+	}
+	return db, taxonomy.NewService(db, queries, nil), cleanup
+}
+
+func createUser(t *testing.T, queries *store.Queries, email, role string) int64 {
+	t.Helper()
+	now := time.Now()
+	user, err := queries.CreateUser(context.Background(), store.CreateUserParams{
+		Email: email, PasswordHash: "x", Name: email, Role: role, CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	return user.ID
 }
 
 func writerActor(t *testing.T) v2.Actor {
+	t.Helper()
+	return keyActor(t, writerUserID)
+}
+
+func keyActor(t *testing.T, createdBy int64) v2.Actor {
 	t.Helper()
 	perms, err := json.Marshal([]string{model.PermissionTaxonomyWrite})
 	if err != nil {
 		t.Fatalf("marshal perms: %v", err)
 	}
-	key := &store.ApiKey{ID: 1, Name: "test", KeyPrefix: "abcd", Permissions: string(perms), IsActive: true}
+	key := &store.ApiKey{ID: 1, Name: "test", KeyPrefix: "abcd", Permissions: string(perms), IsActive: true, CreatedBy: createdBy}
 	return v2.Actor{APIKey: key, Permissions: []string{model.PermissionTaxonomyWrite}}
 }
 
@@ -179,5 +213,43 @@ func TestDeleteCategoryRejectsIfChildrenExist(t *testing.T) {
 	}
 	if de.Kind != v2.ErrConflict {
 		t.Errorf("expected Conflict (409), got kind=%d: %s", de.Kind, de.Msg)
+	}
+}
+
+// TestTaxonomyWritesRequireEditorAccount checks that a key whose account was
+// demoted below editor can no longer change taxonomy through REST, and that
+// the refusal is a 403, not a 500. Deletes answered 500 "Failed to delete
+// tag" while creates and updates still went through.
+//
+// Bug state: drop the v2.RequireEditor call from requireWritePerm and this
+// fails. The in-transaction re-check behind it maps through v2.EditorError,
+// which TestEditorErrorKinds pins.
+func TestTaxonomyWritesRequireEditorAccount(t *testing.T) {
+	db, svc, cleanup := newTestFixture(t)
+	defer cleanup()
+	ctx := context.Background()
+	tag, err := svc.CreateTag(ctx, writerActor(t), taxonomy.CreateTagBody{Name: "Go", Slug: "go"})
+	if err != nil {
+		t.Fatalf("CreateTag: %v", err)
+	}
+
+	isKind := func(err error, kind v2.ErrorKind) bool {
+		var apiErr *v2.Error
+		return errors.As(err, &apiErr) && apiErr.Kind == kind
+	}
+	if _, err = svc.CreateTag(ctx, keyActor(t, 999), taxonomy.CreateTagBody{Name: "Gone", Slug: "gone"}); !isKind(err, v2.ErrUnauthorized) {
+		t.Errorf("deleted account create: %v", err)
+	}
+	if _, err = svc.CreateTag(ctx, writerActor(t), taxonomy.CreateTagBody{Name: "Rust", Slug: "rust"}); err != nil {
+		t.Fatalf("editor create: %v", err)
+	}
+	if _, err = db.ExecContext(ctx, `UPDATE users SET role = ? WHERE id = ?`, model.RolePublic, writerUserID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = svc.CreateTag(ctx, writerActor(t), taxonomy.CreateTagBody{Name: "Zig", Slug: "zig"}); !isKind(err, v2.ErrForbidden) {
+		t.Errorf("demoted account create: %v", err)
+	}
+	if err = svc.DeleteTag(ctx, writerActor(t), tag.ID); !isKind(err, v2.ErrForbidden) {
+		t.Errorf("demoted account delete: %v", err)
 	}
 }

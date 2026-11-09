@@ -301,7 +301,7 @@ func (q *Queries) ListChildMenuItemIDs(ctx context.Context, parentID sql.NullInt
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []int64{}
 	for rows.Next() {
 		var id int64
@@ -328,7 +328,7 @@ func (q *Queries) ListChildMenuItems(ctx context.Context, parentID sql.NullInt64
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []MenuItem{}
 	for rows.Next() {
 		var i MenuItem
@@ -368,7 +368,7 @@ func (q *Queries) ListMenuItemIDsForPage(ctx context.Context, pageID sql.NullInt
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []int64{}
 	for rows.Next() {
 		var id int64
@@ -395,7 +395,7 @@ func (q *Queries) ListMenuItems(ctx context.Context, menuID int64) ([]MenuItem, 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []MenuItem{}
 	for rows.Next() {
 		var i MenuItem
@@ -468,7 +468,7 @@ func (q *Queries) ListMenuItemsWithPage(ctx context.Context, menuID int64) ([]Li
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []ListMenuItemsWithPageRow{}
 	for rows.Next() {
 		var i ListMenuItemsWithPageRow
@@ -539,7 +539,7 @@ func (q *Queries) ListMenuItemsWithPublishedPage(ctx context.Context, menuID int
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []ListMenuItemsWithPublishedPageRow{}
 	for rows.Next() {
 		var i ListMenuItemsWithPublishedPageRow
@@ -582,7 +582,7 @@ func (q *Queries) ListMenus(ctx context.Context) ([]Menu, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Menu{}
 	for rows.Next() {
 		var i Menu
@@ -620,7 +620,7 @@ func (q *Queries) ListMenusByLanguage(ctx context.Context, languageCode string) 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Menu{}
 	for rows.Next() {
 		var i Menu
@@ -654,7 +654,7 @@ func (q *Queries) ListTopLevelMenuItems(ctx context.Context, menuID int64) ([]Me
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []MenuItem{}
 	for rows.Next() {
 		var i MenuItem

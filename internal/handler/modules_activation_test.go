@@ -366,6 +366,9 @@ func sqlFileStatements(t *testing.T, dir string) []sqlStatement {
 			statements = append(statements, sqlStatement{where: rel, sql: string(src)})
 			continue
 		}
+		if parts == nil || len(parts) != len(names)+1 {
+			t.Fatalf("sqlc query headers and statement bodies do not match in %s", rel)
+		}
 		for i, name := range names {
 			statements = append(statements, sqlStatement{where: rel + " " + name[1], sql: parts[i+1]})
 		}

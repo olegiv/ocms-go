@@ -21,6 +21,8 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/imaging"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/pagewrite"
+	"github.com/olegiv/ocms-go/internal/provenance"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
 )
@@ -228,19 +230,33 @@ func (s *MediaService) Upload(ctx context.Context, file multipart.File, header *
 	return &result, nil
 }
 
-// Delete removes a media item and its files. An error wrapping
+// Delete removes a media item and its files, and returns the pages whose
+// revision it changed; see DeleteWithPrincipal. An error wrapping
 // ErrMediaFilesNotRemoved means the records are gone but files remain.
-func (s *MediaService) Delete(ctx context.Context, mediaID int64) (resultErr error) {
+func (s *MediaService) Delete(ctx context.Context, mediaID int64) ([]store.Page, error) {
+	return s.DeleteWithPrincipal(ctx, mediaID, provenance.Principal{Source: "system", Transport: "media_cleanup"})
+}
+
+// DeleteWithPrincipal records the authenticated initiator of page media cleanup.
+// Deleting a media item clears it from the pages that use it as featured or
+// Open Graph image, which gives each of those pages a new revision. The
+// returned pages are those pages as committed: the caller owes each the same
+// after-commit side effects as any other page write (page cache invalidation
+// and the page.updated webhook). They are returned together with an error
+// wrapping ErrMediaFilesNotRemoved, because the records are gone then too.
+func (s *MediaService) DeleteWithPrincipal(ctx context.Context, mediaID int64, principal provenance.Principal) (changed []store.Page, resultErr error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("failed to start media deletion: %w", err)
+		return nil, fmt.Errorf("failed to start media deletion: %w", err)
 	}
 	queries := store.New(s.db).WithTx(tx)
 	var uploadRoot *os.Root
 	committed := false
 	defer func() {
 		if !committed {
-			resultErr = errors.Join(resultErr, tx.Rollback())
+			if rollbackErr := tx.Rollback(); rollbackErr != nil && !errors.Is(rollbackErr, sql.ErrTxDone) {
+				resultErr = errors.Join(resultErr, rollbackErr)
+			}
 		}
 		if uploadRoot == nil {
 			return
@@ -257,10 +273,10 @@ func (s *MediaService) Delete(ctx context.Context, mediaID int64) (resultErr err
 
 	media, err := queries.GetMediaByID(ctx, mediaID)
 	if err != nil {
-		return fmt.Errorf("failed to get media: %w", err)
+		return nil, fmt.Errorf("failed to get media: %w", err)
 	}
 	if !imaging.IsCanonicalMediaUUID(media.Uuid) {
-		return fmt.Errorf("failed to validate media cleanup target: invalid media UUID %q", media.Uuid)
+		return nil, fmt.Errorf("failed to validate media cleanup target: invalid media UUID %q", media.Uuid)
 	}
 
 	// Capture one verified canonical root before the database mutation. Cleanup
@@ -268,27 +284,50 @@ func (s *MediaService) Delete(ctx context.Context, mediaID int64) (resultErr err
 	// symlink cannot redirect deletion to another tree.
 	uploadRoot, err = imaging.OpenExistingUploadRoot(s.uploadDir)
 	if err != nil {
-		return fmt.Errorf("failed to validate media cleanup target: %w", err)
+		return nil, fmt.Errorf("failed to validate media cleanup target: %w", err)
+	}
+
+	work, err := pagewrite.NewTx(queries, principal)
+	if err != nil {
+		return nil, err
+	}
+	if principal.UserID > 0 {
+		if err = pagewrite.RequireEditor(ctx, queries, principal.UserID); err != nil {
+			return nil, err
+		}
+	}
+
+	if err = work.TrackMedia(ctx, mediaID); err != nil {
+		return nil, err
 	}
 
 	// Delete variants from DB
 	if err := queries.DeleteMediaVariants(ctx, mediaID); err != nil {
-		return fmt.Errorf("failed to delete variant records: %w", err)
+		return nil, fmt.Errorf("failed to delete variant records: %w", err)
 	}
 
 	// Delete media record from DB
 	if err := queries.DeleteMedia(ctx, mediaID); err != nil {
-		return fmt.Errorf("failed to delete media record: %w", err)
+		return nil, fmt.Errorf("failed to delete media record: %w", err)
+	}
+
+	if err = work.Finish(ctx); err != nil {
+		return nil, err
 	}
 
 	if s.beforeMediaCommit != nil {
 		s.beforeMediaCommit()
 	}
 
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit media deletion: %w", err)
+	if err = tx.Commit(); err != nil {
+		// Cancellation can roll back the transaction before Commit sees it.
+		if ctxErr := ctx.Err(); ctxErr != nil && errors.Is(err, sql.ErrTxDone) {
+			err = ctxErr
+		}
+		return nil, fmt.Errorf("failed to commit media deletion: %w", err)
 	}
 	committed = true
+	changed = work.ChangedPages()
 
 	if uploadRoot != nil {
 		if s.beforeMediaCleanup != nil {
@@ -299,11 +338,11 @@ func (s *MediaService) Delete(ctx context.Context, mediaID int64) (resultErr err
 			remove = imaging.DeleteMediaFilesFromRoot
 		}
 		if err := remove(uploadRoot, media.Uuid); err != nil {
-			return fmt.Errorf("%w: %w", ErrMediaFilesNotRemoved, err)
+			return changed, fmt.Errorf("%w: %w", ErrMediaFilesNotRemoved, err)
 		}
 	}
 
-	return nil
+	return changed, nil
 }
 
 // GetURL returns the URL path for a media item.

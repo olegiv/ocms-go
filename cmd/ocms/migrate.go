@@ -22,8 +22,8 @@ var migrateCommands = []string{"up", "down", "status", "version"}
 // runMigrate runs the database migrations without starting the server. It
 // knows the Go migrations, which the goose CLI does not: run against a
 // database that has applied one, `goose down` fails, and `goose up` can apply
-// newer SQL migrations first, after which the server refuses to start over
-// the "missing" Go migration. The Makefile's migrate targets use it. Like
+// newer SQL migrations first, leaving the Go migration to run out of order.
+// The Makefile's migrate targets use it. Like
 // serve, it reads .env or the file OCMS_ENV_FILE names, so it migrates the
 // database the server opens unless -db names another. Only up creates a
 // database: the other commands refuse a path where there is none, which a

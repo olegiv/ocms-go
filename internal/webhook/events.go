@@ -28,6 +28,47 @@ func NewEvent(eventType string, data any) *Event {
 	}
 }
 
+// entityID identifies the entity for both debouncing and error diagnostics.
+// A form event identifies the submission, so different submissions stay distinct.
+func (e *Event) entityID() (int64, bool) {
+	switch data := e.Data.(type) {
+	case PageEventData:
+		return data.ID, true
+	case *PageEventData:
+		if data != nil {
+			return data.ID, true
+		}
+	case MediaEventData:
+		return data.ID, true
+	case *MediaEventData:
+		if data != nil {
+			return data.ID, true
+		}
+	case UserEventData:
+		return data.ID, true
+	case *UserEventData:
+		if data != nil {
+			return data.ID, true
+		}
+	case FormEventData:
+		return data.SubmissionID, true
+	case *FormEventData:
+		if data != nil {
+			return data.SubmissionID, true
+		}
+	case map[string]any:
+		switch id := data["id"].(type) {
+		case int64:
+			return id, true
+		case float64:
+			return int64(id), true
+		}
+		// Keep the existing debounce key for maps without a numeric ID.
+		return 0, true
+	}
+	return 0, false
+}
+
 // PageEventData contains data for page-related events.
 type PageEventData struct {
 	ID           int64   `json:"id"`
@@ -78,21 +119,22 @@ type EventDispatcher interface {
 	DispatchEvent(ctx context.Context, eventType string, data any) error
 }
 
-// DispatchPageEvent sends a page event through d and logs a failure, as the
-// change it reports is already saved. The admin UI, the REST API and the
-// scheduler all send page events through it, so they send the same data.
-func DispatchPageEvent(ctx context.Context, d EventDispatcher, eventType string, page store.Page, actorEmail string) {
-	if err := d.DispatchEvent(ctx, eventType, NewPageEventData(page, actorEmail)); err != nil {
-		slog.Error("failed to dispatch webhook event", "error", err, "event_type", eventType, "page_id", page.ID)
+// DispatchEvent sends an event for a saved change and logs any error that the
+// dispatcher has not already recorded.
+func DispatchEvent(ctx context.Context, d EventDispatcher, eventType string, data any) {
+	if err := d.DispatchEvent(ctx, eventType, data); err != nil {
+		logUnreportedDispatchError(slog.Default(), &Event{Type: eventType, Data: data}, err)
 	}
 }
 
-// DispatchMediaEvent sends a media event through d and logs a failure, as the
-// change it reports is already saved.
+// DispatchPageEvent sends the same page data from the admin UI, REST API and scheduler.
+func DispatchPageEvent(ctx context.Context, d EventDispatcher, eventType string, page store.Page, actorEmail string) {
+	DispatchEvent(ctx, d, eventType, NewPageEventData(page, actorEmail))
+}
+
+// DispatchMediaEvent sends a media event for a saved change.
 func DispatchMediaEvent(ctx context.Context, d EventDispatcher, eventType string, media store.Medium) {
-	if err := d.DispatchEvent(ctx, eventType, NewMediaEventData(media)); err != nil {
-		slog.Error("failed to dispatch webhook event", "error", err, "event_type", eventType, "media_id", media.ID)
-	}
+	DispatchEvent(ctx, d, eventType, NewMediaEventData(media))
 }
 
 // MediaEventData contains data for media-related events.

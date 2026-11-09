@@ -25,7 +25,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/olegiv/ocms-go/internal/middleware"
-	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/util"
 )
 
@@ -135,8 +134,8 @@ func (m *Module) handleDifyProxyToken(w http.ResponseWriter, r *http.Request) {
 		if m.ctx != nil && m.ctx.Logger != nil {
 			m.ctx.Logger.Warn("embed proxy token refresh rejected",
 				"error", err,
-				"origin", origin,
-				"path", r.URL.Path)
+				"origin", util.BoundedLogField(origin),
+				"path", util.BoundedLogField(r.URL.Path))
 		}
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
@@ -169,23 +168,23 @@ func (m *Module) handleDifyChatMessagesProxy(w http.ResponseWriter, r *http.Requ
 	}
 	if !m.isRequestOriginAllowed(r) {
 		m.ctx.Logger.Warn("blocked embed proxy request by origin policy",
-			"path", r.URL.Path,
-			"origin", r.Header.Get("Origin"),
-			"referer", r.Header.Get("Referer"))
+			"path", util.BoundedLogField(r.URL.Path),
+			"origin", util.BoundedLogField(r.Header.Get("Origin")),
+			"referer", util.BoundedLogField(r.Header.Get("Referer")))
 		m.logEmbedSecurityEvent(r, "Embed proxy blocked by origin policy", map[string]any{
 			"provider": "dify",
-			"path":     r.URL.Path,
-			"origin":   r.Header.Get("Origin"),
-			"referer":  r.Header.Get("Referer"),
+			"path":     util.BoundedLogField(r.URL.Path),
+			"origin":   util.BoundedLogField(r.Header.Get("Origin")),
+			"referer":  util.BoundedLogField(r.Header.Get("Referer")),
 		})
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 	if !m.isProxyTokenAuthorized(r) {
-		m.ctx.Logger.Warn("blocked embed proxy request by token policy", "path", r.URL.Path)
+		m.ctx.Logger.Warn("blocked embed proxy request by token policy", "path", util.BoundedLogField(r.URL.Path))
 		m.logEmbedSecurityEvent(r, "Embed proxy blocked by token policy", map[string]any{
 			"provider": "dify",
-			"path":     r.URL.Path,
+			"path":     util.BoundedLogField(r.URL.Path),
 		})
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
@@ -216,8 +215,8 @@ func (m *Module) handleDifyChatMessagesProxy(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		m.logEmbedSecurityEvent(r, "Embed proxy rejected invalid chat payload", map[string]any{
 			"provider": "dify",
-			"path":     r.URL.Path,
-			"reason":   err.Error(),
+			"path":     util.BoundedLogField(r.URL.Path),
+			"reason":   util.BoundedLogField(err.Error()),
 		})
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -233,23 +232,23 @@ func (m *Module) handleDifySuggestedProxy(w http.ResponseWriter, r *http.Request
 	}
 	if !m.isRequestOriginAllowed(r) {
 		m.ctx.Logger.Warn("blocked embed proxy request by origin policy",
-			"path", r.URL.Path,
-			"origin", r.Header.Get("Origin"),
-			"referer", r.Header.Get("Referer"))
+			"path", util.BoundedLogField(r.URL.Path),
+			"origin", util.BoundedLogField(r.Header.Get("Origin")),
+			"referer", util.BoundedLogField(r.Header.Get("Referer")))
 		m.logEmbedSecurityEvent(r, "Embed proxy blocked by origin policy", map[string]any{
 			"provider": "dify",
-			"path":     r.URL.Path,
-			"origin":   r.Header.Get("Origin"),
-			"referer":  r.Header.Get("Referer"),
+			"path":     util.BoundedLogField(r.URL.Path),
+			"origin":   util.BoundedLogField(r.Header.Get("Origin")),
+			"referer":  util.BoundedLogField(r.Header.Get("Referer")),
 		})
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 	if !m.isProxyTokenAuthorized(r) {
-		m.ctx.Logger.Warn("blocked embed proxy request by token policy", "path", r.URL.Path)
+		m.ctx.Logger.Warn("blocked embed proxy request by token policy", "path", util.BoundedLogField(r.URL.Path))
 		m.logEmbedSecurityEvent(r, "Embed proxy blocked by token policy", map[string]any{
 			"provider": "dify",
-			"path":     r.URL.Path,
+			"path":     util.BoundedLogField(r.URL.Path),
 		})
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
@@ -321,10 +320,10 @@ func (m *Module) proxyDifyRequest(
 	}
 
 	if !m.allowProxyBudget() {
-		m.ctx.Logger.Warn("embed proxy global rate limit exceeded", "path", r.URL.Path, "ip", embedClientIP(r))
+		m.ctx.Logger.Warn("embed proxy global rate limit exceeded", "path", util.BoundedLogField(r.URL.Path), "ip", embedClientIP(r))
 		m.logEmbedSecurityEvent(r, "Embed proxy blocked by global rate limit", map[string]any{
 			"provider": "dify",
-			"path":     r.URL.Path,
+			"path":     util.BoundedLogField(r.URL.Path),
 		})
 		http.Error(w, "Too many requests", http.StatusTooManyRequests)
 		return
@@ -333,7 +332,7 @@ func (m *Module) proxyDifyRequest(
 	if !m.acquireProxySlot() {
 		m.logEmbedSecurityEvent(r, "Embed proxy blocked by concurrency limit", map[string]any{
 			"provider": "dify",
-			"path":     r.URL.Path,
+			"path":     util.BoundedLogField(r.URL.Path),
 		})
 		http.Error(w, "Service busy", http.StatusTooManyRequests)
 		return
@@ -352,7 +351,7 @@ func (m *Module) proxyDifyRequest(
 	}
 	req, err := http.NewRequestWithContext(ctx, method, targetURL, requestBody)
 	if err != nil {
-		m.ctx.Logger.Error("failed to create Dify proxy request", "error", err)
+		m.ctx.Logger.Warn("failed to create Dify proxy request", "error", util.BoundedLogField(err.Error()))
 		http.Error(w, "Failed to build proxy request", http.StatusInternalServerError)
 		return
 	}
@@ -365,11 +364,11 @@ func (m *Module) proxyDifyRequest(
 
 	resp, err := difyProxyHTTPClient.Do(req)
 	if err != nil {
-		m.ctx.Logger.Error("Dify proxy request failed", "error", err)
+		m.ctx.Logger.Warn("Dify proxy request failed", "error", util.BoundedLogField(err.Error()))
 		m.logEmbedSecurityEvent(r, "Embed proxy upstream request failed", map[string]any{
 			"provider":    "dify",
-			"path":        r.URL.Path,
-			"target_host": req.URL.Host,
+			"path":        util.BoundedLogField(r.URL.Path),
+			"target_host": util.BoundedLogField(req.URL.Host),
 		})
 		http.Error(w, "Failed to contact upstream service", http.StatusBadGateway)
 		return
@@ -384,9 +383,9 @@ func (m *Module) proxyDifyRequest(
 	if shouldAuditUpstreamStatus(resp.StatusCode) {
 		m.logEmbedSecurityEvent(r, "Embed proxy upstream returned error status", map[string]any{
 			"provider":    "dify",
-			"path":        r.URL.Path,
+			"path":        util.BoundedLogField(r.URL.Path),
 			"status_code": resp.StatusCode,
-			"target_host": req.URL.Host,
+			"target_host": util.BoundedLogField(req.URL.Host),
 		})
 	}
 
@@ -401,7 +400,7 @@ func (m *Module) proxyDifyRequest(
 	w.WriteHeader(resp.StatusCode)
 
 	if _, err := io.Copy(w, resp.Body); err != nil {
-		m.ctx.Logger.Debug("Dify proxy response copy interrupted", "error", err)
+		m.ctx.Logger.Debug("Dify proxy response copy interrupted", "error", util.BoundedLogField(err.Error()))
 	}
 }
 
@@ -606,7 +605,7 @@ func (m *Module) logEmbedSecurityEvent(r *http.Request, message string, metadata
 		return
 	}
 	clientIP := embedClientIP(r)
-	_ = m.ctx.Events.LogSecurityEvent(r.Context(), model.EventLevelWarning, message, nil, clientIP, r.URL.Path, metadata)
+	_ = m.ctx.Events.LogAnonymousSecurityEvent(r.Context(), message, clientIP, r.URL.Path, metadata)
 }
 
 func embedClientIP(r *http.Request) string {

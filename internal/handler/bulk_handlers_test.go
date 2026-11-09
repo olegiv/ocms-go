@@ -78,6 +78,7 @@ func TestPagesHandler_BulkDelete_Success(t *testing.T) {
 
 func TestTaxonomyHandler_BulkDeleteTags_Success(t *testing.T) {
 	db, sm := testHandlerSetup(t)
+	user := createTestAdminUser(t, db)
 	q := store.New(db)
 	now := time.Now()
 
@@ -100,7 +101,7 @@ func TestTaxonomyHandler_BulkDeleteTags_Success(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	h.BulkDeleteTags(w, req)
+	h.BulkDeleteTags(w, withUser(req, user))
 
 	resp := assertJSONResponse(t, w, http.StatusOK, true)
 	if deleted, ok := resp["deleted"].(float64); !ok || int(deleted) != 2 {

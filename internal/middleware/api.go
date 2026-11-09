@@ -6,6 +6,7 @@
 package middleware
 
 import (
+	"container/list"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -24,6 +25,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // ContextKeyAPIKey is the context key for API key data.
@@ -488,7 +490,7 @@ func logAPIKeySourceAnomalyEvent(
 		UserID:     sql.NullInt64{Valid: false},
 		Metadata:   string(metadata),
 		IpAddress:  currentIP,
-		RequestUrl: requestPath,
+		RequestUrl: util.BoundedLogField(requestPath),
 		CreatedAt:  time.Now(),
 	})
 	if err != nil {
@@ -541,6 +543,80 @@ func isAPIKeySourceAllowed(ctx context.Context, queries *store.Queries, keyID in
 	return false, true, nil
 }
 
+// RecheckAPIKeyPolicy checks current key/source policy without repeating the
+// expensive credential hash. Callers must first load the authenticated key by ID.
+// This supports queued writes using queries from the write transaction.
+func RecheckAPIKeyPolicy(ctx context.Context, q *store.Queries, key store.ApiKey, clientIP string) (bool, error) {
+	if !key.IsActive || isAPIKeyExpiryRequired() && !key.ExpiresAt.Valid || key.ExpiresAt.Valid && !time.Now().Before(key.ExpiresAt.Time) {
+		return false, nil
+	}
+	if isAPIAllowedCIDRsRequired() && !hasAPIAllowedCIDRsConfigured() || !isAPIClientAllowed(clientIP) {
+		return false, nil
+	}
+	if maximum := getAPIKeyMaxTTL(); maximum > 0 && (!key.ExpiresAt.Valid || key.ExpiresAt.Time.After(key.CreatedAt.Add(maximum))) {
+		return false, nil
+	}
+	allowed, configured, err := checkAPIKeySourcePolicy(ctx, q, key, clientIP)
+	if errors.Is(err, errAPIKeyChanged) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return allowed && (!isAPIKeySourceCIDRsRequired() || configured), nil
+}
+
+// errAPIKeyChanged is returned by checkAPIKeySourcePolicy when the key row was
+// changed or removed after the key was verified. The attempt is denied, but
+// not for lacking source CIDRs or for the client address, which is what a
+// plain "not allowed" result would be reported as.
+var errAPIKeyChanged = errors.New("API key changed while it was being authenticated")
+
+// Check the source rules and authenticated authority in one database snapshot.
+// Hash verification stays outside the transaction; an intervening permission,
+// activation, expiry or owner change rejects this attempt (errAPIKeyChanged)
+// instead of combining an old authority row with a newly widened source policy.
+func checkAPIKeySourcePolicy(ctx context.Context, q *store.Queries, verified store.ApiKey, clientIP string) (bool, bool, error) {
+	queries := q
+	var transaction *sql.Tx
+	switch db := q.DBHandle().(type) {
+	case *sql.DB:
+		var err error
+		transaction, err = db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+		if err != nil {
+			return false, false, err
+		}
+		defer func() { _ = transaction.Rollback() }()
+		queries = q.WithTx(transaction)
+	case *sql.Tx:
+		// Queued writers already hold their authorization snapshot.
+	default:
+		return false, false, errors.New("API key source policy requires a database or transaction")
+	}
+	current, err := queries.GetAPIKeyByID(ctx, verified.ID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, false, errAPIKeyChanged
+	}
+	if err != nil {
+		return false, false, err
+	}
+	if current.KeyHash != verified.KeyHash || current.Permissions != verified.Permissions || current.IsActive != verified.IsActive ||
+		current.CreatedBy != verified.CreatedBy || !current.CreatedAt.Equal(verified.CreatedAt) || current.ExpiresAt.Valid != verified.ExpiresAt.Valid ||
+		current.ExpiresAt.Valid && !current.ExpiresAt.Time.Equal(verified.ExpiresAt.Time) {
+		return false, false, errAPIKeyChanged
+	}
+	allowed, configured, err := isAPIKeySourceAllowed(ctx, queries, verified.ID, clientIP)
+	if err != nil {
+		return false, false, err
+	}
+	if transaction != nil {
+		if err := transaction.Commit(); err != nil {
+			return false, false, err
+		}
+	}
+	return allowed, configured, nil
+}
+
 // WriteAPIError writes a JSON error response.
 func WriteAPIError(w http.ResponseWriter, statusCode int, code, message string, details map[string]string) {
 	w.Header().Set("Content-Type", "application/json")
@@ -562,7 +638,7 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 	clientIP := GetClientIP(r)
 	if isAPIAllowedCIDRsRequired() && !hasAPIAllowedCIDRsConfigured() {
 		slog.Warn("API key auth blocked: global source CIDR policy required but not configured",
-			"path", r.URL.Path,
+			"path", util.BoundedLogField(r.URL.Path),
 			"ip", clientIP)
 		if required {
 			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key access policy is not configured", nil)
@@ -574,7 +650,7 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 	if !isAPIClientAllowed(clientIP) {
 		slog.Warn("API key auth blocked by global source CIDR policy",
 			"ip", clientIP,
-			"path", r.URL.Path)
+			"path", util.BoundedLogField(r.URL.Path))
 		if required {
 			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key access is not allowed from this IP", nil)
 			return nil, true
@@ -621,7 +697,7 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 	if outcome == APIKeyThrottled {
 		slog.Warn("API key verification throttled due to concurrency limit",
 			"ip", clientIP,
-			"path", r.URL.Path)
+			"path", util.BoundedLogField(r.URL.Path))
 		if required {
 			WriteAPIError(w, http.StatusTooManyRequests, "rate_limit_exceeded", "Too many authentication attempts. Please slow down.", nil)
 			return nil, true
@@ -648,7 +724,7 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 	if isAPIKeyExpiryRequired() && !matchedKey.ExpiresAt.Valid {
 		slog.Warn("API key auth blocked: missing expiry while expiry policy enabled",
 			"key_id", matchedKey.ID,
-			"path", r.URL.Path,
+			"path", util.BoundedLogField(r.URL.Path),
 			"ip", clientIP)
 		if required {
 			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key must have an expiration date", nil)
@@ -669,7 +745,7 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 		if !matchedKey.ExpiresAt.Valid {
 			slog.Warn("API key auth blocked: missing expiry while max TTL policy enabled",
 				"key_id", matchedKey.ID,
-				"path", r.URL.Path,
+				"path", util.BoundedLogField(r.URL.Path),
 				"ip", clientIP)
 			if required {
 				WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key must have an expiration date", nil)
@@ -682,7 +758,7 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 		if matchedKey.ExpiresAt.Time.After(maxAllowedExpiry) {
 			slog.Warn("API key auth blocked: key lifetime exceeds max TTL policy",
 				"key_id", matchedKey.ID,
-				"path", r.URL.Path,
+				"path", util.BoundedLogField(r.URL.Path),
 				"ip", clientIP,
 				"created_at", matchedKey.CreatedAt,
 				"expires_at", matchedKey.ExpiresAt.Time,
@@ -695,7 +771,18 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 		}
 	}
 
-	allowed, hasSourceCIDRs, err := isAPIKeySourceAllowed(r.Context(), queries, matchedKey.ID, clientIP)
+	allowed, hasSourceCIDRs, err := checkAPIKeySourcePolicy(r.Context(), queries, *matchedKey, clientIP)
+	if errors.Is(err, errAPIKeyChanged) {
+		slog.Warn("API key auth blocked: key changed while it was being authenticated",
+			"key_id", matchedKey.ID,
+			"path", util.BoundedLogField(r.URL.Path),
+			"ip", clientIP)
+		if required {
+			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key changed while it was being authenticated; retry the request", nil)
+			return nil, true
+		}
+		return nil, false
+	}
 	if err != nil {
 		if required {
 			slog.Error("failed to load API key source CIDR allowlist", "error", err, "key_id", matchedKey.ID)
@@ -707,7 +794,7 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 	if isAPIKeySourceCIDRsRequired() && !hasSourceCIDRs {
 		slog.Warn("API key auth blocked: missing per-key source CIDR while policy enabled",
 			"key_id", matchedKey.ID,
-			"path", r.URL.Path,
+			"path", util.BoundedLogField(r.URL.Path),
 			"ip", clientIP)
 		if required {
 			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key must have at least one source CIDR restriction", nil)
@@ -718,7 +805,7 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 	if !allowed {
 		slog.Warn("API key auth blocked by per-key source CIDR allowlist",
 			"key_id", matchedKey.ID,
-			"path", r.URL.Path,
+			"path", util.BoundedLogField(r.URL.Path),
 			"ip", clientIP)
 		if required {
 			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key access is not allowed from this IP", nil)
@@ -732,7 +819,7 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 			"key_id", matchedKey.ID,
 			"previous_ip", previousIP,
 			"current_ip", clientIP,
-			"path", r.URL.Path)
+			"path", util.BoundedLogField(r.URL.Path))
 		if shouldRevokeAPIKeyOnSourceIPChange() && !hasSourceCIDRs {
 			if err := queries.DeactivateAPIKey(r.Context(), store.DeactivateAPIKeyParams{
 				UpdatedAt: time.Now(),
@@ -752,7 +839,7 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 				slog.Error("failed to deactivate API key after source IP anomaly",
 					"error", err,
 					"key_id", matchedKey.ID,
-					"path", r.URL.Path,
+					"path", util.BoundedLogField(r.URL.Path),
 					"ip", clientIP)
 				if required {
 					WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key access denied due to source IP anomaly", nil)
@@ -775,7 +862,7 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 					"key_id", matchedKey.ID,
 					"previous_ip", previousIP,
 					"current_ip", clientIP,
-					"path", r.URL.Path)
+					"path", util.BoundedLogField(r.URL.Path))
 				if required {
 					WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key was deactivated due to source IP anomaly", nil)
 					return nil, true
@@ -834,8 +921,18 @@ func ParseAPIKeyPermissions(apiKey *store.ApiKey) []string {
 	if apiKey == nil || apiKey.Permissions == "" || apiKey.Permissions == "[]" {
 		return nil
 	}
-	var permissions []string
-	_ = json.Unmarshal([]byte(apiKey.Permissions), &permissions)
+	var entries []any
+	if err := json.Unmarshal([]byte(apiKey.Permissions), &entries); err != nil {
+		return nil
+	}
+	permissions := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		permission, ok := entry.(string)
+		if !ok {
+			return nil
+		}
+		permissions = append(permissions, permission)
+	}
 	return permissions
 }
 
@@ -861,9 +958,17 @@ func addAPIKeyToContext(next http.Handler, w http.ResponseWriter, r *http.Reques
 // APIKeyAuth applies, the key policies and source CIDR rules included, or
 // nil. It writes nothing: validateAPIKey writes only when auth is required.
 func ValidAPIKey(r *http.Request, queries *store.Queries) *store.ApiKey {
-	key, _ := validateAPIKey(nil, r, queries, false)
+	key, _ := validateAPIKey(discardAPIResponseWriter{}, r, queries, false)
 	return key
 }
+
+// Read-only policy callers have no HTTP response to emit. Supply a real sink
+// rather than passing a nil writer through the shared validator.
+type discardAPIResponseWriter struct{}
+
+func (discardAPIResponseWriter) Header() http.Header         { return make(http.Header) }
+func (discardAPIResponseWriter) WriteHeader(int)             {}
+func (discardAPIResponseWriter) Write(p []byte) (int, error) { return len(p), nil }
 
 // OptionalAPIKeyAuth creates middleware that optionally validates API key authentication.
 // Unlike APIKeyAuth, this middleware does not require authentication - it simply
@@ -988,35 +1093,32 @@ func RequireAnyPermission(requiredPerms ...string) func(http.Handler) http.Handl
 	}
 }
 
-// limiterEntry holds a rate limiter and its last access time for TTL eviction.
-type limiterEntry struct {
+// limiterEntry holds a rate limiter and its most recent access time.
+type limiterEntry[K comparable] struct {
+	key      K
 	limiter  *rate.Limiter
 	lastUsed time.Time
 }
 
-// limiterCacheTTL is the time after which idle entries are evicted.
-const limiterCacheTTL = 10 * time.Minute
+const (
+	limiterCacheTTL             = 10 * time.Minute
+	limiterCacheCleanupInterval = 5 * time.Minute
+	limiterCacheMaxEntries      = 10000
+)
 
-// limiterCacheCleanupInterval is how often the cleanup goroutine runs.
-const limiterCacheCleanupInterval = 5 * time.Minute
-
-// limiterCacheMaxEntries bounds in-memory limiter cardinality to protect
-// against unbounded growth from attacker-controlled keys (for example spoofed
-// client IP headers). Oldest entries are evicted when this threshold is hit.
-const limiterCacheMaxEntries = 10000
-
-// limiterCache is a generic rate limiter cache with TTL-based eviction.
+// limiterCache keeps recently used keys at the front, so even a burst of
+// previously unseen addresses costs constant time per insertion.
 type limiterCache[K comparable] struct {
-	entries map[K]*limiterEntry
-	mu      sync.RWMutex
+	entries map[K]*list.Element
+	recent  list.List
+	mu      sync.Mutex
 	rate    rate.Limit
 	burst   int
 }
 
-// newLimiterCache creates a new limiter cache with periodic TTL-based cleanup.
 func newLimiterCache[K comparable](rps float64, burst int) *limiterCache[K] {
 	lc := &limiterCache[K]{
-		entries: make(map[K]*limiterEntry),
+		entries: make(map[K]*list.Element),
 		rate:    rate.Limit(rps),
 		burst:   burst,
 	}
@@ -1024,40 +1126,26 @@ func newLimiterCache[K comparable](rps float64, burst int) *limiterCache[K] {
 	return lc
 }
 
-// get returns the rate limiter for a specific key, creating one if needed.
 func (lc *limiterCache[K]) get(key K) *rate.Limiter {
-	now := time.Now()
-
-	lc.mu.RLock()
-	entry, exists := lc.entries[key]
-	lc.mu.RUnlock()
-
-	if exists {
-		lc.mu.Lock()
-		entry.lastUsed = now
-		lc.mu.Unlock()
-		return entry.limiter
-	}
-
 	lc.mu.Lock()
 	defer lc.mu.Unlock()
 
-	// Double-check after acquiring write lock
-	if entry, exists = lc.entries[key]; exists {
+	now := time.Now()
+	if element, ok := lc.entries[key]; ok {
+		entry := element.Value.(*limiterEntry[K])
 		entry.lastUsed = now
+		lc.recent.MoveToFront(element)
 		return entry.limiter
 	}
 
 	limiter := rate.NewLimiter(lc.rate, lc.burst)
-	lc.entries[key] = &limiterEntry{
-		limiter:  limiter,
-		lastUsed: now,
+	lc.entries[key] = lc.recent.PushFront(&limiterEntry[K]{key: key, limiter: limiter, lastUsed: now})
+	if len(lc.entries) > limiterCacheMaxEntries {
+		lc.removeOldest()
 	}
-	lc.evictOldestIfExceedsLocked()
 	return limiter
 }
 
-// cleanupLoop periodically evicts entries that haven't been used within the TTL.
 func (lc *limiterCache[K]) cleanupLoop() {
 	ticker := time.NewTicker(limiterCacheCleanupInterval)
 	defer ticker.Stop()
@@ -1067,46 +1155,35 @@ func (lc *limiterCache[K]) cleanupLoop() {
 	}
 }
 
-// evictExpired removes entries older than limiterCacheTTL.
 func (lc *limiterCache[K]) evictExpired() {
 	lc.mu.Lock()
 	defer lc.mu.Unlock()
 
 	cutoff := time.Now().Add(-limiterCacheTTL)
-	for key, entry := range lc.entries {
-		if entry.lastUsed.Before(cutoff) {
-			delete(lc.entries, key)
-		}
+	for tail := lc.recent.Back(); tail != nil && tail.Value.(*limiterEntry[K]).lastUsed.Before(cutoff); tail = lc.recent.Back() {
+		lc.removeOldest()
 	}
 }
 
-// evictOldestIfExceedsLocked removes least-recently-used entries until the
-// cache size is within limiterCacheMaxEntries. Caller must hold lc.mu.
-func (lc *limiterCache[K]) evictOldestIfExceedsLocked() {
-	if len(lc.entries) <= limiterCacheMaxEntries {
-		return
+// removeOldest removes the tail while the caller holds the cache lock.
+func (lc *limiterCache[K]) removeOldest() {
+	entry := lc.recent.Remove(lc.recent.Back()).(*limiterEntry[K])
+	delete(lc.entries, entry.key)
+}
+
+// ipRateLimitKey groups IPv6 privacy addresses by /64 while keeping each
+// IPv4 address independent. The original IP remains available for policy
+// checks and logging.
+func ipRateLimitKey(ip string) string {
+	addr, err := netip.ParseAddr(ip)
+	if err != nil {
+		return ip
 	}
-
-	overflow := len(lc.entries) - limiterCacheMaxEntries
-	for i := 0; i < overflow; i++ {
-		var oldestKey K
-		var oldestTime time.Time
-		oldestSet := false
-
-		for key, entry := range lc.entries {
-			if !oldestSet || entry.lastUsed.Before(oldestTime) {
-				oldestKey = key
-				oldestTime = entry.lastUsed
-				oldestSet = true
-			}
-		}
-
-		if !oldestSet {
-			return
-		}
-
-		delete(lc.entries, oldestKey)
+	addr = addr.Unmap()
+	if addr.Is6() {
+		return netip.PrefixFrom(addr.WithZone(""), 64).Masked().String()
 	}
+	return addr.String()
 }
 
 // APIRateLimit creates middleware that rate limits requests per API key.
@@ -1133,6 +1210,20 @@ func APIRateLimit(rps float64, burst int) func(http.Handler) http.Handler {
 	}
 }
 
+// PrincipalRateLimit bounds OAuth requests by a verified principal using the same bounded TTL cache.
+func PrincipalRateLimit(key func(*http.Request) string, rps float64, burst int) func(http.Handler) http.Handler {
+	cache := newLimiterCache[string](rps, burst)
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !cache.get(key(r)).Allow() {
+				WriteAPIError(w, http.StatusTooManyRequests, "rate_limit_exceeded", "Rate limit exceeded", nil)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // GlobalRateLimiter provides a global rate limiter for unauthenticated requests.
 type GlobalRateLimiter struct {
 	cache *limiterCache[string]
@@ -1150,8 +1241,8 @@ func (rl *GlobalRateLimiter) Middleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ip := GetClientIP(r)
-			if !rl.cache.get(ip).Allow() {
-				slog.Debug("API rate limit exceeded", "ip", ip, "path", r.URL.Path)
+			if !rl.cache.get(ipRateLimitKey(ip)).Allow() {
+				slog.Debug("API rate limit exceeded", "ip", ip, "path", util.BoundedLogField(r.URL.Path))
 				WriteAPIError(w, http.StatusTooManyRequests, "rate_limit_exceeded", "Rate limit exceeded. Please slow down.", nil)
 				return
 			}
@@ -1166,8 +1257,8 @@ func (rl *GlobalRateLimiter) HTMLMiddleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ip := GetClientIP(r)
-			if !rl.cache.get(ip).Allow() {
-				slog.Warn("public rate limit exceeded", "ip", ip, "path", r.URL.Path)
+			if !rl.cache.get(ipRateLimitKey(ip)).Allow() {
+				slog.Warn("public rate limit exceeded", "ip", ip, "path", util.BoundedLogField(r.URL.Path))
 				http.Error(w, "Too many requests. Please wait a moment and try again.", http.StatusTooManyRequests)
 				return
 			}

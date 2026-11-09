@@ -27,6 +27,7 @@ func New(db *sql.DB, isDev bool) *scs.SessionManager {
 
 	// Use SQLite store
 	sm.Store = sqlite3store.New(db)
+	sm.HashTokenInStore = true
 
 	// Configure session.
 	//

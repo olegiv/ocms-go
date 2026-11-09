@@ -293,7 +293,7 @@ func searchTestDB(t *testing.T) *sql.DB {
 	}
 	db.SetMaxOpenConns(1)
 
-	// Create minimal pages table matching the columns SearchAdminPages returns
+	// Create a minimal pages table with the columns the search queries read
 	_, err = db.Exec(`
 		CREATE TABLE pages (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,

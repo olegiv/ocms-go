@@ -7,9 +7,11 @@ import (
 	"errors"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -22,7 +24,7 @@ var proxyBashRule = regexp.MustCompile(`"Bash\(([^)]*)\)"`)
 var codeRunningCommands = map[string]bool{
 	"go": true, "staticcheck": true, "errcheck": true, "golangci-lint": true, "nilaway": true,
 	"npm": true, "npx": true, "make": true, "sh": true, "bash": true, "python": true, "python3": true,
-	"node": true, "scripts/test-gate.sh": true, "./scripts/test-gate.sh": true,
+	"node": true, "govulncheck": true, "scripts/test-gate.sh": true, "./scripts/test-gate.sh": true,
 }
 
 // TestProxyRulesForCodeRunningToolsAreExact fails when the Codex proxy allows
@@ -60,6 +62,159 @@ func TestProxyRulesForCodeRunningToolsAreExact(t *testing.T) {
 	}
 	if checked == 0 {
 		t.Fatal("no code-running rule found in the proxy script; the rule format changed and this test is vacuous")
+	}
+}
+
+// TestProxyReadRulesKeepCommandBoundaries inspects the permissions actually
+// passed to Claude by proxy entry points that use Bash. A-T2's git diff* rule also
+// authorized git difftool --extcmd, and the old code-running-tool inventory
+// did not cover Git or date. Wildcards may vary arguments, not command names.
+// N-18 also requires exact list-only formatter rules and denies for write flags
+// that the shared command or user settings could otherwise allow.
+func TestProxyReadRulesKeepCommandBoundaries(t *testing.T) {
+	root := filepath.Join("..", "..")
+	for _, workflow := range []string{"code-quality", "security-audit"} {
+		t.Run(workflow, func(t *testing.T) {
+			dir := t.TempDir()
+			write := func(name string, data []byte) {
+				t.Helper()
+				path := filepath.Join(dir, name)
+				if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, data, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, name := range []string{"scripts/codex-commands", "scripts/codex/proxy-claude-command.sh"} {
+				data, err := os.ReadFile(filepath.Join(root, name))
+				if err != nil {
+					t.Fatal(err)
+				}
+				write(name, data)
+			}
+			// The strict-lint gate has its own real-hook regression test below.
+			write(".claude/hooks/go-strict-lint.sh", []byte("#!/bin/sh\nexit 0\n"))
+			// The audit's report lifecycle is covered by the real helper test.
+			write("scripts/codex/security-audit.sh", []byte("#!/bin/sh\npwd\n"))
+			write("scripts/codex/security-audit-proxy.md", []byte("Audit prompt\n"))
+			write("bin/claude", []byte("#!/bin/sh\nprintf '%s\\0' \"$@\" > \"$PROXY_TEST_ARGS\"\necho 'Fixture audit report'\n"))
+			argsFile := filepath.Join(dir, "args")
+			command := exec.Command("bash", filepath.Join(dir, "scripts", "codex-commands"), workflow)
+			command.Dir = dir
+			command.Env = []string{"PATH=" + filepath.Join(dir, "bin") + ":/usr/bin:/bin", "PROXY_TEST_ARGS=" + argsFile}
+			if out, err := command.CombinedOutput(); err != nil {
+				t.Fatalf("proxy dispatch: %v\n%s", err, out)
+			}
+			data, err := os.ReadFile(argsFile)
+			if err != nil {
+				t.Fatal(err)
+			}
+			args := strings.Split(strings.TrimSuffix(string(data), "\x00"), "\x00")
+			start, end := slices.Index(args, "--allowedTools"), slices.Index(args, "-p")
+			if start < 0 || end <= start+1 {
+				t.Fatalf("proxy passed no permission list: %q", args)
+			}
+			allowed := args[start+1 : end]
+			for _, name := range []string{"git status", "git diff", "git log", "git show", "git rev-parse", "git ls-files", "git write-tree", "date"} {
+				for _, suffix := range []string{"", " *"} {
+					rule := "Bash(" + name + suffix + ")"
+					if !slices.Contains(allowed, rule) {
+						t.Errorf("missing %s; preserve bare commands and space-delimited arguments", rule)
+					}
+				}
+			}
+			for _, rule := range allowed {
+				pattern, bash := strings.CutPrefix(rule, "Bash(")
+				if !bash {
+					continue
+				}
+				fields := strings.Fields(strings.TrimSuffix(pattern, ")"))
+				if len(fields) == 0 {
+					t.Errorf("empty Bash permission: %s", rule)
+					continue
+				}
+				if strings.Contains(fields[0], "*") || (fields[0] == "git" && len(fields) > 1 && strings.Contains(fields[1], "*")) {
+					t.Errorf("%s lets a wildcard change the command name; put it after a complete command and a space", rule)
+				}
+			}
+			for _, formatter := range []string{"gofmt", "goimports"} {
+				want := "Bash(" + formatter + " -l .)"
+				if !slices.Contains(allowed, want) {
+					t.Errorf("missing list-only formatter rule %s", want)
+				}
+				for _, rule := range allowed {
+					if strings.HasPrefix(rule, "Bash("+formatter) && rule != want {
+						t.Errorf("unexpected formatter allow rule %s; allow only %s", rule, want)
+					}
+				}
+			}
+			denyFlag := slices.Index(args, "--disallowedTools")
+			if denyFlag <= end {
+				t.Fatalf("missing explicit denials after the prompt flag: %q", args)
+			}
+			denied := args[denyFlag+1:]
+			if nextFlag := slices.IndexFunc(denied, func(arg string) bool { return strings.HasPrefix(arg, "--") }); nextFlag >= 0 {
+				denied = denied[:nextFlag]
+			}
+			wantDenials := []string{"Edit(//**)", "Bash(gofmt *-w*)", "Bash(goimports *-w*)"}
+			if workflow == "security-audit" {
+				wantDenials = append(wantDenials, "Bash(mkdir *)", "Bash(mv *)")
+			}
+			for _, want := range wantDenials {
+				if !slices.Contains(denied, want) {
+					t.Errorf("missing explicit deny rule %s", want)
+				}
+			}
+			checkProxyGitOptions(t, allowed, denied)
+		})
+	}
+}
+
+func checkProxyGitOptions(t *testing.T, allowed, denied []string) {
+	t.Helper()
+	matches := func(rule, invocation string) bool {
+		pattern := strings.ReplaceAll(regexp.QuoteMeta(rule), `\*`, ".*")
+		return regexp.MustCompile("^" + pattern + "$").MatchString(invocation)
+	}
+	for _, rule := range allowed {
+		command, ok := strings.CutPrefix(rule, "Bash(git ")
+		if !ok {
+			continue
+		}
+		for _, option := range []string{
+			"--output=fixture/path", "--output fixture/path",
+			`"--output" fixture/path`, `'--output'=fixture/path`,
+			"-s --format=format:fixture --output=fixture/path HEAD",
+			"--ext-diff", "--ext-diff HEAD", `"--ext-diff" HEAD`,
+			"--no-index --ext-dif", "--no-index --ext",
+		} {
+			invocation := "Bash(git " + strings.ReplaceAll(command, "*", option)
+			if matches(rule, invocation) && strings.Contains(invocation, option) &&
+				!slices.ContainsFunc(denied, func(deny string) bool { return matches(deny, invocation) }) {
+				t.Errorf("%s permits %s without an explicit deny", rule, invocation)
+			}
+		}
+	}
+	for _, subcommand := range []string{"diff", "log", "show"} {
+		for _, options := range []string{"-o fixture/path", "--stat -o fixture/path"} {
+			invocation := "Bash(git " + subcommand + " " + options + ")"
+			if slices.ContainsFunc(allowed, func(rule string) bool { return matches(rule, invocation) }) &&
+				!slices.ContainsFunc(denied, func(rule string) bool { return matches(rule, invocation) }) {
+				t.Errorf("%s has no explicit deny", invocation)
+			}
+		}
+	}
+	for _, command := range []string{
+		"Bash(git log --oneline -3)", "Bash(git diff --no-ext-diff HEAD)",
+		"Bash(git show --stat HEAD)", "Bash(git ls-files -o)",
+		"Bash(git diff --output-indicator-new=> HEAD)", "Bash(git log --extended-regexp --grep=fixture HEAD)",
+		"Bash(git log --oneline --grep=--output)",
+	} {
+		if !slices.ContainsFunc(allowed, func(rule string) bool { return matches(rule, command) }) ||
+			slices.ContainsFunc(denied, func(rule string) bool { return matches(rule, command) }) {
+			t.Errorf("ordinary read %s must be permitted", command)
+		}
 	}
 }
 
@@ -167,4 +322,151 @@ func rulesByTool(rules []string) map[string][]string {
 // Go CI workflow checks it out and sets OCMS_REQUIRE_SHARED_TOOLING=1.
 func sharedToolingRequired() bool {
 	return os.Getenv("OCMS_REQUIRE_SHARED_TOOLING") == "1"
+}
+
+// TestCodeQualityProxyRequiresStrictLint exercises the real proxy and stack
+// hook with a stub linter and Claude executable. A-T1 let a proxy session
+// report success without ever running strict lint. Findings, unavailable
+// tooling and broken installation must stop before Claude can report a pass.
+func TestCodeQualityProxyRequiresStrictLint(t *testing.T) {
+	root := filepath.Join("..", "..")
+	proxy, err := os.ReadFile(filepath.Join(root, "scripts", "codex", "proxy-claude-command.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	hook, err := os.ReadFile(filepath.Join(root, ".claude", "hooks", "go-strict-lint.sh"))
+	if errors.Is(err, fs.ErrNotExist) && !sharedToolingRequired() {
+		if _, sharedErr := os.Stat(filepath.Join(root, ".claude", "shared", ".git")); errors.Is(sharedErr, fs.ErrNotExist) {
+			t.Skip("the .claude/shared submodule is not checked out")
+		}
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		name       string
+		command    string
+		linterExit int
+		claudeExit int
+		damage     string
+		wantExit   int
+		wantCalls  string
+		wantOutput string
+	}{
+		{name: "clean", command: "/code-quality", wantCalls: "lint\nclaude\n"},
+		{name: "alias", command: "code-quality", wantCalls: "lint\nclaude\n"},
+		{name: "findings", command: "/code-quality", linterExit: 1, wantExit: 1, wantCalls: "lint\n", wantOutput: "strict fixture finding"},
+		{name: "linter failure", command: "/code-quality", linterExit: 7, wantExit: 3, wantCalls: "lint\n", wantOutput: "could not run"},
+		{name: "missing link", command: "/code-quality", damage: "link", wantExit: 3, wantOutput: "requires executable"},
+		{name: "missing target", command: "/code-quality", damage: "target", wantExit: 3, wantOutput: "requires executable"},
+		{name: "nonexecutable", command: "/code-quality", damage: "mode", wantExit: 3, wantOutput: "requires executable"},
+		{name: "unexpected hook exit", command: "/code-quality", damage: "exit", wantExit: 3, wantOutput: "exit 127"},
+		{name: "Claude failure", command: "/code-quality", claudeExit: 9, wantExit: 9, wantCalls: "lint\nclaude\n"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := filepath.Join(t.TempDir(), "repository with spaces")
+			write := func(name, content string, mode fs.FileMode) {
+				t.Helper()
+				path := filepath.Join(dir, name)
+				if mkdirErr := os.MkdirAll(filepath.Dir(path), 0o750); mkdirErr != nil {
+					t.Fatal(mkdirErr)
+				}
+				if writeErr := os.WriteFile(path, []byte(content), mode); writeErr != nil {
+					t.Fatal(writeErr)
+				}
+			}
+			write("scripts/codex/proxy-claude-command.sh", string(proxy), 0o755)
+			write(".claude/shared/stacks/go/hooks/go-strict-lint.sh", string(hook), 0o755)
+			write("go.mod", "module example.test/strict\n\ngo 1.22\n", 0o600)
+			write("fixture.go", "package strict\n", 0o600)
+			write("calls", "", 0o600)
+			write("args", "", 0o600)
+			write("bin/linter", `#!/bin/sh
+[ "$PWD" -ef "$STRICT_TEST_REPO" ] || exit 8
+printf 'lint\n' >> "$STRICT_TEST_REPO/calls"
+if [ "$STRICT_TEST_LINT_EXIT" = 1 ]; then echo 'strict fixture finding (errcheck)'; fi
+exit "$STRICT_TEST_LINT_EXIT"
+`, 0o755)
+			write("bin/claude", `#!/bin/sh
+if [ "$STRICT_TEST_COMMAND" = code-quality ]; then
+  [ "$PWD" -ef "$STRICT_TEST_REPO" ] || exit 8
+fi
+printf 'claude\n' >> "$STRICT_TEST_REPO/calls"
+printf '%s\n' "$@" > "$STRICT_TEST_REPO/args"
+exit "$STRICT_TEST_CLAUDE_EXIT"
+`, 0o755)
+			link := filepath.Join(dir, ".claude", "hooks", "go-strict-lint.sh")
+			if mkdirErr := os.MkdirAll(filepath.Dir(link), 0o750); mkdirErr != nil {
+				t.Fatal(mkdirErr)
+			}
+			if linkErr := os.Symlink("../shared/stacks/go/hooks/go-strict-lint.sh", link); linkErr != nil {
+				t.Fatal(linkErr)
+			}
+			target := filepath.Join(dir, ".claude", "shared", "stacks", "go", "hooks", "go-strict-lint.sh")
+			switch tt.damage {
+			case "link":
+				if removeErr := os.Remove(link); removeErr != nil {
+					t.Fatal(removeErr)
+				}
+			case "target":
+				if removeErr := os.Remove(target); removeErr != nil {
+					t.Fatal(removeErr)
+				}
+			case "mode":
+				if modeErr := os.Chmod(target, 0o600); modeErr != nil {
+					t.Fatal(modeErr)
+				}
+			case "exit":
+				write(".claude/shared/stacks/go/hooks/go-strict-lint.sh", "#!/bin/sh\nexit 127\n", 0o755)
+			}
+			env := []string{
+				"PATH=" + filepath.Join(dir, "bin") + ":/usr/bin:/bin",
+				"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1",
+				"GO_STRICT_LINT_BIN=" + filepath.Join(dir, "bin", "linter"),
+				"STRICT_TEST_REPO=" + dir,
+				"STRICT_TEST_COMMAND=" + strings.TrimPrefix(tt.command, "/"),
+				"STRICT_TEST_LINT_EXIT=" + strconv.Itoa(tt.linterExit),
+				"STRICT_TEST_CLAUDE_EXIT=" + strconv.Itoa(tt.claudeExit),
+			}
+			initRepo := exec.Command("git", "init", "--quiet", dir)
+			initRepo.Env = env
+			if out, initErr := initRepo.CombinedOutput(); initErr != nil {
+				t.Fatalf("initializing fixture: %v\n%s", initErr, out)
+			}
+			command := exec.Command("bash", filepath.Join(dir, "scripts", "codex", "proxy-claude-command.sh"), tt.command, "scope note")
+			command.Dir = t.TempDir() // the proxy must find its own checkout
+			command.Env = env
+			out, runErr := command.CombinedOutput()
+			exitCode := 0
+			if runErr != nil {
+				var exitErr *exec.ExitError
+				if !errors.As(runErr, &exitErr) {
+					t.Fatal(runErr)
+				}
+				exitCode = exitErr.ExitCode()
+			}
+			if exitCode != tt.wantExit || !strings.Contains(string(out), tt.wantOutput) {
+				t.Errorf("exit %d, want %d and output containing %q:\n%s", exitCode, tt.wantExit, tt.wantOutput, out)
+			}
+			calls, readErr := os.ReadFile(filepath.Join(dir, "calls"))
+			if readErr != nil {
+				t.Fatal(readErr)
+			}
+			if string(calls) != tt.wantCalls {
+				t.Errorf("execution order %q, want %q", calls, tt.wantCalls)
+			}
+			args, argsErr := os.ReadFile(filepath.Join(dir, "args"))
+			if argsErr != nil {
+				t.Fatal(argsErr)
+			}
+			if strings.Contains(tt.wantCalls, "claude") {
+				if !strings.Contains(string(args), "--permission-mode\ndontAsk\n") || !strings.Contains(string(args), "-p\n/"+strings.TrimPrefix(tt.command, "/")+" scope note\n") {
+					t.Errorf("proxy lost the permission mode or request arguments: %s", args)
+				}
+				if strings.TrimPrefix(tt.command, "/") == "code-quality" && !strings.Contains(string(args), "--append-system-prompt\nThe repository proxy already ran .claude/hooks/go-strict-lint.sh --check successfully (exit 0).") {
+					t.Error("Claude was not given the completed strict-lint result")
+				}
+			}
+		})
+	}
 }

@@ -98,6 +98,9 @@ Public form submissions are rate-limited at **1 request per second** with a **bu
 
 Oversized submissions are rejected with a security warning event logged.
 
+Form parse failures are logged at WARN in the server log. The separate error
+log file (`OCMS_ERROR_LOG_PATH`) records ERROR and higher.
+
 ## Captcha Integration
 
 Forms support hCaptcha via the optional hCaptcha module.

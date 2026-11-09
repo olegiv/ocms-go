@@ -1073,6 +1073,9 @@ func TestNormalizedTransferMediaIdentitiesRewritesKnownURLsWithoutMutatingCaller
 		Config: map[string]string{"logo": upperURL, "unknown": "/uploads/legacy/" + upperUUID + "/image.png"},
 	}
 	normalized := normalizedTransferMediaIdentities(data, true)
+	if normalized == nil {
+		t.Fatal("normalization discarded the supplied export data")
+	}
 	if normalized.Media[0].UUID != lowerUUID || normalized.Pages[0].Body != lowerURL ||
 		normalized.Menus[0].Items[0].Children[0].URL != lowerURL ||
 		normalized.Forms[0].Description != lowerURL || normalized.Forms[0].Fields[0].HelpText != lowerURL ||
@@ -1105,6 +1108,9 @@ func TestNormalizedTransferMediaIdentitiesLeavesExternalURLsAlone(t *testing.T) 
 		},
 	}
 	normalized := normalizedTransferMediaIdentities(data, true)
+	if normalized == nil {
+		t.Fatal("normalization discarded the supplied export data")
+	}
 	if normalized.Pages[0].Body != `<img src="`+externalURL+`">` {
 		t.Fatalf("external URL was rewritten: %q", normalized.Pages[0].Body)
 	}

@@ -14,12 +14,20 @@ import (
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
+type publishedPageQueries interface {
+	GetPublishedPageBySlugAndLanguage(context.Context, store.GetPublishedPageBySlugAndLanguageParams) (store.Page, error)
+	GetPublishedPageByID(context.Context, int64) (store.Page, error)
+	ListPublishedPages(context.Context, store.ListPublishedPagesParams) ([]store.Page, error)
+}
+
 // PageCache provides cached access to published pages.
 // Pages are cached by context-aware keys: {lang}:{role}:{slug} or {lang}:{role}:{id}
 type PageCache struct {
 	cache   *SimpleCache
-	queries *store.Queries
+	queries publishedPageQueries
 	mu      sync.RWMutex
+	// Incremented even when an invalidated page has no cached entries yet.
+	generation uint64
 
 	// Caches for different lookup patterns (context-aware keys)
 	bySlug map[string]*store.Page // "en:anonymous:about-us" -> page
@@ -30,7 +38,7 @@ type PageCache struct {
 }
 
 // NewPageCache creates a new page cache.
-// TTL defaults to 1 hour but cache is invalidated on any page change.
+// Entries are invalidated on page changes; SimpleCache supplies statistics.
 func NewPageCache(queries *store.Queries) *PageCache {
 	return &PageCache{
 		cache:        New(time.Hour),
@@ -57,6 +65,7 @@ func (c *PageCache) GetBySlug(ctx context.Context, cacheCtx Context, slug string
 	key := cacheCtx.PageKey(slug)
 
 	c.mu.RLock()
+	generation := c.generation
 	if page, ok := c.bySlug[key]; ok {
 		c.mu.RUnlock()
 		c.cache.hits.Add(1)
@@ -76,7 +85,7 @@ func (c *PageCache) GetBySlug(ctx context.Context, cacheCtx Context, slug string
 	}
 
 	// Store in cache with context-aware key
-	c.store(&page, cacheCtx)
+	c.store(&page, cacheCtx, generation)
 
 	return &page, nil
 }
@@ -87,6 +96,7 @@ func (c *PageCache) GetByID(ctx context.Context, cacheCtx Context, id int64) (*s
 	key := cacheCtx.PageIDKey(id)
 
 	c.mu.RLock()
+	generation := c.generation
 	if page, ok := c.byID[key]; ok {
 		c.mu.RUnlock()
 		c.cache.hits.Add(1)
@@ -103,7 +113,7 @@ func (c *PageCache) GetByID(ctx context.Context, cacheCtx Context, id int64) (*s
 	}
 
 	// Store in cache with context-aware key
-	c.store(&page, cacheCtx)
+	c.store(&page, cacheCtx, generation)
 
 	return &page, nil
 }
@@ -116,12 +126,15 @@ func (c *PageCache) GetByID(ctx context.Context, cacheCtx Context, id int64) (*s
 // lookup in that language answer with a page the router would never route
 // there. The ID key keeps the caller's context: an ID names one page whatever
 // language asked for it.
-func (c *PageCache) store(page *store.Page, cacheCtx Context) {
+func (c *PageCache) store(page *store.Page, cacheCtx Context, generation uint64) {
 	slugKey := Context{LanguageCode: page.LanguageCode, Role: cacheCtx.Role}.PageKey(page.Slug)
 	idKey := cacheCtx.PageIDKey(page.ID)
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.generation != generation {
+		return // A page changed while the database read was in flight.
+	}
 
 	c.bySlug[slugKey] = page
 	c.byID[idKey] = page
@@ -137,6 +150,7 @@ func (c *PageCache) store(page *store.Page, cacheCtx Context) {
 func (c *PageCache) InvalidatePage(pageID int64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.generation++
 
 	// Get all keys for this page ID
 	keys := c.keysByPageID[pageID]
@@ -158,6 +172,7 @@ func (c *PageCache) InvalidatePage(pageID int64) {
 func (c *PageCache) InvalidateBySlug(slug string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.generation++
 
 	// Find all keys that end with the slug
 	var keysToDelete []string
@@ -191,6 +206,7 @@ func (c *PageCache) InvalidateBySlug(slug string) {
 func (c *PageCache) Invalidate() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.generation++
 
 	c.bySlug = make(map[string]*store.Page)
 	c.byID = make(map[string]*store.Page)
@@ -221,6 +237,9 @@ func (c *PageCache) Preload(ctx context.Context, cacheCtx Context, limit int) er
 	}
 
 	// Load recent published pages
+	c.mu.RLock()
+	generation := c.generation
+	c.mu.RUnlock()
 	pages, err := c.queries.ListPublishedPages(ctx, store.ListPublishedPagesParams{
 		Limit:  int64(limit),
 		Offset: 0,
@@ -236,7 +255,7 @@ func (c *PageCache) Preload(ctx context.Context, cacheCtx Context, limit int) er
 		if pages[i].LanguageCode != cacheCtx.LanguageCode {
 			continue
 		}
-		c.store(&pages[i], cacheCtx)
+		c.store(&pages[i], cacheCtx, generation)
 	}
 
 	return nil

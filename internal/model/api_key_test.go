@@ -178,67 +178,6 @@ func TestExtractAPIKeyPrefix(t *testing.T) {
 	}
 }
 
-func TestAPIKeyGetPermissions(t *testing.T) {
-	tests := standardJSONArrayParseTests("pages:read", "pages:read", "pages:write", "media:read")
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			k := &APIKey{Permissions: tt.input}
-			assertStringSliceEqual(t, "GetPermissions()", k.GetPermissions(), tt.want)
-		})
-	}
-}
-
-func TestAPIKeyHasPermission(t *testing.T) {
-	key := &APIKey{Permissions: `["pages:read","pages:write"]`}
-	runHasItemTests(t, []hasItemTest{
-		{"pages:read", true},
-		{"pages:write", true},
-		{"media:read", false},
-		{"unknown", false},
-	}, key.HasPermission)
-}
-
-func TestAPIKeyHasAnyPermission(t *testing.T) {
-	key := &APIKey{
-		Permissions: `["pages:read","media:write"]`,
-	}
-
-	tests := []struct {
-		name  string
-		perms []string
-		want  bool
-	}{
-		{
-			name:  "has first permission",
-			perms: []string{"pages:read", "unknown"},
-			want:  true,
-		},
-		{
-			name:  "has second permission",
-			perms: []string{"unknown", "media:write"},
-			want:  true,
-		},
-		{
-			name:  "has none",
-			perms: []string{"pages:write", "media:read"},
-			want:  false,
-		},
-		{
-			name:  "empty perms",
-			perms: []string{},
-			want:  false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := key.HasAnyPermission(tt.perms...); got != tt.want {
-				t.Errorf("HasAnyPermission(%v) = %v, want %v", tt.perms, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestAPIKeyIsExpired(t *testing.T) {
 	now := time.Now()
 
@@ -374,6 +313,7 @@ func TestAllPermissions(t *testing.T) {
 		PermissionTaxonomyRead,
 		PermissionTaxonomyWrite,
 		PermissionMCPAccess,
+		PermissionMCPDrafts,
 	}
 
 	if len(perms) != len(expected) {

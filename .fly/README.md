@@ -6,6 +6,7 @@ This directory contains configuration and scripts for deploying oCMS to Fly.io.
 
 1. [Fly.io CLI](https://fly.io/docs/hands-on/install-flyctl/) installed
 2. Fly.io account (free tier is sufficient)
+3. Git checkout and Docker with support for Linux AMD64 builds
 
 ## Quick Start
 
@@ -26,15 +27,16 @@ fly secrets set OCMS_SESSION_SECRET="$(openssl rand -base64 32)" --app ocms-demo
 fly secrets set GOGC=50 --app ocms-demo
 
 # 6. Deploy
-fly deploy
+./.fly/scripts/deploy.sh
 
 # 7. Open the app
 fly open
 ```
 
-Fly deploys with the project Dockerfile. The image build generates
-`web/static/dist` from source, so committed dist files and GitHub release
-archives are not required.
+The deployment script builds and deploys from the committed `HEAD` snapshot,
+including its `fly.toml`. Commit intended demo changes before deploying.
+Ignored site modules and other local edits stay outside the demo image. The
+project Dockerfile generates `web/static/dist` from source during the build.
 
 ## Configuration
 
@@ -75,17 +77,6 @@ The app uses a single 1GB volume mounted at `/app/data`:
 # Deploy and reset database (fresh seeding)
 ./.fly/scripts/deploy.sh --reset
 
-# Or manually:
-# Deploy current source checkout
-fly deploy
-
-# Deploy with local Docker (if remote builder fails)
-fly deploy --local-only
-
-# Deploy with pre-built image (if --local-only has network issues)
-docker build -t ocms-test .
-fly deploy --local-only --image ocms-test
-
 # Check deployment status
 fly status
 
@@ -93,9 +84,8 @@ fly status
 fly logs
 ```
 
-`fly deploy` uses Fly's remote builder by default and still follows the same
-source Docker build path; use `--local-only` only when you need to build on the
-current machine.
+For a manual remote build, extract `git archive HEAD` into an empty directory
+and run `fly deploy` there to use the committed source and Fly configuration.
 
 ### Monitoring
 

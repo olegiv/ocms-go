@@ -46,7 +46,7 @@ func (m *Module) TrackingMiddleware() func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Debug: log every request that enters the middleware
 			if m.ctx != nil && m.ctx.Logger != nil {
-				m.ctx.Logger.Debug("analytics middleware: request received", "path", r.URL.Path, "method", r.Method)
+				m.ctx.Logger.Debug("analytics middleware: request received", "path", util.BoundedLogField(r.URL.Path), "method", util.BoundedLogField(r.Method))
 			}
 
 			// Skip if tracking is disabled
@@ -57,7 +57,7 @@ func (m *Module) TrackingMiddleware() func(http.Handler) http.Handler {
 
 			// Skip non-trackable requests
 			if !m.shouldTrack(r) {
-				m.ctx.Logger.Debug("analytics: skipping non-trackable request", "path", r.URL.Path)
+				m.ctx.Logger.Debug("analytics: skipping non-trackable request", "path", util.BoundedLogField(r.URL.Path))
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -69,12 +69,12 @@ func (m *Module) TrackingMiddleware() func(http.Handler) http.Handler {
 			next.ServeHTTP(rw, r)
 
 			// Track only successful HTML responses
-			if rw.status == http.StatusOK {
-				m.ctx.Logger.Debug("analytics: tracking page view", "path", r.URL.Path)
+			if rw.status == http.StatusOK && !strings.Contains(rw.Header().Get("Cache-Control"), "private") {
+				m.ctx.Logger.Debug("analytics: tracking page view", "path", util.BoundedLogField(r.URL.Path))
 				// Track asynchronously to not block response; Shutdown waits for it
 				m.bgWG.Go(func() { m.trackPageView(r) })
 			} else {
-				m.ctx.Logger.Debug("analytics: skipping non-200 response", "path", r.URL.Path, "status", rw.status)
+				m.ctx.Logger.Debug("analytics: skipping non-200 response", "path", util.BoundedLogField(r.URL.Path), "status", rw.status)
 			}
 		})
 	}
@@ -205,7 +205,7 @@ func (m *Module) trackPageView(r *http.Request) {
 
 	// Insert into database
 	if err := m.insertPageView(view); err != nil {
-		m.ctx.Logger.Error("failed to insert page view", "error", err, "path", view.Path)
+		m.ctx.Logger.Error("failed to insert page view", "error", err, "path", util.BoundedLogField(view.Path))
 	}
 }
 
@@ -327,7 +327,7 @@ func (m *Module) recordReadWithIdentity(id *requestIdentity, req *ReadRequest) b
 		if strings.Contains(err.Error(), "UNIQUE constraint") {
 			return false
 		}
-		m.ctx.Logger.Error("failed to insert page read", "error", err, "path", read.Path)
+		m.ctx.Logger.Error("failed to insert page read", "error", err, "path", util.BoundedLogField(read.Path))
 		return false
 	}
 	return true

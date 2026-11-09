@@ -208,10 +208,19 @@ func TestBuildCSP(t *testing.T) {
 
 func TestDefaultSecurityHeadersConfig_ProductionCSPIsStrict(t *testing.T) {
 	cfg := DefaultSecurityHeadersConfig(false)
-	if strings.Contains(cfg.ContentSecurityPolicy, "script-src") &&
-		strings.Contains(cfg.ContentSecurityPolicy, "script-src 'self' 'unsafe-inline'") {
-		t.Error("production CSP must not allow 'unsafe-inline' for scripts")
+	for directive := range strings.SplitSeq(cfg.ContentSecurityPolicy, ";") {
+		name, sources, _ := strings.Cut(strings.TrimSpace(directive), " ")
+		if name != "script-src" {
+			continue
+		}
+		for _, source := range strings.Fields(sources) {
+			if source == "'unsafe-inline'" || source == "'unsafe-eval'" {
+				t.Errorf("production script-src must not allow %s", source)
+			}
+		}
+		return
 	}
+	t.Fatal("production CSP is missing script-src")
 }
 
 func TestDefaultSecurityHeadersConfig_DevelopmentCSPAllowsUnsafeDirectives(t *testing.T) {

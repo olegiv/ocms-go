@@ -88,7 +88,7 @@ func (m *Module) Init(ctx *module.Context) error {
 	m.globalRateLimiter = rate.NewLimiter(rate.Limit(embedProxyGlobalRateLimitRPS), embedProxyGlobalRateLimitBurst)
 	m.proxySemaphore = make(chan struct{}, embedProxyMaxConcurrent)
 	if ctx.Config != nil {
-		m.requireOriginPolicy = ctx.Config.Env == "production"
+		m.requireOriginPolicy = ctx.Config.IsProductionLike()
 		origins, err := parseAllowedOrigins(ctx.Config.EmbedAllowedOrigins)
 		if err != nil {
 			return fmt.Errorf("parsing embed allowed origins: %w", err)
@@ -101,7 +101,7 @@ func (m *Module) Init(ctx *module.Context) error {
 		m.allowedUpstreamHosts = upstreamHosts
 		m.requireUpstreamHostPolicy = ctx.Config.RequireEmbedAllowedUpstreamHosts
 		m.proxyToken = strings.TrimSpace(ctx.Config.EmbedProxyToken)
-		m.requireProxyToken = ctx.Config.Env == "production" || ctx.Config.RequireEmbedProxyToken
+		m.requireProxyToken = ctx.Config.IsProductionLike() || ctx.Config.RequireEmbedProxyToken
 		if m.requireProxyToken && m.proxyToken == "" {
 			return fmt.Errorf("embed proxy token is required but OCMS_EMBED_PROXY_TOKEN is empty")
 		}

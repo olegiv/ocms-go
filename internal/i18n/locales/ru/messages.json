@@ -3188,6 +3188,11 @@
             "translation": "Свою двухфакторную аутентификацию меняйте на странице безопасности аккаунта."
         },
         {
+            "id": "users.delete_owns_content",
+            "message": "This user still owns pages, media or other content and cannot be deleted.",
+            "translation": "Этот пользователь всё ещё владеет страницами, медиафайлами или другим содержимым, поэтому его нельзя удалить."
+        },
+        {
             "id": "widgets.title",
             "message": "Widgets",
             "translation": "Виджеты"
@@ -7651,6 +7656,1186 @@
             "id": "frontend.reads",
             "message": "reads",
             "translation": "прочтений"
+        },
+        {
+            "id": "oauth.continue",
+            "message": "Continue to the app",
+            "translation": "Продолжить в приложении"
+        },
+        {
+            "id": "oauth.consent_title",
+            "message": "Connect an AI app",
+            "translation": "Подключение приложения ИИ"
+        },
+        {
+            "id": "oauth.consent_description",
+            "message": "Review access to your oCMS account. Publishing is never granted.",
+            "translation": "Проверьте доступ к своей учётной записи oCMS. Публикация не разрешается."
+        },
+        {
+            "id": "oauth.client_id",
+            "message": "Registered client ID",
+            "translation": "Зарегистрированный ID клиента"
+        },
+        {
+            "id": "oauth.client_host",
+            "message": "Client metadata host",
+            "translation": "Сервер метаданных клиента"
+        },
+        {
+            "id": "oauth.redirect_host",
+            "message": "Return address host",
+            "translation": "Сервер адреса возврата"
+        },
+        {
+            "id": "oauth.permissions",
+            "message": "Requested permissions",
+            "translation": "Запрашиваемые разрешения"
+        },
+        {
+            "id": "oauth.registered_name_note",
+            "message": "The app name is supplied by its registration. Check the client ID and return address.",
+            "translation": "Имя приложения указано при регистрации. Проверьте ID клиента и адрес возврата."
+        },
+        {
+            "id": "oauth.allow",
+            "message": "Allow access",
+            "translation": "Разрешить доступ"
+        },
+        {
+            "id": "oauth.deny",
+            "message": "Deny",
+            "translation": "Отклонить"
+        },
+        {
+            "id": "oauth.connections",
+            "message": "Connected AI apps",
+            "translation": "Подключённые приложения ИИ"
+        },
+        {
+            "id": "oauth.no_connections",
+            "message": "No active AI app connections.",
+            "translation": "Активных подключений приложений ИИ нет."
+        },
+        {
+            "id": "oauth.revoke",
+            "message": "Revoke access",
+            "translation": "Отозвать доступ"
+        },
+        {
+            "id": "oauth.connection_not_found",
+            "message": "That connection was not found or is no longer active.",
+            "translation": "Это подключение не найдено или уже неактивно."
+        },
+        {
+            "id": "oauth.scope.mcp:access",
+            "message": "Read published site content",
+            "translation": "Чтение опубликованного содержимого сайта"
+        },
+        {
+            "id": "oauth.scope.mcp:drafts",
+            "message": "Create and edit your own AI drafts",
+            "translation": "Создание и редактирование ваших ИИ-черновиков"
+        },
+        {
+            "id": "oauth.scope.pages:read",
+            "message": "Read unpublished pages when the site permits it",
+            "translation": "Чтение неопубликованных страниц, если сайт это разрешает"
+        },
+        {
+            "id": "api_keys.perm_mcp_drafts",
+            "message": "AI-editable drafts; cannot publish or delete",
+            "translation": "Черновики для ИИ; без публикации и удаления"
+        },
+        {
+            "id": "oauth.local_registration",
+            "message": "Registered on this site; no client metadata host",
+            "translation": "Зарегистрировано на этом сайте; хост метаданных не указан"
+        },
+        {
+            "id": "pages.revision_conflict",
+            "message": "This page changed after you opened it. Your edits are preserved. Review the latest version, or confirm saving your edits over the revision shown here.",
+            "translation": "Страница изменилась после открытия. Ваши правки сохранены в форме. Просмотрите последнюю версию или подтвердите перезапись показанной версии."
+        },
+        {
+            "id": "pages.view_latest",
+            "message": "View latest",
+            "translation": "Последняя версия"
+        },
+        {
+            "id": "pages.confirm_overwrite",
+            "message": "Confirm overwrite",
+            "translation": "Подтвердить перезапись"
+        },
+        {
+            "id": "pages.allow_ai_edits",
+            "message": "Allow AI edits",
+            "translation": "Разрешить редактирование ИИ"
+        },
+        {
+            "id": "versions.legacy",
+            "message": "Legacy version: only title and body were recorded",
+            "translation": "Старая версия: сохранены только заголовок и текст"
+        },
+        {
+            "id": "pages.error_changed_meanwhile",
+            "message": "The page changed after you opened it. Reload it and try again.",
+            "translation": "Страница изменилась после того, как вы её открыли. Обновите её и повторите попытку."
+        },
+        {
+            "id": "pages.error_publication_checks",
+            "message": "This AI draft did not pass the publication checks. Fix the reported issues, then try again.",
+            "translation": "Этот черновик ИИ не прошёл проверки перед публикацией. Исправьте указанные замечания и повторите попытку."
+        },
+        {
+            "id": "pages.error_site_url_required",
+            "message": "Set the site URL in Site configuration before publishing AI drafts.",
+            "translation": "Укажите URL сайта в настройках сайта перед публикацией черновиков ИИ."
+        },
+        {
+            "id": "pages.error_editor_required",
+            "message": "Your account no longer has editor access.",
+            "translation": "У вашей учётной записи больше нет прав редактора."
+        },
+        {
+            "id": "pages.error_translation_exists",
+            "message": "This page already has a translation in that language.",
+            "translation": "У этой страницы уже есть перевод на этот язык."
+        },
+        {
+            "id": "pages.error_version_not_restored",
+            "message": "The version was not restored.",
+            "translation": "Версия не восстановлена."
+        },
+        {
+            "id": "pages.restore_missing_language",
+            "message": "The language (%s) from this version is unavailable. Choose another version.",
+            "translation": "Язык этой версии (%s) больше недоступен. Выберите другую версию."
+        },
+        {
+            "id": "pages.restore_missing_featured_image",
+            "message": "The featured image (ID %s) from this version is missing. Choose another version.",
+            "translation": "Основное изображение этой версии (ID %s) недоступно. Выберите другую версию."
+        },
+        {
+            "id": "pages.restore_missing_og_image",
+            "message": "The Open Graph image (ID %s) from this version is missing. Choose another version.",
+            "translation": "Изображение Open Graph этой версии (ID %s) недоступно. Выберите другую версию."
+        },
+        {
+            "id": "pages.restore_missing_tag",
+            "message": "The tag (ID %s) from this version is missing. Choose another version.",
+            "translation": "Тег этой версии (ID %s) недоступен. Выберите другую версию."
+        },
+        {
+            "id": "pages.restore_missing_category",
+            "message": "The category (ID %s) from this version is missing. Choose another version.",
+            "translation": "Категория этой версии (ID %s) недоступна. Выберите другую версию."
+        },
+        {
+            "id": "pages.error_translation_not_created",
+            "message": "The translation was not created.",
+            "translation": "Перевод не создан."
+        },
+        {
+            "id": "pages.edit_recovery_title",
+            "message": "Page save interrupted",
+            "translation": "Сохранение страницы прервано"
+        },
+        {
+            "id": "pages.edit_recovery_retry",
+            "message": "The editor hit a temporary error. Retry with your submitted edits below.",
+            "translation": "Редактор столкнулся с временной ошибкой. Повторите попытку с правками, сохранёнными в этой форме."
+        },
+        {
+            "id": "pages.edit_recovery_missing",
+            "message": "The page is unavailable. You can copy your submitted text below.",
+            "translation": "Страница недоступна. Вы можете скопировать введённый текст ниже."
+        },
+        {
+            "id": "pages.edit_recovery_button",
+            "message": "Retry with these edits",
+            "translation": "Повторить с этими правками"
+        },
+        {
+            "id": "pages.conflict_missing_tag",
+            "message": "Tag %d is unavailable. Remove it or select a replacement.",
+            "translation": "Тег %d недоступен. Удалите его или выберите другой."
+        },
+        {
+            "id": "pages.invalid_taxonomy_selection",
+            "message": "Choose valid tags and categories.",
+            "translation": "Выберите допустимые теги и категории."
+        },
+        {
+            "id": "pages.save_missing_category",
+            "message": "Category %d is unavailable. Remove it or select a replacement.",
+            "translation": "Категория %d недоступна. Удалите её или выберите другую."
+        },
+        {
+            "id": "pages.error_manage_ai_access",
+            "message": "Only the owner or an administrator can change AI access.",
+            "translation": "Изменить доступ для ИИ может только автор или администратор."
+        },
+        {
+            "id": "pages.revision_conflict_title",
+            "message": "Page changed",
+            "translation": "Страница изменилась"
+        },
+        {
+            "id": "draft.issues.invalid_input.message",
+            "message": "Input does not match the draft contract.",
+            "translation": "Входные данные не соответствуют контракту черновика."
+        },
+        {
+            "id": "draft.issues.invalid_input.hint",
+            "message": "Use the create or update schema and check field types, required values and nullability.",
+            "translation": "Проверьте типы полей, обязательные значения и допустимость null по схеме создания или обновления."
+        },
+        {
+            "id": "draft.issues.title_length.message",
+            "message": "The title must contain 1–255 characters.",
+            "translation": "Заголовок должен содержать от 1 до 255 символов."
+        },
+        {
+            "id": "draft.issues.title_length.hint",
+            "message": "Trim the title and keep it within the character limit.",
+            "translation": "Уберите пробелы по краям и соблюдайте ограничение длины."
+        },
+        {
+            "id": "draft.issues.summary_length.message",
+            "message": "The summary exceeds 500 characters.",
+            "translation": "Краткое описание превышает 500 символов."
+        },
+        {
+            "id": "draft.issues.summary_length.hint",
+            "message": "Shorten the summary to at most 500 characters.",
+            "translation": "Сократите краткое описание до 500 символов."
+        },
+        {
+            "id": "draft.issues.meta_title_length.message",
+            "message": "The SEO title exceeds 60 characters.",
+            "translation": "SEO-заголовок превышает 60 символов."
+        },
+        {
+            "id": "draft.issues.meta_title_length.hint",
+            "message": "Consider a shorter SEO title; the submitted value is retained.",
+            "translation": "Рекомендуется сократить SEO-заголовок; переданное значение сохранено."
+        },
+        {
+            "id": "draft.issues.meta_description_trimmed.message",
+            "message": "The SEO description was shortened to 160 characters or fewer.",
+            "translation": "SEO-описание сокращено до 160 символов или меньше."
+        },
+        {
+            "id": "draft.issues.meta_description_trimmed.hint",
+            "message": "Review the description shortened at a word boundary.",
+            "translation": "Проверьте описание, сокращённое по границе слова."
+        },
+        {
+            "id": "draft.issues.slug_invalid.message",
+            "message": "The slug has an invalid format.",
+            "translation": "Недопустимый формат URL-идентификатора."
+        },
+        {
+            "id": "draft.issues.slug_invalid.hint",
+            "message": "Use lowercase Latin letters, digits and single hyphens, up to 255 characters.",
+            "translation": "Используйте строчные латинские буквы, цифры и одиночные дефисы, не более 255 символов."
+        },
+        {
+            "id": "draft.issues.slug_taken.message",
+            "message": "The slug conflicts with an existing page, alias or route.",
+            "translation": "URL-идентификатор занят страницей, псевдонимом или маршрутом."
+        },
+        {
+            "id": "draft.issues.slug_taken.hint",
+            "message": "Choose another slug or omit it when creating a draft to derive an available one.",
+            "translation": "Выберите другой идентификатор или не передавайте его при создании для автоматического подбора."
+        },
+        {
+            "id": "draft.issues.tags_limit.message",
+            "message": "More than ten distinct tags were supplied.",
+            "translation": "Передано более десяти разных тегов."
+        },
+        {
+            "id": "draft.issues.tags_limit.hint",
+            "message": "Keep at most ten existing tag slugs after deduplication.",
+            "translation": "Оставьте не более десяти существующих тегов после удаления повторов."
+        },
+        {
+            "id": "draft.issues.unknown_tag.message",
+            "message": "A tag is unavailable in the selected language.",
+            "translation": "Тег недоступен для выбранного языка."
+        },
+        {
+            "id": "draft.issues.unknown_tag.hint",
+            "message": "Choose an existing tag offered for this language.",
+            "translation": "Выберите существующий тег, предложенный для этого языка."
+        },
+        {
+            "id": "draft.issues.tag_creation_not_allowed.message",
+            "message": "Creating tags through draft authoring is not allowed.",
+            "translation": "Создание тегов через инструменты черновиков запрещено."
+        },
+        {
+            "id": "draft.issues.tag_creation_not_allowed.hint",
+            "message": "Use existing tag slugs from the authoring context.",
+            "translation": "Используйте существующие теги из контекста сайта."
+        },
+        {
+            "id": "draft.issues.category_not_found.message",
+            "message": "The category is unavailable in the selected language.",
+            "translation": "Категория недоступна для выбранного языка."
+        },
+        {
+            "id": "draft.issues.category_not_found.hint",
+            "message": "Choose an existing category offered for this language, or clear it.",
+            "translation": "Выберите существующую категорию для этого языка или очистите поле."
+        },
+        {
+            "id": "draft.issues.image_not_found.message",
+            "message": "The featured image is unavailable or is not a supported image.",
+            "translation": "Изображение записи недоступно или имеет неподдерживаемый формат."
+        },
+        {
+            "id": "draft.issues.image_not_found.hint",
+            "message": "Choose an existing JPEG, PNG, GIF or WebP image from the media library.",
+            "translation": "Выберите существующее изображение JPEG, PNG, GIF или WebP из медиатеки."
+        },
+        {
+            "id": "draft.issues.image_too_small.message",
+            "message": "The featured image is smaller than 1200×800 pixels.",
+            "translation": "Изображение записи меньше 1200×800 пикселей."
+        },
+        {
+            "id": "draft.issues.image_too_small.hint",
+            "message": "Choose an existing image meeting the featured-image minimum dimensions.",
+            "translation": "Выберите существующее изображение с допустимыми минимальными размерами."
+        },
+        {
+            "id": "draft.issues.media_ref_not_found.message",
+            "message": "An inline image does not resolve to supported existing media.",
+            "translation": "Изображение в тексте не найдено в медиатеке или имеет неподдерживаемый формат."
+        },
+        {
+            "id": "draft.issues.media_ref_not_found.hint",
+            "message": "Use a canonical media:ID reference to an existing image.",
+            "translation": "Используйте ссылку media:ID на существующее изображение."
+        },
+        {
+            "id": "draft.issues.language_inactive.message",
+            "message": "The language is unavailable, inactive or cannot be routed.",
+            "translation": "Язык недоступен, неактивен или не поддерживает маршрутизацию."
+        },
+        {
+            "id": "draft.issues.language_inactive.hint",
+            "message": "Choose an active language offered by this site.",
+            "translation": "Выберите активный язык, предложенный сайтом."
+        },
+        {
+            "id": "draft.issues.reference_unresolved.message",
+            "message": "A site reference could not be resolved.",
+            "translation": "Не удалось разрешить ссылку на материал сайта."
+        },
+        {
+            "id": "draft.issues.reference_unresolved.hint",
+            "message": "Reread the authoring context and choose an existing site reference.",
+            "translation": "Обновите контекст сайта и выберите существующий материал."
+        },
+        {
+            "id": "draft.issues.reference_not_visible.message",
+            "message": "A site reference is unavailable to this account.",
+            "translation": "Материал сайта недоступен этому аккаунту."
+        },
+        {
+            "id": "draft.issues.reference_not_visible.hint",
+            "message": "Use only references visible under the current connection's permissions.",
+            "translation": "Используйте только материалы, доступные текущему подключению."
+        },
+        {
+            "id": "draft.issues.external_link.message",
+            "message": "The draft includes an external link for editorial review.",
+            "translation": "Черновик содержит внешнюю ссылку для редакторской проверки."
+        },
+        {
+            "id": "draft.issues.external_link.hint",
+            "message": "Review the external-links list and the applied keep, nofollow or strip policy.",
+            "translation": "Проверьте список внешних ссылок и применённую политику keep, nofollow или strip."
+        },
+        {
+            "id": "draft.issues.internal_link_broken.message",
+            "message": "An internal link does not resolve to visible site content.",
+            "translation": "Внутренняя ссылка не ведёт на доступный материал сайта."
+        },
+        {
+            "id": "draft.issues.internal_link_broken.hint",
+            "message": "Choose a valid internal link from the authoring context.",
+            "translation": "Выберите допустимую внутреннюю ссылку из контекста сайта."
+        },
+        {
+            "id": "draft.issues.link_not_allowed.message",
+            "message": "A link uses an unsupported or unsafe URL.",
+            "translation": "Ссылка содержит неподдерживаемый или небезопасный URL."
+        },
+        {
+            "id": "draft.issues.link_not_allowed.hint",
+            "message": "Use an internal link, HTTP, HTTPS or mailto URL without embedded credentials.",
+            "translation": "Используйте внутреннюю ссылку, HTTP, HTTPS или mailto без встроенных учётных данных."
+        },
+        {
+            "id": "draft.issues.raw_html_not_allowed.message",
+            "message": "Raw HTML is not accepted in Markdown drafts.",
+            "translation": "HTML-разметка не принимается в Markdown-черновиках."
+        },
+        {
+            "id": "draft.issues.raw_html_not_allowed.hint",
+            "message": "Use Markdown syntax; put HTML examples inside fenced code blocks.",
+            "translation": "Используйте Markdown; примеры HTML помещайте в блоки кода."
+        },
+        {
+            "id": "draft.issues.overlap_with_example.message",
+            "message": "The draft overlaps substantially with an example page.",
+            "translation": "Черновик существенно совпадает с материалом-примером."
+        },
+        {
+            "id": "draft.issues.overlap_with_example.hint",
+            "message": "Review and rewrite passages that copy an example rather than use it for style.",
+            "translation": "Проверьте и перепишите фрагменты, скопированные из примера вместо использования его стиля."
+        },
+        {
+            "id": "draft.issues.forbidden_field.message",
+            "message": "The request contains a field this operation cannot change.",
+            "translation": "Запрос содержит поле, которое эта операция не может изменять."
+        },
+        {
+            "id": "draft.issues.forbidden_field.hint",
+            "message": "Remove lifecycle, ownership, language, page-type or verified fields from updates.",
+            "translation": "Уберите из обновления поля публикации, владельца, языка, типа страницы и проверенных данных."
+        },
+        {
+            "id": "draft.issues.revision_required.message",
+            "message": "A base revision is required.",
+            "translation": "Необходимо указать базовую ревизию."
+        },
+        {
+            "id": "draft.issues.revision_required.hint",
+            "message": "Read the current draft and submit its revision with the update.",
+            "translation": "Прочитайте текущий черновик и передайте его ревизию при обновлении."
+        },
+        {
+            "id": "draft.issues.revision_conflict.message",
+            "message": "The page changed after it was read.",
+            "translation": "Страница изменена после чтения."
+        },
+        {
+            "id": "draft.issues.revision_conflict.hint",
+            "message": "Reread the draft and merge the changes before submitting a new update.",
+            "translation": "Перечитайте черновик и объедините изменения перед повторным обновлением."
+        },
+        {
+            "id": "draft.issues.idempotency_key_reused.message",
+            "message": "This request ID was already used for different input.",
+            "translation": "Этот идентификатор запроса уже использован с другими данными."
+        },
+        {
+            "id": "draft.issues.idempotency_key_reused.hint",
+            "message": "Reuse an ID only for an unchanged retry; use a new UUID for a new operation.",
+            "translation": "Повторяйте идентификатор только с теми же данными; для новой операции создайте новый UUID."
+        },
+        {
+            "id": "draft.issues.request_expired.message",
+            "message": "The original result is expired or its page was deleted.",
+            "translation": "Срок хранения результата истёк или страница удалена."
+        },
+        {
+            "id": "draft.issues.request_expired.hint",
+            "message": "Inspect current drafts before starting a new operation with a new request ID.",
+            "translation": "Проверьте текущие черновики перед новой операцией с новым идентификатором запроса."
+        },
+        {
+            "id": "draft.issues.not_ai_editable.message",
+            "message": "The draft is not available for AI edits.",
+            "translation": "Черновик недоступен для редактирования ИИ."
+        },
+        {
+            "id": "draft.issues.not_ai_editable.hint",
+            "message": "The owner must enable AI edits on a plain draft accessible to this account.",
+            "translation": "Владелец должен разрешить правки ИИ для доступного этому аккаунту неопубликованного черновика."
+        },
+        {
+            "id": "draft.issues.source_revision_conflict.message",
+            "message": "The translation source changed after it was read.",
+            "translation": "Источник перевода изменён после чтения."
+        },
+        {
+            "id": "draft.issues.source_revision_conflict.hint",
+            "message": "Reread the source and regenerate the translation from its current revision.",
+            "translation": "Перечитайте источник и подготовьте перевод по его текущей ревизии."
+        },
+        {
+            "id": "draft.issues.translation_exists.message",
+            "message": "This translation group already contains the target language.",
+            "translation": "Группа переводов уже содержит материал на целевом языке."
+        },
+        {
+            "id": "draft.issues.translation_exists.hint",
+            "message": "Read the translation status before creating another translation.",
+            "translation": "Проверьте состояние переводов перед созданием нового."
+        },
+        {
+            "id": "draft.issues.body_too_large.message",
+            "message": "The Markdown or resulting HTML exceeds 200,000 bytes.",
+            "translation": "Markdown или итоговый HTML превышает 200 000 байт."
+        },
+        {
+            "id": "draft.issues.body_too_large.hint",
+            "message": "Shorten the body and retry the same logical operation only with a new request ID.",
+            "translation": "Сократите текст; для изменённых данных используйте новый идентификатор запроса."
+        },
+        {
+            "id": "draft.issues.too_many_links.message",
+            "message": "The body links to more than 500 distinct destinations.",
+            "translation": "Текст содержит ссылки более чем на 500 разных адресов."
+        },
+        {
+            "id": "draft.issues.too_many_links.hint",
+            "message": "Keep at most 500 distinct link targets; repeated links to the same URL count once.",
+            "translation": "Оставьте не более 500 разных адресов ссылок; повторные ссылки на один адрес считаются один раз."
+        },
+        {
+            "id": "draft.issues.html_conversion_lossy.message",
+            "message": "The stored rich HTML cannot be represented completely as Markdown.",
+            "translation": "Сохранённый HTML нельзя полностью представить в Markdown."
+        },
+        {
+            "id": "draft.issues.html_conversion_lossy.hint",
+            "message": "Review the stored HTML before explicitly replacing its body; metadata-only updates preserve it.",
+            "translation": "Проверьте HTML перед заменой текста; обновления метаданных сохраняют его без изменений."
+        },
+        {
+            "id": "draft.issues.media_conversion_lossy.message",
+            "message": "An existing image could not be converted to a media:ID reference.",
+            "translation": "Не удалось преобразовать существующее изображение в ссылку media:ID."
+        },
+        {
+            "id": "draft.issues.media_conversion_lossy.hint",
+            "message": "Choose matching media from the library before replacing this body.",
+            "translation": "Перед заменой текста выберите соответствующий файл из медиатеки."
+        },
+        {
+            "id": "nav.editorial",
+            "message": "Editorial guidance",
+            "translation": "Редакционные правила"
+        },
+        {
+            "id": "editorial.title",
+            "message": "Editorial guidance",
+            "translation": "Редакционные правила"
+        },
+        {
+            "id": "editorial.description",
+            "message": "Set the style and article presets your connected AI apps receive.",
+            "translation": "Настройте стиль и шаблоны статей для подключённых ИИ-приложений."
+        },
+        {
+            "id": "editorial.language",
+            "message": "Guidance language",
+            "translation": "Язык правил"
+        },
+        {
+            "id": "editorial.default",
+            "message": "Site default",
+            "translation": "Общие правила сайта"
+        },
+        {
+            "id": "editorial.guide",
+            "message": "Style guide",
+            "translation": "Руководство по стилю"
+        },
+        {
+            "id": "editorial.guide_help",
+            "message": "Use plain text or Markdown. Describe audience, tone, structure and claims that need review. Maximum 8,000 characters.",
+            "translation": "Используйте текст или Markdown. Опишите аудиторию, тон, структуру и утверждения, требующие проверки. До 8000 символов."
+        },
+        {
+            "id": "editorial.guide_body",
+            "message": "Writing guidance",
+            "translation": "Правила написания"
+        },
+        {
+            "id": "editorial.inherited",
+            "message": "This language uses the site default. Saving creates an override.",
+            "translation": "Для этого языка используются общие правила сайта. Сохранение создаст отдельные правила."
+        },
+        {
+            "id": "editorial.reset_help",
+            "message": "Leave the guide empty and save to use the site default again.",
+            "translation": "Очистите правила и сохраните, чтобы снова использовать общие правила сайта."
+        },
+        {
+            "id": "editorial.save_guide",
+            "message": "Save style guide",
+            "translation": "Сохранить правила"
+        },
+        {
+            "id": "editorial.presets",
+            "message": "Article presets",
+            "translation": "Шаблоны статей"
+        },
+        {
+            "id": "editorial.preset_help",
+            "message": "Choose a preset to edit its outline and authoring instructions. These settings guide drafting; publication remains a human action.",
+            "translation": "Выберите шаблон для настройки структуры и правил подготовки. Публикацию выполняет человек."
+        },
+        {
+            "id": "editorial.preset_name",
+            "message": "Preset name",
+            "translation": "Название шаблона"
+        },
+        {
+            "id": "editorial.preset_instructions",
+            "message": "Outline and instructions",
+            "translation": "Структура и инструкции"
+        },
+        {
+            "id": "editorial.reset_preset_help",
+            "message": "Clear both fields and save to restore this language’s default preset.",
+            "translation": "Очистите оба поля и сохраните, чтобы вернуть общий шаблон для этого языка."
+        },
+        {
+            "id": "editorial.save_preset",
+            "message": "Save preset",
+            "translation": "Сохранить шаблон"
+        },
+        {
+            "id": "editorial.saved",
+            "message": "Editorial guidance saved.",
+            "translation": "Редакционные правила сохранены."
+        },
+        {
+            "id": "editorial.invalid",
+            "message": "Check the language and preset. A default guide needs 1–8,000 characters; a preset needs a name (1–100) and instructions (1–4,000).",
+            "translation": "Проверьте язык и шаблон. Общие правила: 1–8000 символов; шаблон: название (1–100) и инструкции (1–4000)."
+        },
+        {
+            "id": "review.title",
+            "message": "Editorial review",
+            "translation": "Редакторская проверка"
+        },
+        {
+            "id": "review.verified",
+            "message": "Verified",
+            "translation": "Подтверждено"
+        },
+        {
+            "id": "review.validated",
+            "message": "Validated by oCMS",
+            "translation": "Проверено oCMS"
+        },
+        {
+            "id": "review.reported",
+            "message": "Reported by the agent",
+            "translation": "Сообщено агентом"
+        },
+        {
+            "id": "review.revision",
+            "message": "Revision %d",
+            "translation": "Версия %d"
+        },
+        {
+            "id": "review.baseline",
+            "message": "Baseline snapshot: the original author and validation were not recorded.",
+            "translation": "Базовый снимок: исходный автор и результаты проверки не зафиксированы."
+        },
+        {
+            "id": "review.account",
+            "message": "Recorded account",
+            "translation": "Зафиксированная учётная запись"
+        },
+        {
+            "id": "review.source",
+            "message": "Source and transport",
+            "translation": "Источник и канал"
+        },
+        {
+            "id": "review.registered_app",
+            "message": "Registered app name",
+            "translation": "Зарегистрированное имя приложения"
+        },
+        {
+            "id": "review.client_id",
+            "message": "Registered client ID",
+            "translation": "Зарегистрированный ID клиента"
+        },
+        {
+            "id": "review.grant_id",
+            "message": "OAuth grant ID",
+            "translation": "ID разрешения OAuth"
+        },
+        {
+            "id": "review.key_id",
+            "message": "API key ID",
+            "translation": "ID API-ключа"
+        },
+        {
+            "id": "review.registration_note",
+            "message": "Registration details identify an app registration, not a verified vendor.",
+            "translation": "Данные регистрации идентифицируют приложение, но не подтверждают его производителя."
+        },
+        {
+            "id": "review.validation_note",
+            "message": "These checks establish structure and reference visibility, not factual accuracy.",
+            "translation": "Эти проверки подтверждают структуру и доступность источников, но не достоверность утверждений."
+        },
+        {
+            "id": "review.reference",
+            "message": "Page %d, revision %d",
+            "translation": "Страница %d, версия %d"
+        },
+        {
+            "id": "review.no_validation",
+            "message": "No validation was recorded for this revision.",
+            "translation": "Для этой версии результаты проверки не зафиксированы."
+        },
+        {
+            "id": "review.prompt_contract",
+            "message": "Guidance version",
+            "translation": "Версия инструкций"
+        },
+        {
+            "id": "review.reported_note",
+            "message": "The following information was supplied by the agent and is unverified.",
+            "translation": "Следующие сведения предоставлены агентом и не подтверждены."
+        },
+        {
+            "id": "review.model",
+            "message": "Agent-reported model",
+            "translation": "Модель по сообщению агента"
+        },
+        {
+            "id": "review.client_report",
+            "message": "Client-reported name/version",
+            "translation": "Название и версия по сообщению клиента"
+        },
+        {
+            "id": "review.reported_source",
+            "message": "Agent-reported source",
+            "translation": "Источник по сообщению агента"
+        },
+        {
+            "id": "review.acknowledgment_note",
+            "message": "Checking a claim records your review; it does not verify the claim as fact.",
+            "translation": "Отметка фиксирует вашу проверку, но не подтверждает утверждение как факт."
+        },
+        {
+            "id": "review.checked_by",
+            "message": "Reviewed by",
+            "translation": "Проверил"
+        },
+        {
+            "id": "review.save_check",
+            "message": "Save review",
+            "translation": "Сохранить отметку"
+        },
+        {
+            "id": "review.publish_notice",
+            "message": "%d unchecked claims. Claims and warning/info issues do not block publication; review this revision before publishing.",
+            "translation": "Непроверенных утверждений: %d. Утверждения, предупреждения и замечания не блокируют публикацию; проверьте эту версию перед публикацией."
+        },
+        {
+            "id": "review.translations",
+            "message": "Translation review",
+            "translation": "Проверка переводов"
+        },
+        {
+            "id": "review.translation_source",
+            "message": "Source to review",
+            "translation": "Источник для проверки"
+        },
+        {
+            "id": "review.translation_note",
+            "message": "Save any text edits first, then compare the saved translation with the linked source revision. This action records your review in a new revision without changing the text or publishing it. Earlier reviews remain in history.",
+            "translation": "Сначала сохраните правки текста, затем сопоставьте сохранённый перевод с указанной версией источника. Это действие запишет проверку в новой версии без изменения текста или публикации. Предыдущие проверки останутся в истории."
+        },
+        {
+            "id": "review.translation_acknowledge",
+            "message": "I reviewed this translation against the source revision shown above and confirm that it preserves its meaning.",
+            "translation": "Я сопоставил перевод с указанной выше версией источника и подтверждаю, что он сохраняет её смысл."
+        },
+        {
+            "id": "review.translation_save",
+            "message": "Mark translation reviewed",
+            "translation": "Подтвердить проверку перевода"
+        },
+        {
+            "id": "review.translation_saved",
+            "message": "Translation review saved for the selected source revision.",
+            "translation": "Проверка перевода сохранена для выбранной версии источника."
+        },
+        {
+            "id": "review.translation_conflict",
+            "message": "The translation, source revision or translation group changed, or this draft cannot be reviewed. Reload both pages and review them again.",
+            "translation": "Перевод, версия источника или группа переводов изменились, либо этот черновик недоступен для проверки. Обновите обе страницы и проверьте их заново."
+        },
+        {
+            "id": "review.translation_failed",
+            "message": "Could not confirm the translation review. Reload the page before trying again.",
+            "translation": "Не удалось подтвердить сохранение проверки перевода. Обновите страницу перед повторной попыткой."
+        },
+        {
+            "id": "review.translation_reviewed_revision",
+            "message": "Translation revision reviewed: %d",
+            "translation": "Проверенная версия перевода: %d"
+        },
+        {
+            "id": "review.ai_draft",
+            "message": "AI draft",
+            "translation": "ИИ-черновик"
+        },
+        {
+            "id": "review.stale",
+            "message": "Stale",
+            "translation": "Устарел"
+        },
+        {
+            "id": "review.current",
+            "message": "Current",
+            "translation": "Актуален"
+        },
+        {
+            "id": "review.not_tracked",
+            "message": "Source basis not recorded",
+            "translation": "Версия источника не зафиксирована"
+        },
+        {
+            "id": "review.missing",
+            "message": "Missing",
+            "translation": "Отсутствует"
+        },
+        {
+            "id": "review.unavailable",
+            "message": "Unavailable",
+            "translation": "Недоступно"
+        },
+        {
+            "id": "review.awaiting",
+            "message": "AI drafts awaiting review",
+            "translation": "ИИ-черновики для проверки"
+        },
+        {
+            "id": "review.unchecked",
+            "message": "%d unchecked claims",
+            "translation": "Непроверенных утверждений: %d"
+        },
+        {
+            "id": "review.check_conflict",
+            "message": "The reviewed revision changed or this claim is unavailable. Reload the page.",
+            "translation": "Проверяемая версия изменилась или утверждение недоступно. Обновите страницу."
+        },
+        {
+            "id": "review.compare",
+            "message": "Review and compare",
+            "translation": "Проверить и сравнить"
+        },
+        {
+            "id": "review.compare_note",
+            "message": "Compared with the preceding recorded version. Legacy versions contain only title and body.",
+            "translation": "Сравнение с предыдущей сохранённой версией. Старые версии содержат только заголовок и текст."
+        },
+        {
+            "id": "review.no_changes",
+            "message": "No recorded text or assignment changes.",
+            "translation": "Изменений текста и связей не зафиксировано."
+        },
+        {
+            "id": "review.before",
+            "message": "Previous recorded version",
+            "translation": "Предыдущая сохранённая версия"
+        },
+        {
+            "id": "review.after",
+            "message": "Selected version",
+            "translation": "Выбранная версия"
+        },
+        {
+            "id": "review.not_recorded",
+            "message": "Not recorded",
+            "translation": "Не зафиксировано"
+        },
+        {
+            "id": "review.diff_truncated",
+            "message": "This comparison is shortened. Open the recorded preview to review the full content.",
+            "translation": "Сравнение сокращено. Откройте предпросмотр сохранённой версии для проверки полного текста."
+        },
+        {
+            "id": "preview.title",
+            "message": "Revision previews and sharing",
+            "translation": "Предпросмотр версий и общий доступ"
+        },
+        {
+            "id": "preview.open_revision",
+            "message": "Preview this revision",
+            "translation": "Предпросмотр этой версии"
+        },
+        {
+            "id": "preview.open_complete_link",
+            "message": "Open the complete share link to view this revision.",
+            "translation": "Откройте полную ссылку общего доступа для просмотра этой версии."
+        },
+        {
+            "id": "preview.javascript_required",
+            "message": "JavaScript is required to open a shared preview. Enable it and reopen the original link.",
+            "translation": "Для общего предпросмотра нужен JavaScript. Включите его и снова откройте исходную ссылку."
+        },
+        {
+            "id": "preview.share_warning",
+            "message": "Anyone with a share link can read the selected revision until expiry or revocation.",
+            "translation": "Любой обладатель ссылки может читать выбранную версию до истечения срока или отзыва доступа."
+        },
+        {
+            "id": "preview.acknowledge",
+            "message": "I understand that anyone holding this link can read this revision.",
+            "translation": "Я понимаю, что любой обладатель ссылки сможет читать эту версию."
+        },
+        {
+            "id": "preview.create_share",
+            "message": "Create share link",
+            "translation": "Создать ссылку общего доступа"
+        },
+        {
+            "id": "preview.revoke",
+            "message": "Revoke link",
+            "translation": "Отозвать ссылку"
+        },
+        {
+            "id": "preview.expires",
+            "message": "Expires",
+            "translation": "Срок действия"
+        },
+        {
+            "id": "preview.created",
+            "message": "Share link created",
+            "translation": "Ссылка общего доступа создана"
+        },
+        {
+            "id": "preview.only_once",
+            "message": "Copy this URL now. oCMS stores only its hash and cannot show it again.",
+            "translation": "Скопируйте ссылку сейчас. oCMS хранит только её хеш и не сможет показать её повторно."
+        },
+        {
+            "id": "preview.share_url",
+            "message": "Share URL",
+            "translation": "Ссылка общего доступа"
+        },
+        {
+            "id": "preview.active_limit",
+            "message": "You have reached the limit of %d active preview links. Revoke a link or wait for one to expire.",
+            "translation": "Достигнут лимит активных ссылок для просмотра: %d. Отзовите ссылку или дождитесь окончания её срока действия."
+        },
+        {
+            "id": "preview.rate_limit",
+            "message": "You have reached the limit of %d preview links per hour. Try again in %d seconds. Revoking links does not reset this limit.",
+            "translation": "Достигнут лимит ссылок для просмотра в час: %d. Повторите попытку через %d секунд. Отзыв ссылок не сбрасывает этот лимит."
+        },
+        {
+            "id": "preview.revoked",
+            "message": "The share link was revoked.",
+            "translation": "Ссылка для просмотра отозвана."
+        },
+        {
+            "id": "preview.revoke_missing",
+            "message": "That share link was already revoked or no longer exists.",
+            "translation": "Эта ссылка уже отозвана или больше не существует."
+        },
+        {
+            "id": "preview.revoke_failed",
+            "message": "The share link was not revoked. Try again shortly.",
+            "translation": "Ссылка для просмотра не была отозвана. Повторите попытку позже."
+        },
+        {
+            "id": "preview.temporarily_unavailable",
+            "message": "The preview is temporarily unavailable. Try again shortly.",
+            "translation": "Предпросмотр временно недоступен. Повторите попытку позже."
+        },
+        {
+            "id": "review.check_failed",
+            "message": "The check could not be saved. Try again.",
+            "translation": "Не удалось сохранить отметку. Повторите попытку."
+        },
+        {
+            "id": "preview.site_url_required",
+            "message": "Set a valid HTTPS site URL in Site configuration before sharing previews. HTTP is allowed only for localhost or loopback addresses.",
+            "translation": "Укажите корректный HTTPS URL сайта в настройках сайта, прежде чем делиться предпросмотром. HTTP разрешён только для localhost или адресов обратной петли."
+        },
+        {
+            "id": "preview.unavailable",
+            "message": "Cannot share this revision. Reload the editor and check that the draft is eligible for sharing.",
+            "translation": "Нельзя открыть общий доступ к этой версии. Обновите редактор и проверьте, доступен ли общий доступ к черновику."
+        },
+        {
+            "id": "preview.render_error",
+            "message": "The theme could not render the recorded revision. Preview is unavailable.",
+            "translation": "Тема не смогла отобразить сохранённую версию. Предпросмотр недоступен."
+        },
+        {
+            "id": "preview.banner",
+            "message": "Preview · page %d · revision %d",
+            "translation": "Предпросмотр · страница %d · версия %d"
+        },
+        {
+            "id": "preview.placeholder",
+            "message": "External media and interactive content are omitted in previews.",
+            "translation": "Внешние материалы и интерактивное содержимое отключены в предпросмотре."
+        },
+        {
+            "id": "review.field.title",
+            "message": "Title",
+            "translation": "Заголовок"
+        },
+        {
+            "id": "review.field.summary",
+            "message": "Summary",
+            "translation": "Краткое описание"
+        },
+        {
+            "id": "review.field.body",
+            "message": "Body text",
+            "translation": "Текст"
+        },
+        {
+            "id": "review.field.meta_title",
+            "message": "SEO title",
+            "translation": "SEO-заголовок"
+        },
+        {
+            "id": "review.field.meta_description",
+            "message": "SEO description",
+            "translation": "SEO-описание"
+        },
+        {
+            "id": "review.field.meta_keywords",
+            "message": "SEO keywords",
+            "translation": "Ключевые слова SEO"
+        },
+        {
+            "id": "review.field.slug",
+            "message": "URL slug",
+            "translation": "Адрес страницы"
+        },
+        {
+            "id": "review.field.language_code",
+            "message": "Language",
+            "translation": "Язык"
+        },
+        {
+            "id": "review.field.featured_image_id",
+            "message": "Featured image",
+            "translation": "Главное изображение"
+        },
+        {
+            "id": "review.field.category_ids",
+            "message": "Categories",
+            "translation": "Категории"
+        },
+        {
+            "id": "review.field.tag_ids",
+            "message": "Tags",
+            "translation": "Теги"
+        },
+        {
+            "id": "review.system",
+            "message": "System action; no acting account was recorded.",
+            "translation": "Системное действие; учётная запись исполнителя не зафиксирована."
+        },
+        {
+            "id": "connected.title",
+            "message": "Connected apps",
+            "translation": "Подключённые приложения"
+        },
+        {
+            "id": "connected.description",
+            "message": "Review apps and MCP API keys. Revoking access does not delete drafts.",
+            "translation": "Управляйте приложениями и API-ключами MCP. Отзыв доступа не удаляет черновики."
+        },
+        {
+            "id": "connected.policy_note",
+            "message": "Access also depends on current site policies, account permissions and API-key restrictions.",
+            "translation": "Доступ также зависит от текущих настроек сайта, прав пользователя и ограничений API-ключей."
+        },
+        {
+            "id": "connected.oauth",
+            "message": "OAuth connections",
+            "translation": "Подключения OAuth"
+        },
+        {
+            "id": "connected.keys",
+            "message": "MCP API keys",
+            "translation": "API-ключи MCP"
+        },
+        {
+            "id": "connected.metadata_note",
+            "message": "App names and client hosts are registered metadata, not verified vendor identities.",
+            "translation": "Имена приложений и адреса клиентов указаны при регистрации и не подтверждают личность поставщика."
+        },
+        {
+            "id": "connected.key_note",
+            "message": "API keys are not bound to a client host. Only keys with MCP access are listed.",
+            "translation": "API-ключи не привязаны к адресу приложения. Показаны только ключи с доступом MCP."
+        },
+        {
+            "id": "connected.empty",
+            "message": "No connections on this page.",
+            "translation": "На этой странице нет подключений."
+        },
+        {
+            "id": "connected.owner",
+            "message": "Account",
+            "translation": "Пользователь"
+        },
+        {
+            "id": "connected.created",
+            "message": "Created",
+            "translation": "Создано"
+        },
+        {
+            "id": "connected.not_recorded",
+            "message": "Not recorded",
+            "translation": "Не указан"
+        },
+        {
+            "id": "connected.never_used",
+            "message": "Never used",
+            "translation": "Не использовалось"
+        },
+        {
+            "id": "connected.no_expiry",
+            "message": "No stored expiry",
+            "translation": "Срок действия не указан"
+        },
+        {
+            "id": "connected.revoke",
+            "message": "Revoke access",
+            "translation": "Отозвать доступ"
+        },
+        {
+            "id": "connected.status_active",
+            "message": "Active",
+            "translation": "Активно"
+        },
+        {
+            "id": "connected.status_revoked",
+            "message": "Revoked",
+            "translation": "Отозвано"
+        },
+        {
+            "id": "connected.status_expired",
+            "message": "Expired",
+            "translation": "Срок истёк"
+        },
+        {
+            "id": "connected.status_unavailable",
+            "message": "Unavailable under current account or server policy",
+            "translation": "Недоступно при текущих правах пользователя или настройках сервера"
         }
     ]
 }

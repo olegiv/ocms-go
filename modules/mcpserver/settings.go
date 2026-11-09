@@ -11,12 +11,16 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/olegiv/ocms-go/internal/config"
+	"github.com/olegiv/ocms-go/internal/preview"
+	"github.com/olegiv/ocms-go/internal/store"
 )
 
 // maxInstructionsRunes caps the administrator's agent instructions. They are
 // sent to every MCP client and land in the model's context, so they stay
 // short enough not to crowd out the content agents actually asked for.
-const maxInstructionsRunes = 4000
+const maxInstructionsRunes = 2400
 
 // i18n message keys returned by normalizeInstructions.
 const (
@@ -32,20 +36,46 @@ type Settings struct {
 	AllowDrafts bool
 	// Instructions is site-specific guidance appended to the instructions
 	// every MCP client receives.
-	Instructions string
+	Instructions      string
+	DraftToolsEnabled bool
+	ExternalLinks     string
+	// AgentShareLinks lets agents issue links and readers redeem them.
+	AgentShareLinks bool
+}
+
+// AgentSharePolicy checks the live MCP settings for existing agent links.
+func AgentSharePolicy(cfg *config.Config) preview.AgentSharePolicy {
+	return func(ctx context.Context, q *store.Queries) (bool, error) {
+		if cfg == nil || cfg.AIDisabled {
+			return false, nil
+		}
+		var allowed bool
+		// Read the module and settings in the same SQLite snapshot.
+		err := q.DBHandle().QueryRowContext(ctx, `
+			SELECT EXISTS (
+				SELECT 1 FROM modules m JOIN mcp_settings s ON s.id = 1
+				WHERE m.name = ? AND m.is_active = 1
+					AND s.draft_tools_enabled = 1 AND s.agent_share_links = 1
+			)`, ModuleName).Scan(&allowed)
+		return allowed, err
+	}
 }
 
 // loadSettings reads the settings row. A missing row yields the defaults.
-func loadSettings(ctx context.Context, db *sql.DB) (Settings, error) {
+type settingsReader interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func loadSettings(ctx context.Context, db settingsReader) (Settings, error) {
 	var (
 		allowDrafts int
 		s           Settings
 	)
 	err := db.QueryRowContext(ctx,
-		`SELECT allow_drafts, instructions FROM mcp_settings WHERE id = 1`,
-	).Scan(&allowDrafts, &s.Instructions)
+		`SELECT allow_drafts, instructions, draft_tools_enabled, external_links, agent_share_links FROM mcp_settings WHERE id = 1`,
+	).Scan(&allowDrafts, &s.Instructions, &s.DraftToolsEnabled, &s.ExternalLinks, &s.AgentShareLinks)
 	if errors.Is(err, sql.ErrNoRows) {
-		return Settings{}, nil
+		return Settings{ExternalLinks: "keep", AgentShareLinks: true}, nil
 	}
 	if err != nil {
 		return Settings{}, fmt.Errorf("loading MCP settings: %w", err)
@@ -61,13 +91,16 @@ func saveSettings(ctx context.Context, db *sql.DB, s Settings) error {
 		allowDrafts = 1
 	}
 	_, err := db.ExecContext(ctx, `
-		INSERT INTO mcp_settings (id, allow_drafts, instructions, updated_at)
-		VALUES (1, ?, ?, CURRENT_TIMESTAMP)
+		INSERT INTO mcp_settings (id, allow_drafts, instructions, draft_tools_enabled, external_links, agent_share_links, updated_at)
+		VALUES (1, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 		ON CONFLICT(id) DO UPDATE SET
 			allow_drafts = excluded.allow_drafts,
 			instructions = excluded.instructions,
+			draft_tools_enabled = excluded.draft_tools_enabled,
+			external_links = excluded.external_links,
+			agent_share_links = excluded.agent_share_links,
 			updated_at = CURRENT_TIMESTAMP
-	`, allowDrafts, s.Instructions)
+	`, allowDrafts, s.Instructions, s.DraftToolsEnabled, linkPolicy(s), s.AgentShareLinks)
 	if err != nil {
 		return fmt.Errorf("saving MCP settings: %w", err)
 	}
@@ -108,6 +141,12 @@ func (m *Module) saveAndApply(ctx context.Context, next Settings) (Settings, err
 	m.settingsMu.Lock()
 	defer m.settingsMu.Unlock()
 	prev := m.currentSettings()
+	if next.ExternalLinks == "" {
+		next.ExternalLinks = "keep"
+	}
+	if next.ExternalLinks != "keep" && next.ExternalLinks != "nofollow" && next.ExternalLinks != "strip" {
+		return prev, errors.New("invalid external link policy")
+	}
 	srv, err := m.buildServer(next)
 	if err != nil {
 		return prev, fmt.Errorf("rebuilding MCP server: %w", err)
@@ -117,6 +156,13 @@ func (m *Module) saveAndApply(ctx context.Context, next Settings) (Settings, err
 	}
 	m.state.Store(&serverState{settings: next, server: srv})
 	return prev, nil
+}
+
+func linkPolicy(s Settings) string {
+	if s.ExternalLinks == "" {
+		return "keep"
+	}
+	return s.ExternalLinks
 }
 
 // reloadSettings reads the stored settings and, when they differ from the

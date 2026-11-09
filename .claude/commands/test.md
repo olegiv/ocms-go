@@ -5,12 +5,14 @@ description: "Run all Go tests for the oCMS project with verbose output and cove
 Run all Go tests for the oCMS project with verbose output and coverage reporting.
 
 Steps:
-1. Set the required OCMS_SESSION_SECRET environment variable
-2. Run `go test -v -cover ./...` to execute all tests
-3. Report test results including:
+1. Run the uncached suite with the development test secret and coverage enabled.
+
+   ```bash
+   OCMS_SESSION_SECRET='test-secret-key-32-bytes-long!!!' go test -count=1 -v -cover ./...
+   ```
+
+2. Report test results including:
    - Number of tests passed/failed
    - Test coverage percentage
    - Any test failures with details
-4. If tests fail, provide analysis and suggested fixes
-
-Note: All tests require OCMS_SESSION_SECRET environment variable to be set.
+3. If tests fail, provide analysis and suggested fixes

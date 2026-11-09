@@ -5,9 +5,12 @@ package handler
 
 import (
 	"database/sql"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -67,6 +70,98 @@ func TestLoginRoleRedirect(t *testing.T) {
 	}
 }
 
+func TestUnknownLoginEventBoundsSubmittedEmail(t *testing.T) {
+	h, db, sm := newAuthTestHandler(t)
+	router := authTestRouter(h, db, sm)
+	attempt := func(email, source string) { failedLoginFrom(t, router, email, source) }
+	normal := "unknown@example.test"
+	attempt(normal, "192.0.2.1:80")
+	attempt("another@example.test", "192.0.2.1:81")
+	attempt(strings.Repeat("界", 3000)+"@example.test", "[2001:db8::1]:80")
+	attempt("another@example.test", "[2001:db8::2]:80")
+
+	hash, err := auth.HashPassword("test-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	user := createTestUser(t, db, testUser{Email: "known@example.test", Name: "Known user",
+		Role: model.RolePublic, PasswordHash: hash})
+	attempt(user.Email, "192.0.2.1:80")
+	attempt(user.Email, "192.0.2.1:80")
+	rows, err := db.Query("SELECT message, metadata FROM events ORDER BY id")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rows.Close() }()
+	var messages, emails []string
+	for rows.Next() {
+		var message, raw string
+		if err := rows.Scan(&message, &raw); err != nil {
+			t.Fatal(err)
+		}
+		var metadata map[string]string
+		if err := json.Unmarshal([]byte(raw), &metadata); err != nil {
+			t.Fatal(err)
+		}
+		messages = append(messages, message)
+		emails = append(emails, metadata["email"])
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	wantMessages := []string{"Login failed: user not found", "Login failed: user not found",
+		"Login failed: invalid password", "Login failed: invalid password"}
+	if !slices.Equal(messages, wantMessages) ||
+		!slices.Equal(emails, []string{normal, strings.Repeat("界", 256), user.Email, user.Email}) {
+		t.Fatalf("unexpected audit rows: %v, got %d email values", messages, len(emails))
+	}
+}
+
+func failedLoginFrom(t *testing.T, router http.Handler, email, source string) {
+	t.Helper()
+	form := url.Values{"email": {email}, "password": {"invalid"}}
+	r := httptest.NewRequest(http.MethodPost, RouteLogin, strings.NewReader(form.Encode()))
+	r.RemoteAddr = source
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, r)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("failed login status = %d, want 303", w.Code)
+	}
+}
+
+func TestLockedLoginSamplesRepeatedIPv6Denials(t *testing.T) {
+	h, db, sm := newAuthTestHandler(t)
+	if _, err := db.Exec(`CREATE TABLE login_protection (
+		email TEXT PRIMARY KEY, attempt_count INTEGER NOT NULL DEFAULT 0,
+		first_failed_at DATETIME NOT NULL, locked_until DATETIME,
+		lockout_count INTEGER NOT NULL DEFAULT 0, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`); err != nil {
+		t.Fatal(err)
+	}
+	h.loginProtection = middleware.NewLoginProtection(db, middleware.DefaultLoginProtectionConfig())
+	router := authTestRouter(h, db, sm)
+	hash, err := auth.HashPassword("test-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	user := createTestUser(t, db, testUser{Email: "locked@example.test", Name: "Locked user",
+		Role: model.RolePublic, PasswordHash: hash})
+	for i := 1; i <= 25; i++ {
+		failedLoginFrom(t, router, user.Email, fmt.Sprintf("[2001:db8::%x]:80", i))
+	}
+	for message, want := range map[string]int{
+		"Login failed: invalid password":        5,
+		"Account locked due to failed attempts": 1,
+		"Login attempt on locked account":       1,
+	} {
+		var got int
+		if err := db.QueryRow("SELECT COUNT(*) FROM events WHERE message = ?", message).Scan(&got); err != nil || got != want {
+			t.Errorf("%q recorded %d times, want %d, err=%v", message, got, want, err)
+		}
+	}
+}
+
 func newAuthTestHandler(t *testing.T) (*AuthHandler, *sql.DB, *scs.SessionManager) {
 	t.Helper()
 	if err := i18n.Init(nil); err != nil {
@@ -97,6 +192,8 @@ func authTestRouter(h *AuthHandler, db *sql.DB, sm *scs.SessionManager) http.Han
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Auth(sm), middleware.LoadUser(sm, db), middleware.LoadSiteConfig(db, nil))
 		r.Get("/account", h.Account)
+		admin := NewAdminHandler(db, h.renderer, sm, nil)
+		r.With(middleware.RequireEditor()).Post("/admin/language", admin.SetLanguage)
 		r.With(middleware.RequireEditor()).Get("/admin", func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusNoContent)
 		})

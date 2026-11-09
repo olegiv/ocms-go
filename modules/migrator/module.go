@@ -143,7 +143,7 @@ func (m *Module) CheckActivation(ctx *module.Context) error {
 		return nil
 	}
 	cfg := ctx.Config
-	if cfg.Env != "production" || !cfg.RequireMigratorAllowedDBHosts {
+	if !cfg.IsProductionLike() || !cfg.RequireMigratorAllowedDBHosts {
 		return nil
 	}
 	if strings.TrimSpace(cfg.MigratorAllowedDBHosts) == "" {

@@ -39,19 +39,18 @@ Each site runs on its own port (8081, 8082, ...) behind Nginx reverse proxy.
 mkdir -p bin
 curl -L https://github.com/olegiv/ocms-go/releases/latest/download/ocms-linux-amd64.tar.gz | tar -xz ocms
 mv ocms bin/ocms-linux-amd64
-scp bin/ocms-linux-amd64 user@server:/tmp/ocms
-ssh user@server mkdir -p /tmp/ocms-setup
-scp scripts/deploy/* user@server:/tmp/ocms-setup/
+ssh user@server 'umask 077; mkdir "$HOME/ocms-setup"'
+scp bin/ocms-linux-amd64 user@server:ocms-setup/ocms
+scp scripts/deploy/* user@server:ocms-setup/
 
 # On the server:
 sudo mkdir -p /opt/ocms/bin /etc/ocms
-sudo cp /tmp/ocms /opt/ocms/bin/ocms
-sudo chmod 755 /opt/ocms/bin/ocms
-sudo cp /tmp/ocms-setup/ocmsctl /opt/ocms/bin/
+sudo install -m 755 "$HOME/ocms-setup/ocms" /opt/ocms/bin/ocms
+sudo cp "$HOME/ocms-setup/ocmsctl" /opt/ocms/bin/
 sudo chmod 755 /opt/ocms/bin/ocmsctl
-sudo cp /tmp/ocms-setup/ocms@.service /etc/systemd/system/
+sudo cp "$HOME/ocms-setup/ocms@.service" /etc/systemd/system/
 for script in setup-site.sh deploy-multi.sh backup-multi.sh healthcheck-multi.sh generate-logrotate.sh helper.sh; do
-    sudo cp /tmp/ocms-setup/$script /opt/ocms/
+    sudo cp "$HOME/ocms-setup/$script" /opt/ocms/
     sudo chmod 755 /opt/ocms/$script
 done
 sudo systemctl daemon-reload
@@ -150,12 +149,12 @@ cd /var/www/vhosts/example.com/ocms
 sudo -u example_com env OCMS_ENV=development OCMS_DO_SEED=true /opt/ocms/bin/ocms
 ```
 
-While the process is running, open `https://example.com/admin/` and log in with:
-- Email: `admin@example.com`
-- Password: `changeme1234`
-
-Change the admin email and password, then stop the foreground process with
-`Ctrl+C`.
+While the process runs, open `https://example.com/admin/` and sign in as
+`admin@example.com` with the unique `OCMS_SEED_ADMIN_PASSWORD` from the site's
+owner-only `.env`. Read it privately. Change the admin email and password,
+stop the foreground process with `Ctrl+C`, and remove the seed password from
+`.env`. Leave `OCMS_REQUIRE_SEED_ADMIN_PASSWORD=true` in place so an accidental
+seeding run cannot use a default password.
 
 ### 6. Start the site
 
@@ -240,10 +239,12 @@ The script:
 1. Builds `bin/ocms-linux-amd64` unless `--skip-build` is set
 2. Backs up the running binary, `/opt/ocms/bin/ocms`, to `/opt/ocms/bin/ocms.backup`; a
    backup that fails stops the deploy
-3. Transfers the binary via `scp` to `/opt/ocms/bin/ocms-linux-amd64`
+3. Transfers the binary via `scp` into a fresh directory under `/opt/ocms/bin`.
+   `REMOTE_BINARY` can override the upload filename within that directory
 4. Installs it as `/opt/ocms/bin/ocms`, the binary `ocmsctl` and `ocms@.service` run, by
-   copying it beside that file and renaming it over, which leaves the running binary alone,
-   so a failed upload or install stops no instance
+   renaming the staged upload over that path and removing the temporary directory. This
+   leaves running executables in place, even if the old path was a symlink to a versioned
+   binary. A failed upload or install stops no instance
 5. Restarts all listed instances via `ocmsctl` (stop, then start). An instance that does not
    stop is left as it is and one that does not start is reported; the deploy goes on with
    the others
@@ -311,21 +312,24 @@ For updating all instances on a server:
 mkdir -p bin
 curl -L https://github.com/olegiv/ocms-go/releases/latest/download/ocms-linux-amd64.tar.gz | tar -xz ocms
 mv ocms bin/ocms-linux-amd64
+sha256sum bin/ocms-linux-amd64
 scp bin/ocms-linux-amd64 user@server:/tmp/ocms
 
-# On the server:
-sudo /opt/ocms/deploy-multi.sh /tmp/ocms
+# On the server, use the digest calculated on the trusted local machine:
+read -r trusted_sha256
+sudo /opt/ocms/deploy-multi.sh /tmp/ocms "$trusted_sha256"
 ```
 
 For development builds, replace the release download with `make build-linux-amd64`.
+Use a separate upload file and obtain its expected SHA-256 on a trusted
+machine, independently of the upload path. Provide a regular, non-symlink
+upload of at most 256 MiB. The script copies it
+into a private directory next to the installed binary and verifies the
+copy before making a backup or stopping any sites.
 
-This backs up the current binary to `/opt/ocms/bin/ocms.backup`, installs the new binary as `/opt/ocms/bin/ocms` while the sites still run (renaming it into place, so a failed install stops nothing), stops every site in `sites.conf` with `ocmsctl stop` (through systemd or its PID file, whichever runs it), starts every site in `sites.conf` with `systemctl`, and health-checks each one (`/health` on its port, up to 10 tries 2 seconds apart). A site that fails to stop or start is reported as failed and the others carry on; a site that did not stop is not started, because its old process may still be running. On failure it prints rollback instructions; on success it deletes the uploaded binary.
+This backs up the current binary to `/opt/ocms/bin/ocms.backup`, installs the new binary as `/opt/ocms/bin/ocms` while the sites still run (renaming it into place, so a failed install stops nothing), stops every site in `sites.conf` with `ocmsctl stop` (through systemd or its PID file, whichever runs it), starts every site in `sites.conf` with `systemctl`, and health-checks each one (`/health` on its port, up to 10 tries 2 seconds apart). A site that fails to stop or start is reported as failed and the others carry on; a site that did not stop is not started, because its old process may still be running. On failure it prints rollback instructions; the caller can remove the upload after deployment.
 
-Or manually:
-```bash
-sudo install -m 755 /tmp/ocms /opt/ocms/bin/ocms
-sudo systemctl restart 'ocms@*'
-```
+
 
 ## Custom Themes
 
@@ -447,19 +451,40 @@ Options:
 - `--sync-custom` — Also sync custom/ directory (themes only; `custom/modules/` is never synced)
 - `--dry-run` — Print commands without executing
 
-The script asks for confirmation (`y/N`) before touching anything, except with `--dry-run`, then:
-1. Stops the local development server (kills whatever listens on the local port)
-2. Stops remote instance via `ocmsctl`
-3. Checkpoints SQLite WAL on server (flushes to main file)
-4. Syncs the whole `data/` directory via `rsync --delete`
-5. Syncs uploads via `rsync --delete` (mirrors production exactly)
-6. Syncs logs via `rsync` (keeps local logs not on prod)
-7. (If --sync-custom) Syncs custom directory
-8. Restarts remote instance and waits for it to report healthy (`ocmsctl health`, as `deploy.sh` does; `HEALTH_RETRIES` and `HEALTH_INTERVAL` set how long), exiting 1 when it does not
+Install `rsync` locally and `sqlite3` on both ends when copying a database.
+After confirmation, the script stops the local development server. For a
+database or uploads sync, it stops production and captures the requested
+directories into private local staging during the same stop. The remote
+uploads copy uses existing local uploads as a private transfer basis. The
+script prepares it before stopping production and checks file contents
+during capture.
 
-If a step fails, or the sync is interrupted, while the remote instance is stopped, the script starts it again and waits for it before exiting with a non-zero status, so a failed sync does not leave the production site down; another Ctrl-C does not cut that start short. If the stop itself fails, the script exits before copying anything: copying the database of a running instance gives a torn copy.
+The remote checkpoint checks the default `data/ocms.db` when it exists. The copy
+includes the data directory's journal files and any SQLite database with a
+different filename. Production restarts and must pass its health check before
+the script scrubs and publishes the local copy. Logs and optional custom files
+are copied while production is running. Logs retain files that exist only
+locally. `--dry-run` shows the order without running it.
 
-**WARNING:** This overwrites your local `data/`, `uploads/`, and `logs/` directories with production data!
+If capture fails or is interrupted while production is stopped, the script
+attempts to restart it and preserves the original failure status. Local data
+and uploads are published only after capture, health check and database scrub
+succeed. Publishing uses separate `rsync --delete` operations for data and
+uploads, so an interrupted publish can leave the local copy incomplete.
+
+The scrub removes sessions, OAuth tokens and codes, and preview links. It
+clears webhook signing secrets, custom headers and destinations, clears
+scheduled HTTP task destinations, and disables both kinds of integration.
+It also clears the hCaptcha secret and disables stored hCaptcha verification.
+Embed providers are disabled and their stored configuration is reset.
+Configure development destinations and credentials before re-enabling them.
+
+**Treat the result as production data.** It retains password and API-key
+verifiers, sealed MFA secrets and recovery-code hashes, as well as content,
+form submissions, and integration history. Logs and historical records can
+contain previously recorded URLs or credentials. The scrub covers the listed
+fields in regular SQLite files under `data/`. Archives, uploads, logs, custom
+module data and arbitrary file contents can still contain sensitive data.
 
 ## Backups
 
@@ -476,7 +501,13 @@ Backups include:
 - Uploads (`uploads_TIMESTAMP.tar.gz`)
 - Custom content (`custom_TIMESTAMP.tar.gz`) — only if `custom/` contains files (themes or modules)
 
-Backups are stored in each site's `backups/` directory with 30-day retention.
+Backups are stored for 30 days in each site's owner-only `backups/` directory
+(mode `0700`). New archives are owner-only (mode `0600`).
+Database, compression, archive and retention commands run as the registered
+site account, including when root starts the cron job. Existing backup outputs
+must be writable by that account; the job fails rather than repairing ownership
+through a site-controlled path. PID-mode stops likewise signal as the site
+account. Active systemd instances continue to use unit-bound service control.
 
 ## Health Checks
 
@@ -827,7 +858,9 @@ example_com /var/www/vhosts/example.com/ocms example_com 8081
 
 ### Upgrade sequence
 
-**All steps run on the server.** Steps 3 and 4 must happen together — old scripts expect old format, new scripts expect new format. Never mix them.
+**All steps run on the server.** First put the new binary and scripts in the
+private upload directory described in [Quick Start](#quick-start). Complete the
+registry migration and script update together so their formats match.
 
 ```bash
 # 1. Stop all instances
@@ -839,24 +872,25 @@ sudo /opt/ocms/bin/ocmsctl stop <site> # for each site
 sudo cp /etc/ocms/sites.conf /etc/ocms/sites.conf.backup
 
 # 3. Migrate sites.conf (append /ocms to column 2)
+new_registry=$(mktemp)
 sudo awk '{
     if (/^#/ || /^$/ || NF < 4) { print; next }
     if ($2 !~ /\/ocms$/) $2 = $2 "/ocms"
     print
-}' /etc/ocms/sites.conf > /tmp/sites.conf.new
-sudo mv /tmp/sites.conf.new /etc/ocms/sites.conf
+}' /etc/ocms/sites.conf > "$new_registry"
+sudo install -m 644 "$new_registry" /etc/ocms/sites.conf
+rm -- "$new_registry"
 
 # 4. Update deploy scripts
-sudo cp /tmp/ocms-setup/ocmsctl /opt/ocms/bin/ocmsctl
+sudo cp "$HOME/ocms-setup/ocmsctl" /opt/ocms/bin/ocmsctl
 sudo chmod 755 /opt/ocms/bin/ocmsctl
 for script in setup-site.sh backup-multi.sh deploy-multi.sh healthcheck-multi.sh generate-logrotate.sh helper.sh; do
-    sudo cp /tmp/ocms-setup/$script /opt/ocms/
+    sudo cp "$HOME/ocms-setup/$script" /opt/ocms/
     sudo chmod 755 /opt/ocms/$script
 done
 
 # 5. Update binary
-sudo cp /tmp/ocms /opt/ocms/bin/ocms
-sudo chmod 755 /opt/ocms/bin/ocms
+sudo install -m 755 "$HOME/ocms-setup/ocms" /opt/ocms/bin/ocms
 
 # 6. Start all instances
 sudo /opt/ocms/bin/ocmsctl start <site> # for each site

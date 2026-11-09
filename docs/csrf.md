@@ -38,19 +38,16 @@ Note: Cookie-related options (Secure, Domain, Path, MaxAge, SameSite) are no lon
 
 ### TrustedOrigins Format
 
-**IMPORTANT**: oCMS's built-in list is scheme-less (`localhost:8080`,
-`127.0.0.1:8080`). The library treats a scheme-less entry as `https://host:port`
-and compares it with the request's `Origin` header exactly, so on a plain-HTTP
-dev server those entries trust nothing. To trust a plain-HTTP origin, list it with
-its scheme (`http://localhost:8080`), which the library accepts.
-`middleware.ValidateTrustedOrigins` would reject that form, but the application
-never calls it.
+Trusted origins match the complete `Origin` header, including the scheme
+and port. Development trusts both HTTP and HTTPS for localhost and IPv4
+loopback on port 8080.
 
 ```go
-// host:port format (matched as https://localhost:8080, https://127.0.0.1:8080)
 TrustedOrigins: []string{
-    "localhost:8080",
-    "127.0.0.1:8080",
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+    "https://localhost:8080",
+    "https://127.0.0.1:8080",
 }
 ```
 
@@ -58,11 +55,8 @@ The list comes from `DefaultCSRFConfig`; there is no environment variable for it
 
 ### Development vs Production
 
-In development mode (`OCMS_ENV=development`, the default):
-- `localhost:8080` and `127.0.0.1:8080` are trusted origins
-
-In production mode (`OCMS_ENV=production`):
-- No default trusted origins (same-origin requests only)
+Development mode (`OCMS_ENV=development`) uses the list above. Production
+is the default and starts with an empty trusted cross-origin list.
 
 ## Template Fields (Legacy)
 
@@ -110,7 +104,8 @@ but no application route uses it.
 
 ### "Forbidden - CSRF validation failed"
 
-This error occurs when CSRF validation fails. Check the server logs for the specific reason:
+Check the server log at WARN level for the specific reason. The separate
+error log file (`OCMS_ERROR_LOG_PATH`) records ERROR and higher.
 
 | Error Reason | Cause | Solution |
 |--------------|-------|----------|

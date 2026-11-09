@@ -16,6 +16,10 @@ build/
 coverage/
 *.out
 *.test
+output/
+Claude outputs/
+.zap/
+.local-oiv/
 
 # Runtime/dev artifacts
 data/

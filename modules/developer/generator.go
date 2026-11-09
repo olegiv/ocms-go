@@ -22,6 +22,8 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/imaging"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/pagewrite"
+	"github.com/olegiv/ocms-go/internal/provenance"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
 )
@@ -163,7 +165,14 @@ func assignTranslatedTaxonomy(
 	langID int64,
 	assignFn func(translatedID int64) error,
 	warnFn func(msg string, args ...any),
-) {
+) error {
+	if len(origIDs) == 0 {
+		return nil
+	}
+	if queries == nil {
+		return errors.New("taxonomy translation requires database queries")
+	}
+	var failures error
 	for _, origID := range origIDs {
 		translatedID, err := queries.GetTranslatedEntityID(ctx, store.GetTranslatedEntityIDParams{
 			EntityType: entityType,
@@ -172,12 +181,17 @@ func assignTranslatedTaxonomy(
 		})
 		if err != nil {
 			warnFn("failed to get translated "+entityType, "origID", origID, "langID", langID, "error", err)
+			if !errors.Is(err, sql.ErrNoRows) {
+				failures = errors.Join(failures, err)
+			}
 			continue
 		}
 		if err := assignFn(translatedID); err != nil {
 			warnFn("failed to add translated "+entityType, "error", err)
+			failures = errors.Join(failures, err)
 		}
 	}
+	return failures
 }
 
 // generateLoremIpsum generates 3-5 paragraphs of Lorem Ipsum
@@ -748,12 +762,15 @@ func (m *Module) generatePages(ctx context.Context, languages []store.Language, 
 			featuredImageID = sql.NullInt64{Int64: mediaIDs[cryptoRandIntn(len(mediaIDs))], Valid: true}
 		}
 
+		var assignedTagIDs, assignedCatIDs []int64
+
 		// Create page
-		page, err := queries.CreatePage(ctx, store.CreatePageParams{
+		page, err := pagewrite.Insert(ctx, queries, provenance.Principal{Source: "system", Transport: "developer"}, store.CreatePageParams{
 			Title:           title,
 			Slug:            pageSlug,
 			Body:            body,
 			Status:          "published",
+			PublishedAt:     sql.NullTime{Time: now, Valid: true},
 			AuthorID:        authorID,
 			FeaturedImageID: featuredImageID,
 			MetaTitle:       title,
@@ -768,33 +785,28 @@ func (m *Module) generatePages(ctx context.Context, languages []store.Language, 
 			PageType:        "post",
 			CreatedAt:       now,
 			UpdatedAt:       now,
+		}, func(work *pagewrite.Tx, page store.Page) error {
+			var assignmentErr error
+			assignedTagIDs = assignRandomTaxonomy(tagIDs, 3, func(id int64) error {
+				err := work.Q.AddTagToPage(ctx, store.AddTagToPageParams{PageID: page.ID, TagID: id})
+				assignmentErr = errors.Join(assignmentErr, err)
+				return err
+			})
+			assignedCatIDs = assignRandomTaxonomy(catIDs, 2, func(id int64) error {
+				err := work.Q.AddCategoryToPage(ctx, store.AddCategoryToPageParams{PageID: page.ID, CategoryID: id})
+				assignmentErr = errors.Join(assignmentErr, err)
+				return err
+			})
+			return assignmentErr
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create page: %w", err)
-		}
-
-		// Publish the page
-		_, err = queries.PublishPage(ctx, store.PublishPageParams{
-			ID:          page.ID,
-			PublishedAt: sql.NullTime{Time: now, Valid: true},
-			UpdatedAt:   now,
-		})
-		if err != nil {
-			m.ctx.Logger.Warn("failed to publish page", "error", err)
 		}
 
 		if err := m.trackItem(ctx, "page", page.ID); err != nil {
 			return nil, fmt.Errorf("failed to track page: %w", err)
 		}
 		pageIDs = append(pageIDs, page.ID)
-
-		// Assign 1-3 random tags and 1-2 random categories to original page
-		assignedTagIDs := assignRandomTaxonomy(tagIDs, 3, func(tagID int64) error {
-			return queries.AddTagToPage(ctx, store.AddTagToPageParams{PageID: page.ID, TagID: tagID})
-		})
-		assignedCatIDs := assignRandomTaxonomy(catIDs, 2, func(catID int64) error {
-			return queries.AddCategoryToPage(ctx, store.AddCategoryToPageParams{PageID: page.ID, CategoryID: catID})
-		})
 
 		// Create translations for other languages
 		for _, lang := range languages {
@@ -806,11 +818,12 @@ func (m *Module) generatePages(ctx context.Context, languages []store.Language, 
 			translatedSlug := fmt.Sprintf("%s-%s", pageSlug, lang.Code)
 			translatedBody := fmt.Sprintf("[%s]\n\n%s", lang.Code, body)
 
-			transPage, err := queries.CreatePage(ctx, store.CreatePageParams{
+			transPage, err := pagewrite.Insert(ctx, queries, provenance.Principal{Source: "system", Transport: "developer"}, store.CreatePageParams{
 				Title:           translatedTitle,
 				Slug:            translatedSlug,
 				Body:            translatedBody,
 				Status:          "published",
+				PublishedAt:     sql.NullTime{Time: now, Valid: true},
 				AuthorID:        authorID,
 				FeaturedImageID: featuredImageID,
 				MetaTitle:       translatedTitle,
@@ -825,45 +838,30 @@ func (m *Module) generatePages(ctx context.Context, languages []store.Language, 
 				PageType:        "post",
 				CreatedAt:       now,
 				UpdatedAt:       now,
+			}, func(work *pagewrite.Tx, created store.Page) error {
+				if err := assignTranslatedTaxonomy(ctx, work.Q, "tag", assignedTagIDs, lang.ID, func(id int64) error {
+					return work.Q.AddTagToPage(ctx, store.AddTagToPageParams{PageID: created.ID, TagID: id})
+				}, m.ctx.Logger.Warn); err != nil {
+					return err
+				}
+				if err := assignTranslatedTaxonomy(ctx, work.Q, "category", assignedCatIDs, lang.ID, func(id int64) error {
+					return work.Q.AddCategoryToPage(ctx, store.AddCategoryToPageParams{PageID: created.ID, CategoryID: id})
+				}, m.ctx.Logger.Warn); err != nil {
+					return err
+				}
+				return work.LinkTranslation(ctx, page.ID, lang.Code, created.ID)
 			})
 			if err != nil {
 				return nil, fmt.Errorf("failed to create page translation: %w", err)
-			}
-
-			// Publish the translated page
-			_, err = queries.PublishPage(ctx, store.PublishPageParams{
-				ID:          transPage.ID,
-				PublishedAt: sql.NullTime{Time: now, Valid: true},
-				UpdatedAt:   now,
-			})
-			if err != nil {
-				m.ctx.Logger.Warn("failed to publish translated page", "error", err)
 			}
 
 			if err := m.trackItem(ctx, "page", transPage.ID); err != nil {
 				return nil, fmt.Errorf("failed to track page translation: %w", err)
 			}
 
-			// Assign translated tags and categories to the translated page
-			assignTranslatedTaxonomy(ctx, queries, "tag", assignedTagIDs, lang.ID,
-				func(tagID int64) error {
-					return queries.AddTagToPage(ctx, store.AddTagToPageParams{PageID: transPage.ID, TagID: tagID})
-				}, m.ctx.Logger.Warn)
-			assignTranslatedTaxonomy(ctx, queries, "category", assignedCatIDs, lang.ID,
-				func(catID int64) error {
-					return queries.AddCategoryToPage(ctx, store.AddCategoryToPageParams{PageID: transPage.ID, CategoryID: catID})
-				}, m.ctx.Logger.Warn)
-
-			// Create translation record
-			trans, err := queries.CreateTranslation(ctx, store.CreateTranslationParams{
-				EntityType:    "page",
-				EntityID:      page.ID,
-				LanguageID:    lang.ID,
-				TranslationID: transPage.ID,
-				CreatedAt:     now,
-			})
+			trans, err := queries.GetTranslation(ctx, store.GetTranslationParams{EntityType: "page", EntityID: page.ID, LanguageID: lang.ID})
 			if err != nil {
-				return nil, fmt.Errorf(errFmtCreateTranslationRecord, err)
+				return nil, fmt.Errorf("load committed translation: %w", err)
 			}
 
 			if err := m.trackItem(ctx, "translation", trans.ID); err != nil {
@@ -1034,7 +1032,9 @@ func (m *Module) deleteAllGeneratedItems(ctx context.Context) error {
 	if err := deleteEntities("menu_item", queries.DeleteMenuItem); err != nil {
 		return err
 	}
-	if err := deleteEntities("translation", queries.DeleteTranslation); err != nil {
+	if err := deleteEntities("translation", func(ctx context.Context, id int64) error {
+		return pagewrite.DeleteTranslationFromQueries(ctx, queries, id)
+	}); err != nil {
 		return err
 	}
 
@@ -1044,10 +1044,8 @@ func (m *Module) deleteAllGeneratedItems(ctx context.Context) error {
 		return fmt.Errorf("failed to get tracked pages: %w", err)
 	}
 	for _, id := range pageIDs {
-		_ = queries.ClearPageTags(ctx, id)
-		_ = queries.ClearPageCategories(ctx, id)
-		if err := queries.DeletePage(ctx, id); err != nil {
-			m.ctx.Logger.Warn("failed to delete page", "id", id, "error", err)
+		if deleteErr := pagewrite.DeleteFromQueries(ctx, queries, id); deleteErr != nil {
+			m.ctx.Logger.Warn("failed to delete page", "id", id, "error", deleteErr)
 		}
 	}
 
@@ -1084,14 +1082,11 @@ func (m *Module) deleteAllGeneratedItems(ctx context.Context) error {
 			_ = tx.Rollback()
 			return fmt.Errorf("failed to persist media cleanup for %d: %w", id, err)
 		}
-		if err := txQueries.DeleteMediaVariants(ctx, id); err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("failed to delete media variants for %d: %w", id, err)
-		}
-		if err := txQueries.DeleteMedia(ctx, id); err != nil {
+		if err := pagewrite.DeleteMediaFromQueries(ctx, txQueries, id); err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("failed to delete media %d: %w", id, err)
 		}
+
 		if err := tx.Commit(); err != nil {
 			return fmt.Errorf("failed to commit media delete for %d: %w", id, err)
 		}
@@ -1106,10 +1101,14 @@ func (m *Module) deleteAllGeneratedItems(ctx context.Context) error {
 	}
 
 	// Simple deletions
-	if err := deleteEntities("category", queries.DeleteCategory); err != nil {
+	if err := deleteEntities("category", func(ctx context.Context, id int64) error {
+		return pagewrite.DeleteTermFromQueries(ctx, queries, "category", id)
+	}); err != nil {
 		return err
 	}
-	if err := deleteEntities("tag", queries.DeleteTag); err != nil {
+	if err := deleteEntities("tag", func(ctx context.Context, id int64) error {
+		return pagewrite.DeleteTermFromQueries(ctx, queries, "tag", id)
+	}); err != nil {
 		return err
 	}
 

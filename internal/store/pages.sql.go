@@ -267,7 +267,7 @@ func (q *Queries) CountSearchPagesByStatus(ctx context.Context, arg CountSearchP
 const createPage = `-- name: CreatePage :one
 INSERT INTO pages (title, slug, body, summary, status, author_id, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, published_at, created_at, updated_at, video_url, video_title)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title
+RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title, revision
 `
 
 type CreatePageParams struct {
@@ -351,6 +351,7 @@ func (q *Queries) CreatePage(ctx context.Context, arg CreatePageParams) (Page, e
 		&i.Summary,
 		&i.VideoUrl,
 		&i.VideoTitle,
+		&i.Revision,
 	)
 	return i, err
 }
@@ -359,7 +360,7 @@ const createPageVersion = `-- name: CreatePageVersion :one
 
 INSERT INTO page_versions (page_id, title, body, changed_by, created_at)
 VALUES (?, ?, ?, ?, ?)
-RETURNING id, page_id, title, body, changed_by, created_at
+RETURNING id, page_id, title, body, changed_by, created_at, revision, snapshot_json, legacy
 `
 
 type CreatePageVersionParams struct {
@@ -387,6 +388,9 @@ func (q *Queries) CreatePageVersion(ctx context.Context, arg CreatePageVersionPa
 		&i.Body,
 		&i.ChangedBy,
 		&i.CreatedAt,
+		&i.Revision,
+		&i.SnapshotJson,
+		&i.Legacy,
 	)
 	return i, err
 }
@@ -440,7 +444,7 @@ func (q *Queries) GetFeaturedImageForPage(ctx context.Context, id int64) (Medium
 }
 
 const getLatestPageVersion = `-- name: GetLatestPageVersion :one
-SELECT id, page_id, title, body, changed_by, created_at FROM page_versions WHERE page_id = ? ORDER BY created_at DESC LIMIT 1
+SELECT id, page_id, title, body, changed_by, created_at, revision, snapshot_json, legacy FROM page_versions WHERE page_id = ? ORDER BY created_at DESC LIMIT 1
 `
 
 func (q *Queries) GetLatestPageVersion(ctx context.Context, pageID int64) (PageVersion, error) {
@@ -453,6 +457,9 @@ func (q *Queries) GetLatestPageVersion(ctx context.Context, pageID int64) (PageV
 		&i.Body,
 		&i.ChangedBy,
 		&i.CreatedAt,
+		&i.Revision,
+		&i.SnapshotJson,
+		&i.Legacy,
 	)
 	return i, err
 }
@@ -523,7 +530,7 @@ func (q *Queries) GetPageAuthor(ctx context.Context, id int64) (GetPageAuthorRow
 }
 
 const getPageByID = `-- name: GetPageByID :one
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title FROM pages WHERE id = ?
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title, revision FROM pages WHERE id = ?
 `
 
 func (q *Queries) GetPageByID(ctx context.Context, id int64) (Page, error) {
@@ -555,12 +562,13 @@ func (q *Queries) GetPageByID(ctx context.Context, id int64) (Page, error) {
 		&i.Summary,
 		&i.VideoUrl,
 		&i.VideoTitle,
+		&i.Revision,
 	)
 	return i, err
 }
 
 const getPageBySlug = `-- name: GetPageBySlug :one
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title FROM pages WHERE slug = ?
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title, revision FROM pages WHERE slug = ?
 `
 
 func (q *Queries) GetPageBySlug(ctx context.Context, slug string) (Page, error) {
@@ -592,12 +600,13 @@ func (q *Queries) GetPageBySlug(ctx context.Context, slug string) (Page, error) 
 		&i.Summary,
 		&i.VideoUrl,
 		&i.VideoTitle,
+		&i.Revision,
 	)
 	return i, err
 }
 
 const getPageVersion = `-- name: GetPageVersion :one
-SELECT id, page_id, title, body, changed_by, created_at FROM page_versions WHERE id = ?
+SELECT id, page_id, title, body, changed_by, created_at, revision, snapshot_json, legacy FROM page_versions WHERE id = ?
 `
 
 func (q *Queries) GetPageVersion(ctx context.Context, id int64) (PageVersion, error) {
@@ -610,6 +619,9 @@ func (q *Queries) GetPageVersion(ctx context.Context, id int64) (PageVersion, er
 		&i.Body,
 		&i.ChangedBy,
 		&i.CreatedAt,
+		&i.Revision,
+		&i.SnapshotJson,
+		&i.Legacy,
 	)
 	return i, err
 }
@@ -620,6 +632,8 @@ SELECT
     pv.page_id,
     pv.title,
     pv.body,
+    pv.revision,
+    pv.legacy,
     pv.changed_by,
     pv.created_at,
     u.name as changed_by_name,
@@ -630,14 +644,16 @@ WHERE pv.id = ?
 `
 
 type GetPageVersionWithUserRow struct {
-	ID             int64     `json:"id"`
-	PageID         int64     `json:"page_id"`
-	Title          string    `json:"title"`
-	Body           string    `json:"body"`
-	ChangedBy      int64     `json:"changed_by"`
-	CreatedAt      time.Time `json:"created_at"`
-	ChangedByName  string    `json:"changed_by_name"`
-	ChangedByEmail string    `json:"changed_by_email"`
+	ID             int64         `json:"id"`
+	PageID         int64         `json:"page_id"`
+	Title          string        `json:"title"`
+	Body           string        `json:"body"`
+	Revision       sql.NullInt64 `json:"revision"`
+	Legacy         bool          `json:"legacy"`
+	ChangedBy      int64         `json:"changed_by"`
+	CreatedAt      time.Time     `json:"created_at"`
+	ChangedByName  string        `json:"changed_by_name"`
+	ChangedByEmail string        `json:"changed_by_email"`
 }
 
 func (q *Queries) GetPageVersionWithUser(ctx context.Context, id int64) (GetPageVersionWithUserRow, error) {
@@ -648,6 +664,8 @@ func (q *Queries) GetPageVersionWithUser(ctx context.Context, id int64) (GetPage
 		&i.PageID,
 		&i.Title,
 		&i.Body,
+		&i.Revision,
+		&i.Legacy,
 		&i.ChangedBy,
 		&i.CreatedAt,
 		&i.ChangedByName,
@@ -657,7 +675,7 @@ func (q *Queries) GetPageVersionWithUser(ctx context.Context, id int64) (GetPage
 }
 
 const getPublishedPageByID = `-- name: GetPublishedPageByID :one
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title FROM pages WHERE id = ? AND status = 'published'
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title, revision FROM pages WHERE id = ? AND status = 'published'
 `
 
 func (q *Queries) GetPublishedPageByID(ctx context.Context, id int64) (Page, error) {
@@ -689,12 +707,13 @@ func (q *Queries) GetPublishedPageByID(ctx context.Context, id int64) (Page, err
 		&i.Summary,
 		&i.VideoUrl,
 		&i.VideoTitle,
+		&i.Revision,
 	)
 	return i, err
 }
 
 const getPublishedPageBySlug = `-- name: GetPublishedPageBySlug :one
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title FROM pages WHERE slug = ? AND status = 'published'
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title, revision FROM pages WHERE slug = ? AND status = 'published'
 `
 
 func (q *Queries) GetPublishedPageBySlug(ctx context.Context, slug string) (Page, error) {
@@ -726,12 +745,13 @@ func (q *Queries) GetPublishedPageBySlug(ctx context.Context, slug string) (Page
 		&i.Summary,
 		&i.VideoUrl,
 		&i.VideoTitle,
+		&i.Revision,
 	)
 	return i, err
 }
 
 const getPublishedPageBySlugAndLanguage = `-- name: GetPublishedPageBySlugAndLanguage :one
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title FROM pages
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title, revision FROM pages
 WHERE slug = ? AND language_code = ? AND status = 'published'
 `
 
@@ -769,13 +789,14 @@ func (q *Queries) GetPublishedPageBySlugAndLanguage(ctx context.Context, arg Get
 		&i.Summary,
 		&i.VideoUrl,
 		&i.VideoTitle,
+		&i.Revision,
 	)
 	return i, err
 }
 
 const getScheduledPagesForPublishing = `-- name: GetScheduledPagesForPublishing :many
 
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title FROM pages
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title, revision FROM pages
 WHERE scheduled_at IS NOT NULL AND scheduled_at <= ? AND status = 'draft'
 ORDER BY scheduled_at
 `
@@ -786,7 +807,7 @@ func (q *Queries) GetScheduledPagesForPublishing(ctx context.Context, scheduledA
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Page{}
 	for rows.Next() {
 		var i Page
@@ -816,6 +837,7 @@ func (q *Queries) GetScheduledPagesForPublishing(ctx context.Context, scheduledA
 			&i.Summary,
 			&i.VideoUrl,
 			&i.VideoTitle,
+			&i.Revision,
 		); err != nil {
 			return nil, err
 		}
@@ -831,7 +853,7 @@ func (q *Queries) GetScheduledPagesForPublishing(ctx context.Context, scheduledA
 }
 
 const listPageVersions = `-- name: ListPageVersions :many
-SELECT id, page_id, title, body, changed_by, created_at FROM page_versions WHERE page_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?
+SELECT id, page_id, title, body, changed_by, created_at, revision, snapshot_json, legacy FROM page_versions WHERE page_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?
 `
 
 type ListPageVersionsParams struct {
@@ -845,7 +867,7 @@ func (q *Queries) ListPageVersions(ctx context.Context, arg ListPageVersionsPara
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []PageVersion{}
 	for rows.Next() {
 		var i PageVersion
@@ -856,6 +878,9 @@ func (q *Queries) ListPageVersions(ctx context.Context, arg ListPageVersionsPara
 			&i.Body,
 			&i.ChangedBy,
 			&i.CreatedAt,
+			&i.Revision,
+			&i.SnapshotJson,
+			&i.Legacy,
 		); err != nil {
 			return nil, err
 		}
@@ -876,6 +901,8 @@ SELECT
     pv.page_id,
     pv.title,
     pv.body,
+    pv.revision,
+    pv.legacy,
     pv.changed_by,
     pv.created_at,
     u.name as changed_by_name,
@@ -894,14 +921,16 @@ type ListPageVersionsWithUserParams struct {
 }
 
 type ListPageVersionsWithUserRow struct {
-	ID             int64     `json:"id"`
-	PageID         int64     `json:"page_id"`
-	Title          string    `json:"title"`
-	Body           string    `json:"body"`
-	ChangedBy      int64     `json:"changed_by"`
-	CreatedAt      time.Time `json:"created_at"`
-	ChangedByName  string    `json:"changed_by_name"`
-	ChangedByEmail string    `json:"changed_by_email"`
+	ID             int64         `json:"id"`
+	PageID         int64         `json:"page_id"`
+	Title          string        `json:"title"`
+	Body           string        `json:"body"`
+	Revision       sql.NullInt64 `json:"revision"`
+	Legacy         bool          `json:"legacy"`
+	ChangedBy      int64         `json:"changed_by"`
+	CreatedAt      time.Time     `json:"created_at"`
+	ChangedByName  string        `json:"changed_by_name"`
+	ChangedByEmail string        `json:"changed_by_email"`
 }
 
 func (q *Queries) ListPageVersionsWithUser(ctx context.Context, arg ListPageVersionsWithUserParams) ([]ListPageVersionsWithUserRow, error) {
@@ -909,7 +938,7 @@ func (q *Queries) ListPageVersionsWithUser(ctx context.Context, arg ListPageVers
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []ListPageVersionsWithUserRow{}
 	for rows.Next() {
 		var i ListPageVersionsWithUserRow
@@ -918,6 +947,8 @@ func (q *Queries) ListPageVersionsWithUser(ctx context.Context, arg ListPageVers
 			&i.PageID,
 			&i.Title,
 			&i.Body,
+			&i.Revision,
+			&i.Legacy,
 			&i.ChangedBy,
 			&i.CreatedAt,
 			&i.ChangedByName,
@@ -937,7 +968,7 @@ func (q *Queries) ListPageVersionsWithUser(ctx context.Context, arg ListPageVers
 }
 
 const listPages = `-- name: ListPages :many
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title FROM pages ORDER BY created_at DESC LIMIT ? OFFSET ?
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title, revision FROM pages ORDER BY created_at DESC LIMIT ? OFFSET ?
 `
 
 type ListPagesParams struct {
@@ -950,7 +981,7 @@ func (q *Queries) ListPages(ctx context.Context, arg ListPagesParams) ([]Page, e
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Page{}
 	for rows.Next() {
 		var i Page
@@ -980,6 +1011,7 @@ func (q *Queries) ListPages(ctx context.Context, arg ListPagesParams) ([]Page, e
 			&i.Summary,
 			&i.VideoUrl,
 			&i.VideoTitle,
+			&i.Revision,
 		); err != nil {
 			return nil, err
 		}
@@ -996,7 +1028,7 @@ func (q *Queries) ListPages(ctx context.Context, arg ListPagesParams) ([]Page, e
 
 const listPagesByLanguageAndStatus = `-- name: ListPagesByLanguageAndStatus :many
 
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title FROM pages
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title, revision FROM pages
 WHERE language_code = ? AND status = ?
 ORDER BY created_at DESC
 LIMIT ? OFFSET ?
@@ -1020,7 +1052,7 @@ func (q *Queries) ListPagesByLanguageAndStatus(ctx context.Context, arg ListPage
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Page{}
 	for rows.Next() {
 		var i Page
@@ -1050,6 +1082,7 @@ func (q *Queries) ListPagesByLanguageAndStatus(ctx context.Context, arg ListPage
 			&i.Summary,
 			&i.VideoUrl,
 			&i.VideoTitle,
+			&i.Revision,
 		); err != nil {
 			return nil, err
 		}
@@ -1065,7 +1098,7 @@ func (q *Queries) ListPagesByLanguageAndStatus(ctx context.Context, arg ListPage
 }
 
 const listPagesByStatus = `-- name: ListPagesByStatus :many
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title FROM pages WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title, revision FROM pages WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?
 `
 
 type ListPagesByStatusParams struct {
@@ -1079,7 +1112,7 @@ func (q *Queries) ListPagesByStatus(ctx context.Context, arg ListPagesByStatusPa
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Page{}
 	for rows.Next() {
 		var i Page
@@ -1109,6 +1142,7 @@ func (q *Queries) ListPagesByStatus(ctx context.Context, arg ListPagesByStatusPa
 			&i.Summary,
 			&i.VideoUrl,
 			&i.VideoTitle,
+			&i.Revision,
 		); err != nil {
 			return nil, err
 		}
@@ -1125,7 +1159,7 @@ func (q *Queries) ListPagesByStatus(ctx context.Context, arg ListPagesByStatusPa
 
 const listPublishedPages = `-- name: ListPublishedPages :many
 
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title FROM pages WHERE status = 'published' ORDER BY published_at DESC LIMIT ? OFFSET ?
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title, revision FROM pages WHERE status = 'published' ORDER BY published_at DESC LIMIT ? OFFSET ?
 `
 
 type ListPublishedPagesParams struct {
@@ -1139,7 +1173,7 @@ func (q *Queries) ListPublishedPages(ctx context.Context, arg ListPublishedPages
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Page{}
 	for rows.Next() {
 		var i Page
@@ -1169,6 +1203,7 @@ func (q *Queries) ListPublishedPages(ctx context.Context, arg ListPublishedPages
 			&i.Summary,
 			&i.VideoUrl,
 			&i.VideoTitle,
+			&i.Revision,
 		); err != nil {
 			return nil, err
 		}
@@ -1184,7 +1219,7 @@ func (q *Queries) ListPublishedPages(ctx context.Context, arg ListPublishedPages
 }
 
 const listPublishedPagesByCategory = `-- name: ListPublishedPagesByCategory :many
-SELECT DISTINCT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_code, p.hide_featured_image, p.page_type, p.exclude_from_lists, p.summary, p.video_url, p.video_title FROM pages p
+SELECT DISTINCT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_code, p.hide_featured_image, p.page_type, p.exclude_from_lists, p.summary, p.video_url, p.video_title, p.revision FROM pages p
 INNER JOIN page_categories pc ON pc.page_id = p.id
 WHERE pc.category_id = ? AND p.status = 'published'
   AND p.exclude_from_lists = 0
@@ -1203,7 +1238,7 @@ func (q *Queries) ListPublishedPagesByCategory(ctx context.Context, arg ListPubl
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Page{}
 	for rows.Next() {
 		var i Page
@@ -1233,6 +1268,7 @@ func (q *Queries) ListPublishedPagesByCategory(ctx context.Context, arg ListPubl
 			&i.Summary,
 			&i.VideoUrl,
 			&i.VideoTitle,
+			&i.Revision,
 		); err != nil {
 			return nil, err
 		}
@@ -1249,7 +1285,7 @@ func (q *Queries) ListPublishedPagesByCategory(ctx context.Context, arg ListPubl
 
 const listPublishedPagesByCategoryAndLanguage = `-- name: ListPublishedPagesByCategoryAndLanguage :many
 
-SELECT DISTINCT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_code, p.hide_featured_image, p.page_type, p.exclude_from_lists, p.summary, p.video_url, p.video_title FROM pages p
+SELECT DISTINCT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_code, p.hide_featured_image, p.page_type, p.exclude_from_lists, p.summary, p.video_url, p.video_title, p.revision FROM pages p
 INNER JOIN page_categories pc ON pc.page_id = p.id
 WHERE pc.category_id = ? AND p.status = 'published' AND p.language_code = ?
   AND p.exclude_from_lists = 0
@@ -1275,7 +1311,7 @@ func (q *Queries) ListPublishedPagesByCategoryAndLanguage(ctx context.Context, a
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Page{}
 	for rows.Next() {
 		var i Page
@@ -1305,6 +1341,7 @@ func (q *Queries) ListPublishedPagesByCategoryAndLanguage(ctx context.Context, a
 			&i.Summary,
 			&i.VideoUrl,
 			&i.VideoTitle,
+			&i.Revision,
 		); err != nil {
 			return nil, err
 		}
@@ -1341,7 +1378,7 @@ func (q *Queries) ListPublishedPagesForSitemap(ctx context.Context) ([]ListPubli
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []ListPublishedPagesForSitemapRow{}
 	for rows.Next() {
 		var i ListPublishedPagesForSitemapRow
@@ -1367,7 +1404,7 @@ func (q *Queries) ListPublishedPagesForSitemap(ctx context.Context) ([]ListPubli
 }
 
 const listPublishedPagesForTag = `-- name: ListPublishedPagesForTag :many
-SELECT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_code, p.hide_featured_image, p.page_type, p.exclude_from_lists, p.summary, p.video_url, p.video_title FROM pages p
+SELECT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_code, p.hide_featured_image, p.page_type, p.exclude_from_lists, p.summary, p.video_url, p.video_title, p.revision FROM pages p
 INNER JOIN page_tags pt ON pt.page_id = p.id
 WHERE pt.tag_id = ? AND p.status = 'published'
   AND p.exclude_from_lists = 0
@@ -1386,7 +1423,7 @@ func (q *Queries) ListPublishedPagesForTag(ctx context.Context, arg ListPublishe
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Page{}
 	for rows.Next() {
 		var i Page
@@ -1416,6 +1453,7 @@ func (q *Queries) ListPublishedPagesForTag(ctx context.Context, arg ListPublishe
 			&i.Summary,
 			&i.VideoUrl,
 			&i.VideoTitle,
+			&i.Revision,
 		); err != nil {
 			return nil, err
 		}
@@ -1431,7 +1469,7 @@ func (q *Queries) ListPublishedPagesForTag(ctx context.Context, arg ListPublishe
 }
 
 const listPublishedPagesForTagAndLanguage = `-- name: ListPublishedPagesForTagAndLanguage :many
-SELECT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_code, p.hide_featured_image, p.page_type, p.exclude_from_lists, p.summary, p.video_url, p.video_title FROM pages p
+SELECT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_code, p.hide_featured_image, p.page_type, p.exclude_from_lists, p.summary, p.video_url, p.video_title, p.revision FROM pages p
 INNER JOIN page_tags pt ON pt.page_id = p.id
 WHERE pt.tag_id = ? AND p.status = 'published' AND p.language_code = ?
   AND p.exclude_from_lists = 0
@@ -1456,7 +1494,7 @@ func (q *Queries) ListPublishedPagesForTagAndLanguage(ctx context.Context, arg L
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Page{}
 	for rows.Next() {
 		var i Page
@@ -1486,6 +1524,7 @@ func (q *Queries) ListPublishedPagesForTagAndLanguage(ctx context.Context, arg L
 			&i.Summary,
 			&i.VideoUrl,
 			&i.VideoTitle,
+			&i.Revision,
 		); err != nil {
 			return nil, err
 		}
@@ -1501,7 +1540,7 @@ func (q *Queries) ListPublishedPagesForTagAndLanguage(ctx context.Context, arg L
 }
 
 const listPublishedPosts = `-- name: ListPublishedPosts :many
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title FROM pages
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title, revision FROM pages
 WHERE status = 'published' AND page_type = 'post' AND exclude_from_lists = 0
 ORDER BY published_at DESC LIMIT ? OFFSET ?
 `
@@ -1517,7 +1556,7 @@ func (q *Queries) ListPublishedPosts(ctx context.Context, arg ListPublishedPosts
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Page{}
 	for rows.Next() {
 		var i Page
@@ -1547,6 +1586,7 @@ func (q *Queries) ListPublishedPosts(ctx context.Context, arg ListPublishedPosts
 			&i.Summary,
 			&i.VideoUrl,
 			&i.VideoTitle,
+			&i.Revision,
 		); err != nil {
 			return nil, err
 		}
@@ -1562,7 +1602,7 @@ func (q *Queries) ListPublishedPosts(ctx context.Context, arg ListPublishedPosts
 }
 
 const listScheduledPages = `-- name: ListScheduledPages :many
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title FROM pages WHERE scheduled_at IS NOT NULL AND status = 'draft' ORDER BY scheduled_at LIMIT ? OFFSET ?
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title, revision FROM pages WHERE scheduled_at IS NOT NULL AND status = 'draft' ORDER BY scheduled_at LIMIT ? OFFSET ?
 `
 
 type ListScheduledPagesParams struct {
@@ -1575,7 +1615,7 @@ func (q *Queries) ListScheduledPages(ctx context.Context, arg ListScheduledPages
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Page{}
 	for rows.Next() {
 		var i Page
@@ -1605,6 +1645,7 @@ func (q *Queries) ListScheduledPages(ctx context.Context, arg ListScheduledPages
 			&i.Summary,
 			&i.VideoUrl,
 			&i.VideoTitle,
+			&i.Revision,
 		); err != nil {
 			return nil, err
 		}
@@ -1645,7 +1686,7 @@ const publishPage = `-- name: PublishPage :one
 UPDATE pages
 SET status = 'published', published_at = ?, scheduled_at = NULL, updated_at = ?
 WHERE id = ?
-RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title
+RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title, revision
 `
 
 type PublishPageParams struct {
@@ -1683,6 +1724,7 @@ func (q *Queries) PublishPage(ctx context.Context, arg PublishPageParams) (Page,
 		&i.Summary,
 		&i.VideoUrl,
 		&i.VideoTitle,
+		&i.Revision,
 	)
 	return i, err
 }
@@ -1691,7 +1733,7 @@ const publishScheduledPage = `-- name: PublishScheduledPage :one
 UPDATE pages
 SET status = 'published', published_at = ?, scheduled_at = NULL, updated_at = ?
 WHERE id = ? AND status = 'draft' AND scheduled_at IS NOT NULL AND scheduled_at <= ?
-RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title
+RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title, revision
 `
 
 type PublishScheduledPageParams struct {
@@ -1738,6 +1780,7 @@ func (q *Queries) PublishScheduledPage(ctx context.Context, arg PublishScheduled
 		&i.Summary,
 		&i.VideoUrl,
 		&i.VideoTitle,
+		&i.Revision,
 	)
 	return i, err
 }
@@ -1746,7 +1789,7 @@ const publishUnpublishedPage = `-- name: PublishUnpublishedPage :one
 UPDATE pages
 SET status = 'published', published_at = ?, scheduled_at = NULL, updated_at = ?
 WHERE id = ? AND status <> 'published'
-RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title
+RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title, revision
 `
 
 type PublishUnpublishedPageParams struct {
@@ -1786,13 +1829,14 @@ func (q *Queries) PublishUnpublishedPage(ctx context.Context, arg PublishUnpubli
 		&i.Summary,
 		&i.VideoUrl,
 		&i.VideoTitle,
+		&i.Revision,
 	)
 	return i, err
 }
 
 const searchPages = `-- name: SearchPages :many
 
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title FROM pages
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title, revision FROM pages
 WHERE title LIKE ? OR body LIKE ? OR slug LIKE ?
 ORDER BY updated_at DESC
 LIMIT ? OFFSET ?
@@ -1818,7 +1862,7 @@ func (q *Queries) SearchPages(ctx context.Context, arg SearchPagesParams) ([]Pag
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Page{}
 	for rows.Next() {
 		var i Page
@@ -1848,6 +1892,7 @@ func (q *Queries) SearchPages(ctx context.Context, arg SearchPagesParams) ([]Pag
 			&i.Summary,
 			&i.VideoUrl,
 			&i.VideoTitle,
+			&i.Revision,
 		); err != nil {
 			return nil, err
 		}
@@ -1863,7 +1908,7 @@ func (q *Queries) SearchPages(ctx context.Context, arg SearchPagesParams) ([]Pag
 }
 
 const searchPagesByLanguage = `-- name: SearchPagesByLanguage :many
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title FROM pages
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title, revision FROM pages
 WHERE language_code = ? AND (title LIKE ? OR body LIKE ? OR slug LIKE ?)
 ORDER BY updated_at DESC
 LIMIT ? OFFSET ?
@@ -1890,7 +1935,7 @@ func (q *Queries) SearchPagesByLanguage(ctx context.Context, arg SearchPagesByLa
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Page{}
 	for rows.Next() {
 		var i Page
@@ -1920,6 +1965,7 @@ func (q *Queries) SearchPagesByLanguage(ctx context.Context, arg SearchPagesByLa
 			&i.Summary,
 			&i.VideoUrl,
 			&i.VideoTitle,
+			&i.Revision,
 		); err != nil {
 			return nil, err
 		}
@@ -1935,7 +1981,7 @@ func (q *Queries) SearchPagesByLanguage(ctx context.Context, arg SearchPagesByLa
 }
 
 const searchPagesByStatus = `-- name: SearchPagesByStatus :many
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title FROM pages
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title, revision FROM pages
 WHERE status = ? AND (title LIKE ? OR body LIKE ? OR slug LIKE ?)
 ORDER BY updated_at DESC
 LIMIT ? OFFSET ?
@@ -1962,7 +2008,7 @@ func (q *Queries) SearchPagesByStatus(ctx context.Context, arg SearchPagesByStat
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Page{}
 	for rows.Next() {
 		var i Page
@@ -1992,6 +2038,7 @@ func (q *Queries) SearchPagesByStatus(ctx context.Context, arg SearchPagesByStat
 			&i.Summary,
 			&i.VideoUrl,
 			&i.VideoTitle,
+			&i.Revision,
 		); err != nil {
 			return nil, err
 		}
@@ -2086,7 +2133,7 @@ const unpublishPage = `-- name: UnpublishPage :one
 UPDATE pages
 SET status = 'draft', published_at = NULL, scheduled_at = NULL, updated_at = ?
 WHERE id = ? AND status = 'published'
-RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title
+RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title, revision
 `
 
 type UnpublishPageParams struct {
@@ -2124,6 +2171,7 @@ func (q *Queries) UnpublishPage(ctx context.Context, arg UnpublishPageParams) (P
 		&i.Summary,
 		&i.VideoUrl,
 		&i.VideoTitle,
+		&i.Revision,
 	)
 	return i, err
 }
@@ -2132,7 +2180,7 @@ const updatePage = `-- name: UpdatePage :one
 UPDATE pages
 SET title = ?, slug = ?, body = ?, summary = ?, status = ?, featured_image_id = ?, meta_title = ?, meta_description = ?, meta_keywords = ?, og_image_id = ?, no_index = ?, no_follow = ?, canonical_url = ?, scheduled_at = ?, language_code = ?, hide_featured_image = ?, page_type = ?, exclude_from_lists = ?, published_at = ?, updated_at = ?, video_url = ?, video_title = ?
 WHERE id = ?
-RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title
+RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title, revision
 `
 
 type UpdatePageParams struct {
@@ -2214,6 +2262,7 @@ func (q *Queries) UpdatePage(ctx context.Context, arg UpdatePageParams) (Page, e
 		&i.Summary,
 		&i.VideoUrl,
 		&i.VideoTitle,
+		&i.Revision,
 	)
 	return i, err
 }
