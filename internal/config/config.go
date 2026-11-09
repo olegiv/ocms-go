@@ -52,6 +52,9 @@ type Config struct {
 	Env                 string `env:"OCMS_ENV" envDefault:"production"`
 	LogLevel            string `env:"OCMS_LOG_LEVEL" envDefault:"info"`
 	ErrorLogPath        string `env:"OCMS_ERROR_LOG_PATH"` // Optional path for a separate error log file (5xx/ERROR+)
+	EventCleanupEnabled bool   `env:"OCMS_EVENT_CLEANUP_ENABLED" envDefault:"true"`
+	EventDiagnosticDays int    `env:"OCMS_EVENT_DIAGNOSTIC_RETENTION_DAYS" envDefault:"90"`
+	EventAuditDays      int    `env:"OCMS_EVENT_AUDIT_RETENTION_DAYS" envDefault:"0"`
 	CustomDir           string `env:"OCMS_CUSTOM_DIR" envDefault:"./custom"`
 	UploadsDir          string `env:"OCMS_UPLOADS_DIR" envDefault:"./uploads"`
 	ActiveTheme         string `env:"OCMS_ACTIVE_THEME" envDefault:"default"`
@@ -223,6 +226,13 @@ func Load() (*Config, error) {
 
 	if cfg.PreviewLinkTTLHours < 1 || cfg.PreviewLinkTTLHours > 24 {
 		return nil, fmt.Errorf("preview link TTL must be 1–24 hours")
+	}
+	const maxEventRetentionDays = 36500
+	if cfg.EventDiagnosticDays < 0 || cfg.EventDiagnosticDays > maxEventRetentionDays {
+		return nil, fmt.Errorf("OCMS_EVENT_DIAGNOSTIC_RETENTION_DAYS must be 0–%d", maxEventRetentionDays)
+	}
+	if cfg.EventAuditDays < 0 || cfg.EventAuditDays > maxEventRetentionDays {
+		return nil, fmt.Errorf("OCMS_EVENT_AUDIT_RETENTION_DAYS must be 0–%d", maxEventRetentionDays)
 	}
 	if cfg.OAuthEnabled && strings.TrimSpace(cfg.SiteURL) == "" {
 		return nil, fmt.Errorf("OCMS_SITE_URL is required when OAuth is enabled")

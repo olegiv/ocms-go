@@ -213,6 +213,9 @@ Summary (grouped by concern; source of truth: `internal/config/config.go`):
 | `OCMS_ENV` | No | `production` | Unset or empty uses production. Set `development` explicitly for local runs. Staging and production apply the secure defaults marked "in prod" below (`Config.IsProductionLike`). Unknown values fail startup |
 | `OCMS_LOG_LEVEL` | No | `info` | Log level: `debug`, `info`, `warn`, `error` |
 | `OCMS_ERROR_LOG_PATH` | No | - | Path for separate error log file (errors also go to stdout) |
+| `OCMS_EVENT_CLEANUP_ENABLED` | No | `true` | Register automatic and manual Event Log cleanup |
+| `OCMS_EVENT_DIAGNOSTIC_RETENTION_DAYS` | No | `90` | Retain recognized diagnostics for 0–36500 days (0 keeps them indefinitely) |
+| `OCMS_EVENT_AUDIT_RETENTION_DAYS` | No | `0` | Retain classified security and audit records for 0–36500 days (0 keeps them indefinitely) |
 | `OCMS_CUSTOM_DIR` | No | `./custom` | Directory for custom themes (custom modules are compiled in) |
 | `OCMS_UPLOADS_DIR` | No | `./uploads` | Directory for uploaded media files |
 | `OCMS_ACTIVE_THEME` | No | `default` | Active theme (overrides DB/admin setting) |

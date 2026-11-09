@@ -90,6 +90,10 @@ services:
       # or the .env file beside this file, and leaves it unset in the container
       # when neither has it, so production's secure defaults still apply.
       # TestComposeForwardsEveryVariable keeps the list complete.
+      # Event Log retention
+      - OCMS_EVENT_CLEANUP_ENABLED
+      - OCMS_EVENT_DIAGNOSTIC_RETENTION_DAYS
+      - OCMS_EVENT_AUDIT_RETENTION_DAYS
       #
       # Required in production: startup fails without them unless the matching
       # OCMS_REQUIRE_* flag is set to false.

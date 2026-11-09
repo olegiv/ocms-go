@@ -50,6 +50,10 @@ func TestLoad_DevelopmentDefaults(t *testing.T) {
 	if cfg.LogLevel != "info" {
 		t.Errorf("LogLevel = %q, want %q", cfg.LogLevel, "info")
 	}
+	if !cfg.EventCleanupEnabled || cfg.EventDiagnosticDays != 90 || cfg.EventAuditDays != 0 {
+		t.Errorf("event retention defaults = %v/%d/%d, want true/90/0",
+			cfg.EventCleanupEnabled, cfg.EventDiagnosticDays, cfg.EventAuditDays)
+	}
 	if cfg.HCaptchaDisabled {
 		t.Error("HCaptchaDisabled = true, want false")
 	}
@@ -121,6 +125,37 @@ func TestLoad_DevelopmentDefaults(t *testing.T) {
 	}
 	if cfg.RequireBlockSuspiciousPageHTML {
 		t.Error("RequireBlockSuspiciousPageHTML = true, want false")
+	}
+}
+
+func TestLoad_EventRetention(t *testing.T) {
+	t.Setenv("OCMS_ENV", "development")
+	t.Setenv("OCMS_SESSION_SECRET", testSessionSecret)
+	t.Setenv("OCMS_EVENT_CLEANUP_ENABLED", "false")
+	t.Setenv("OCMS_EVENT_DIAGNOSTIC_RETENTION_DAYS", "45")
+	t.Setenv("OCMS_EVENT_AUDIT_RETENTION_DAYS", "365")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.EventCleanupEnabled || cfg.EventDiagnosticDays != 45 || cfg.EventAuditDays != 365 {
+		t.Errorf("event retention settings = %v/%d/%d, want false/45/365",
+			cfg.EventCleanupEnabled, cfg.EventDiagnosticDays, cfg.EventAuditDays)
+	}
+	for _, tc := range []struct{ key, value, errorField string }{
+		{"OCMS_EVENT_DIAGNOSTIC_RETENTION_DAYS", "-1", "OCMS_EVENT_DIAGNOSTIC_RETENTION_DAYS"},
+		{"OCMS_EVENT_DIAGNOSTIC_RETENTION_DAYS", "36501", "OCMS_EVENT_DIAGNOSTIC_RETENTION_DAYS"},
+		{"OCMS_EVENT_AUDIT_RETENTION_DAYS", "-1", "OCMS_EVENT_AUDIT_RETENTION_DAYS"},
+		{"OCMS_EVENT_AUDIT_RETENTION_DAYS", "36501", "OCMS_EVENT_AUDIT_RETENTION_DAYS"},
+		{"OCMS_EVENT_CLEANUP_ENABLED", "typo", "EventCleanupEnabled"},
+	} {
+		t.Run(tc.key+"/"+tc.value, func(t *testing.T) {
+			t.Setenv(tc.key, tc.value)
+			if _, err := Load(); err == nil || !strings.Contains(err.Error(), tc.errorField) {
+				t.Errorf("Load() error = %v, want error for %s", err, tc.key)
+			}
+		})
 	}
 }
 

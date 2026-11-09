@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Event Log retention on upgrade.** Earlier releases kept events indefinitely.
+  Existing recognized diagnostics older than 90 days become eligible for
+  deletion on the first run. Security and audit records (including sign-in,
+  MFA, API-key, account and configuration changes, and share-link actions)
+  and unclassified events are kept by default. Configure the two windows with
+  `OCMS_EVENT_DIAGNOSTIC_RETENTION_DAYS` and `OCMS_EVENT_AUDIT_RETENTION_DAYS`
+  (`0` keeps the class). Set `OCMS_EVENT_CLEANUP_ENABLED=false` before
+  restarting to disable cleanup. Deletion can only be reversed from a backup.
+  SQLite keeps freed pages for reuse. See [Event Log retention](docs/scheduler.md#event-log-retention)
+  for monitoring and reclaiming disk space.
 - **Production is the default (I-10).** Set `OCMS_ENV` explicitly before
   upgrading. Unset or empty selects production. Only `development`,
   `staging` and `production` are accepted. Other values fail startup.

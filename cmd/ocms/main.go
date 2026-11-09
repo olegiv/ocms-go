@@ -1992,7 +1992,7 @@ func run(inspectRouter func(chi.Router) error) (runErr error) {
 	schedulerRegistry := scheduler.NewRegistry(db, logger)
 	sched := scheduler.New(db, logger, schedulerRegistry)
 	sched.SetWebhookDispatcher(webhookDispatcher)
-	if startErr := startCoreScheduler(sched); startErr != nil {
+	if startErr := startCoreScheduler(sched, cfg); startErr != nil {
 		return fmt.Errorf("starting scheduler: %w", startErr)
 	}
 	defer cleanup.within("scheduler", sched.Stop)

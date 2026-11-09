@@ -28,7 +28,7 @@ func TestRunWiresWebhooksIntoEveryWriter(t *testing.T) {
 	}
 	set, start := positions["sched.SetWebhookDispatcher"], positions["startCoreScheduler"]
 	if start == token.NoPos {
-		t.Fatal("run does not call startCoreScheduler(sched); the layout changed and this test is vacuous")
+		t.Fatal("run does not call startCoreScheduler(sched, cfg); the layout changed and this test is vacuous")
 	}
 	if set != token.NoPos && set > start {
 		t.Errorf("run calls sched.SetWebhookDispatcher (%s) after startCoreScheduler (%s); the scheduler's goroutines would read it unsynchronized", fset.Position(set), fset.Position(start))
@@ -60,7 +60,7 @@ func TestRunWiresWebhooksIntoEveryWriter(t *testing.T) {
 }
 
 // runCallPositions parses main.go and returns the position of the first call
-// in run of each receiver.method, plus startCoreScheduler(sched).
+// in run of each receiver.method, plus startCoreScheduler(sched, cfg).
 func runCallPositions(t *testing.T, fset *token.FileSet) map[string]token.Pos {
 	t.Helper()
 	file, err := parser.ParseFile(fset, "main.go", nil, 0)
@@ -79,7 +79,7 @@ func runCallPositions(t *testing.T, fset *token.FileSet) map[string]token.Pos {
 				return true
 			}
 			if name, isIdent := call.Fun.(*ast.Ident); isIdent && name.Name == "startCoreScheduler" {
-				if len(call.Args) == 1 {
+				if len(call.Args) == 2 {
 					if arg, isSchedArg := call.Args[0].(*ast.Ident); isSchedArg && arg.Name == "sched" {
 						positions[name.Name] = call.Pos()
 					}

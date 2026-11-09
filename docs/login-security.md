@@ -278,6 +278,12 @@ All login-related events are logged to the events system:
 
 View these events in the admin panel under **Admin > Events**.
 
+Login, lockout, MFA, and related account security records are kept indefinitely
+by default. Set `OCMS_EVENT_AUDIT_RETENTION_DAYS` to a positive number of days
+to expire classified security and audit records. This affects the Event Log.
+See [Event Log retention](scheduler.md#event-log-retention) for upgrade and
+backup details.
+
 ## Configuration
 
 Login protection settings are currently defined in code. To customize:

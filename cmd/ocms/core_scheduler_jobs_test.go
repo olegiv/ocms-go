@@ -9,6 +9,10 @@ import (
 	"go/token"
 	"slices"
 	"testing"
+
+	"github.com/olegiv/ocms-go/internal/config"
+	"github.com/olegiv/ocms-go/internal/scheduler"
+	"github.com/olegiv/ocms-go/internal/testutil"
 )
 
 // TestCoreSchedulerRegistersRetentionJobsBeforeStart fails when the process
@@ -46,5 +50,51 @@ func TestCoreSchedulerRegistersRetentionJobsBeforeStart(t *testing.T) {
 		if at := slices.Index(calls, job); at < 0 || at > start {
 			t.Errorf("startCoreScheduler must call s.%s before s.Start(); calls: %v", job, calls)
 		}
+	}
+}
+
+func TestCoreEventCleanupRespectsDisableAndScheduleOverride(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		enabled     bool
+		diagnostics int
+		want        bool
+	}{
+		{"enabled", true, 90, true},
+		{"explicitly disabled", false, 90, false},
+		{"both windows indefinite", true, 0, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db, closeDB := testutil.TestDB(t)
+			t.Cleanup(closeDB)
+			logger := testutil.TestLoggerSilent()
+			registry := scheduler.NewRegistry(db, logger)
+			sched := scheduler.New(db, logger, registry)
+			if _, err := db.Exec(`INSERT INTO scheduler_overrides(source, name, override_schedule)
+				VALUES ('core', 'event_cleanup', '@every 1h')`); err != nil {
+				t.Fatal(err)
+			}
+			if err := startCoreScheduler(sched, &config.Config{
+				EventCleanupEnabled: tc.enabled, EventDiagnosticDays: tc.diagnostics,
+			}); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(sched.Stop)
+			found := false
+			for _, job := range registry.List() {
+				if job.Source == "core" && job.Name == "event_cleanup" {
+					found = true
+					if !job.CanTrigger || !job.IsOverridden || job.Schedule != "@every 1h" {
+						t.Errorf("registered event cleanup = %+v", job)
+					}
+				}
+			}
+			if found != tc.want {
+				t.Fatalf("event cleanup registered = %v, want %v", found, tc.want)
+			}
+			if err := registry.TriggerNow("core", "event_cleanup"); (err == nil) != tc.want {
+				t.Errorf("trigger result = %v, want success = %v", err, tc.want)
+			}
+		})
 	}
 }

@@ -363,6 +363,18 @@ checks below apply to staging and production.
   update any integrity hash pinned to the previous Alpine asset. See
   [custom theme scripting](docs/custom-themes.md).
 
+## Upgrading Event Log retention
+
+Older releases kept Event Log records indefinitely. After upgrade, recognized
+diagnostics older than 90 days are eligible for deletion on the first cleanup
+run. Security and audit records and unclassified events are kept by default.
+Take a database backup before upgrading if you need the old diagnostics.
+Set `OCMS_EVENT_CLEANUP_ENABLED=false` before restarting to keep all events,
+or set either window to `0` to keep that class. Recovering deleted events
+requires a backup. SQLite reuses the freed pages inside the existing database
+file. See [Event Log retention](docs/scheduler.md#event-log-retention) for
+the policy and how to reclaim disk space.
+
 ## Environment Variables
 
 The R1.7 OAuth retention job has a fixed, bounded
@@ -382,6 +394,9 @@ controls the issuer, not cleanup of previously stored evidence.
 | `OCMS_ENV` | Environment mode (`development`, `staging` or `production`). Unset or empty uses production. An unrecognized value fails startup. `staging` and `production` apply the secure defaults, startup refusals and secret checks | `production` | No |
 | `OCMS_LOG_LEVEL` | Log level (`debug`/`info`/`warn`/`error`) | `info` | No |
 | `OCMS_ERROR_LOG_PATH` | Path for a separate error log file (5xx/ERROR+ also go to stdout) | - | No |
+| `OCMS_EVENT_CLEANUP_ENABLED` | Register automatic and manual Event Log cleanup | `true` | No |
+| `OCMS_EVENT_DIAGNOSTIC_RETENTION_DAYS` | Retain recognized diagnostics for 0–36500 days (0 keeps them indefinitely) | `90` | No |
+| `OCMS_EVENT_AUDIT_RETENTION_DAYS` | Retain classified security and audit records for 0–36500 days (0 keeps them indefinitely) | `0` | No |
 | `OCMS_CUSTOM_DIR` | Directory for custom themes (custom modules are compiled in) | `./custom` | No |
 | `OCMS_ACTIVE_THEME` | Active theme (overrides DB/admin setting) | `default` | No |
 | `OCMS_SITE_URL` | Full site URL written into site config on startup (overrides DB/admin setting). Required for RSS/Atom feeds, the sitemap and agent-discovery documents, which answer 503 while it is unset. Must be scheme and host only, e.g. `https://example.com` — a path, query, fragment, credentials or an out-of-range port fails startup, because routes are served from the root | - | No |

@@ -34,6 +34,7 @@ Built-in jobs:
 |--------|------|------------------|-------------|
 | `core` | `scheduled_pages` | `* * * * *` (every minute) | Publish pages scheduled for publishing; can be triggered manually |
 | `core` | `ai_revision_cleanup` | `*/15 * * * *` (every 15 minutes) | Keep the newest 20 revisions of each unpublished AI draft and remove older ones in atomic batches of at most 100 (see below); can be triggered manually |
+| `core` | `event_cleanup` | `*/15 * * * *` (every 15 minutes) | Expire Event Log records according to the configured retention windows |
 | `core` | `demo_reset` | `0 1 * * *` (daily at 01:00 server time, UTC on Fly.io) | Only in demo mode: reset the demo data and restart; no manual trigger |
 | `task` | `cleanup` | `0 3 * * *` (daily at 03:00 server time) | Delete custom-task runs older than 30 days; can be triggered manually |
 
@@ -60,6 +61,38 @@ together; retained replay receipts of it become expired tombstones. See
 [Draft authoring](draft-authoring.md#revision-retention). No environment
 variable is needed; to pause the job, set its schedule to an impossible
 expression as described under [Disable a Job](#disable-a-job).
+
+### Event Log retention
+
+`core:event_cleanup` defaults to every 15 minutes. The job honors schedule
+overrides and **Run Now** at **Admin > Scheduler**. Configure the policy in the
+environment and restart oCMS:
+
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `OCMS_EVENT_CLEANUP_ENABLED` | `true` | Set to `false` to disable scheduled cleanup and **Run Now**. |
+| `OCMS_EVENT_DIAGNOSTIC_RETENTION_DAYS` | `90` | Keep recognized diagnostics, such as 404s, request timeouts, server lifecycle events and routine cache errors, for this many days. |
+| `OCMS_EVENT_AUDIT_RETENTION_DAYS` | `0` | Keep classified security and audit records for this many days. These include sign-in, lockout, MFA, API keys, account and configuration changes, share links and administrative changes to content or integrations. |
+
+Both windows accept whole days from 0 to 36500. A zero window keeps that class
+indefinitely. Unknown categories and unrecognized records in mixed categories
+are kept even when both windows are finite.
+
+Each run deletes the oldest eligible rows within each producer group, up to
+1,000 per batch and 10,000 total, with a ten-second deadline. A failed run can
+leave completed batches in place. The server logs deleted and remaining counts
+at INFO level. A capped remaining count of 10,001 means at least that many
+remain. An error reports how many rows were deleted before the failure.
+Use `OCMS_LOG_LEVEL=info` to see successful runs.
+
+**Before upgrading**, review these settings and take a database backup if you
+need old diagnostics. Earlier releases kept events indefinitely. Eligible
+records can be removed on the first scheduled or manual run after upgrade.
+Recovering deleted records requires a backup. SQLite reuses freed pages
+without shrinking the database file because automatic vacuuming is off.
+To return space to the filesystem, stop oCMS, take a backup, and run
+`sqlite3 "$OCMS_DB_PATH" 'VACUUM;'` against the configured database. Allow
+temporary disk space for the rebuild, then restart oCMS.
 
 ### Module Jobs
 
@@ -254,7 +287,8 @@ To prevent a job from running, set its schedule to an impossible expression:
 0 0 31 2 *  (never - Feb 31 doesn't exist)
 ```
 
-For a custom task, use **Disable** instead.
+For a custom task, use **Disable**. For `core:event_cleanup`, use the
+[environment switch](#event-log-retention) to disable both cron and **Run Now**.
 
 ### Shift Job Timing
 
