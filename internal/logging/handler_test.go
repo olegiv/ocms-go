@@ -439,13 +439,13 @@ func TestEventMetadataCapsEscapedAttributesAndContextPath(t *testing.T) {
 	if metadata["code"] != "retained" || metadata["oversized"] == "" || len(metadata["oversized"]) >= 8192 {
 		t.Fatal("metadata lost normal fields or retained an unbounded field")
 	}
-	if path := metadata["path"]; path == "" || len(path) >= 6001 || strings.ContainsRune(path, utf8.RuneError) {
+	if path := metadata["path"]; path != "/"+strings.Repeat("界", 255) || strings.ContainsRune(path, utf8.RuneError) {
 		t.Fatal("context path was lost or cut through a UTF-8 character")
 	}
 }
 
 func TestEventMetadataEncodesControlCharacters(t *testing.T) {
-	ctx := context.WithValue(t.Context(), middleware.ContextKeyRequestPath, "/path\x00")
+	ctx := context.WithValue(t.Context(), middleware.ContextKeyRequestPath, "/path\x00\u202e")
 	record := slog.NewRecord(time.Now(), slog.LevelWarn, "warning", 0)
 	record.AddAttrs(slog.String("category", "system"), slog.String("key\x01", "value\b\f\x1f"), slog.Int("count", 4))
 	var metadata map[string]string
@@ -453,7 +453,7 @@ func TestEventMetadataEncodesControlCharacters(t *testing.T) {
 	if err := json.Unmarshal([]byte(raw), &metadata); err != nil {
 		t.Fatalf("metadata is invalid JSON: %v", err)
 	}
-	want := map[string]string{"path": "/path\x00", "key\x01": "value\b\f\x1f", "count": "4"}
+	want := map[string]string{"path": "/path", "key\x01": "value\b\f\x1f", "count": "4"}
 	if !maps.Equal(metadata, want) {
 		t.Fatalf("metadata = %q, want %q", metadata, want)
 	}

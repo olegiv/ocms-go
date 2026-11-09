@@ -9,19 +9,18 @@ package logging
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
-	"unicode/utf8"
 
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // EventLogHandler is a slog.Handler that wraps another handler and also writes
@@ -340,51 +339,22 @@ func (h *EventLogHandler) extractCategory(r slog.Record) string {
 	}
 }
 
-const (
-	maxEventMetadataBytes  = 4 << 10
-	maxEventAttributeBytes = 1 << 10
-)
-
 // extractMetadata keeps attributes within the budget after JSON escaping.
 // An explicit path attribute takes precedence over the request context.
 func (h *EventLogHandler) extractMetadata(ctx context.Context, r slog.Record) string {
-	attrs := make(map[string]string)
-	budget := maxEventMetadataBytes - len("{}")
-	add := func(key, value string) {
-		if len(key) > maxEventAttributeBytes {
-			return
-		}
-		if len(value) > maxEventAttributeBytes {
-			end := maxEventAttributeBytes
-			for end > 0 && !utf8.RuneStart(value[end]) {
-				end--
-			}
-			value = value[:end]
-		}
-		encodedKey, _ := json.Marshal(key)
-		encodedValue, _ := json.Marshal(value)
-		size := len(encodedKey) + len(encodedValue) + len(":,")
-		if size <= budget {
-			attrs[key] = value
-			budget -= size
-		}
-	}
+	var metadata service.EventMetadata
 	hasPath := false
 	r.Attrs(func(a slog.Attr) bool {
 		hasPath = hasPath || a.Key == "path"
 		if a.Key != "category" {
-			add(a.Key, a.Value.String())
+			metadata.Add(a.Key, a.Value.String())
 		}
-		return budget > len(`"":"",`)
+		return true
 	})
 	if !hasPath {
 		if path := middleware.GetRequestPath(ctx); path != "" {
-			add("path", path)
+			metadata.Add("path", util.BoundedLogField(path))
 		}
 	}
-	encoded, err := json.Marshal(attrs)
-	if err != nil {
-		return "{}"
-	}
-	return string(encoded)
+	return metadata.JSON()
 }

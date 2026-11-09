@@ -8,12 +8,13 @@ import (
 	"unicode"
 )
 
-// BoundedLogField strips control characters and keeps at most 256 runes.
+// BoundedLogField strips control, format and line-separator characters and
+// keeps at most 256 runes.
 func BoundedLogField(value string) string {
 	var b strings.Builder
 	kept := 0
 	for _, r := range value {
-		if unicode.IsControl(r) {
+		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) || r == '\u2028' || r == '\u2029' {
 			continue
 		}
 		b.WriteRune(r)

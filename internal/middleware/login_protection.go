@@ -368,7 +368,7 @@ func (lp *LoginProtection) RecordSuccessfulLogin(email, ip string) {
 			slog.Error("login_protection: delete", "error", err, "email", util.BoundedLogField(email), "scope", scope.name)
 		}
 	}
-	slog.Debug("login attempts cleared", "email", email, "ip", ip)
+	slog.Debug("login attempts cleared", "email", util.BoundedLogField(email), "ip", util.BoundedLogField(ip))
 }
 
 // GetRemainingAttempts returns the number of remaining attempts before the
@@ -432,7 +432,7 @@ func (lp *LoginProtection) Middleware() func(http.Handler) http.Handler {
 			ip := GetClientIP(r)
 
 			if !lp.CheckIPRateLimit(ip) {
-				slog.Warn("login rate limit exceeded", "ip", ip)
+				slog.Warn("login rate limit exceeded", "ip", util.BoundedLogField(ip))
 				lang := GetAdminLang(r)
 				http.Error(w, i18n.T(lang, "auth.rate_limit"), http.StatusTooManyRequests)
 				return

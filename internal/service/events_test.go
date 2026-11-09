@@ -6,12 +6,73 @@ package service
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"net/netip"
+	"strings"
 	"testing"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/olegiv/ocms-go/internal/model"
 )
+
+func TestLogEventCapsMetadataAndPreservesStructuredFields(t *testing.T) {
+	db := setupEventTestDB(t)
+	t.Cleanup(func() { _ = db.Close() })
+	metadata := map[string]any{
+		"count": 3, "allowed": true, "nested": []any{"read", 7},
+		"oversized_array": []string{strings.Repeat("x", 5000)},
+		"multibyte":       strings.Repeat("界", 5000),
+	}
+	for _, name := range []string{"x", "y", "z"} {
+		metadata[name] = strings.Repeat("<\x00", 5000)
+	}
+	if err := NewEventService(db).LogSecurityEvent(t.Context(), model.EventLevelWarning,
+		"request rejected", nil, "192.0.2.1", "/"+strings.Repeat("x", 10000), metadata); err != nil {
+		t.Fatal(err)
+	}
+	var raw, path string
+	if err := db.QueryRow("SELECT metadata, request_url FROM events").Scan(&raw, &path); err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(raw), &got); err != nil || len(raw) > 4096 || len(path) != 256 {
+		t.Fatalf("invalid or oversized audit row: metadata=%d path=%d err=%v", len(raw), len(path), err)
+	}
+	if string(got["count"]) != "3" || string(got["allowed"]) != "true" ||
+		string(got["nested"]) != `["read",7]` || got["oversized_array"] != nil {
+		t.Fatalf("structured fields changed")
+	}
+	var value string
+	if err := json.Unmarshal(got["multibyte"], &value); err != nil || value != strings.Repeat("界", 341) {
+		t.Fatal("multibyte field was lost or corrupted")
+	}
+}
+
+func TestAnonymousEventBudgetIsScopedAndBounded(t *testing.T) {
+	var limiter anonymousEventLimiter
+	now := time.Now()
+	if !limiter.allow("rejected", "::ffff:192.0.2.1", now) ||
+		limiter.allow("rejected", "192.0.2.1", now) ||
+		!limiter.allow("different", "192.0.2.1", now) ||
+		!limiter.allow("rejected", "2001:db8::1", now) ||
+		limiter.allow("rejected", "2001:db8::2", now) ||
+		!limiter.allow("rejected", "2001:db8:0:1::1", now) {
+		t.Fatal("sampling did not distinguish the message and canonical address")
+	}
+	ip := netip.MustParseAddr("198.18.0.0")
+	for len(limiter.seen) < maxAnonymousEventSources {
+		if !limiter.allow("rejected", ip.String(), now) {
+			t.Fatal("source suppressed before capacity")
+		}
+		ip = ip.Next()
+	}
+	if limiter.allow("rejected", ip.String(), now) ||
+		!limiter.allow("rejected", ip.String(), now.Add(anonymousEventWindow)) {
+		t.Fatal("saturated limiter did not recover after expiry")
+	}
+}
 
 func setupEventTestDB(t *testing.T) *sql.DB {
 	t.Helper()

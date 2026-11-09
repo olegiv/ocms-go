@@ -104,7 +104,8 @@ but no application route uses it.
 
 ### "Forbidden - CSRF validation failed"
 
-This error occurs when CSRF validation fails. Check the server logs for the specific reason:
+Check the server log at WARN level for the specific reason. The separate
+error log file (`OCMS_ERROR_LOG_PATH`) records ERROR and higher.
 
 | Error Reason | Cause | Solution |
 |--------------|-------|----------|

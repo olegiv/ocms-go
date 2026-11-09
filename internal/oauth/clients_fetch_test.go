@@ -4,16 +4,57 @@
 package oauth
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/olegiv/ocms-go/internal/logging"
 )
+
+func TestCIMDTransportErrorBoundsBothCopiesOfClientID(t *testing.T) {
+	f := metadataFixture(t, func(http.ResponseWriter, *http.Request) {})
+	var output bytes.Buffer
+	previous := slog.Default()
+	handler := logging.NewEventLogHandler(slog.NewJSONHandler(&output, nil), f.db)
+	t.Cleanup(func() { _ = handler.Close(context.Background()) })
+	slog.SetDefault(slog.New(handler))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	id := "https://client.test/" + strings.Repeat("x", 1500)
+	f.s.clients.http.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if !strings.HasPrefix(r.URL.String(), id) {
+			t.Fatal("the original URL did not reach the transport")
+		}
+		return nil, errors.New("connection refused")
+	})
+	for i := range 4 {
+		if _, err := f.s.clients.resolve(t.Context(), id+fmt.Sprint(i)); problemCode(err) != "temporarily_unavailable" {
+			t.Fatalf("resolution returned %v", err)
+		}
+	}
+	var entry map[string]string
+	if err := json.NewDecoder(&output).Decode(&entry); err != nil {
+		t.Fatal(err)
+	}
+	if entry["client_id"] != id[:256] || entry["error"] != "connection refused" || entry["level"] != "WARN" {
+		t.Fatal("expected bounded client ID and transport error in server log")
+	}
+	if err := handler.Flush(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := f.db.QueryRow("SELECT COUNT(*) FROM events WHERE message = 'OAuth client metadata fetch failed'").Scan(&count); err != nil || count != 1 {
+		t.Fatalf("event log stored %d fetch failures, want 1, err=%v", count, err)
+	}
+}
 
 func cimdDocument(id string) registeredClient {
 	return registeredClient{ID: id, Name: "Client", AuthMethod: "none", Redirects: []string{"https://client.test/callback"}}

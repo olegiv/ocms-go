@@ -36,6 +36,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/seo"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 //go:embed locales
@@ -249,7 +250,7 @@ func (m *Module) serveEndpoint(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		m.logger.Error("MCP endpoint panicked",
-			"panic", fmt.Sprint(p),
+			"panic", util.BoundedLogField(fmt.Sprint(p)),
 			"stack", string(debug.Stack()),
 			"ip", middleware.GetClientIP(r))
 		middleware.WriteAPIError(w, http.StatusInternalServerError, codeInternal, msgInternal, nil)

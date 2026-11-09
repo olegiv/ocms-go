@@ -9,6 +9,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -94,10 +95,11 @@ func (rm *RedirectsMiddleware) Handler(next http.Handler) http.Handler {
 		}
 		target, status, matched, err := contentpath.FirstRedirect(rm.getRedirects(), r.URL.Path, r.URL.RawQuery)
 		if err != nil {
-			attrs := []any{"source", r.URL.Path, "error", err}
+			attrs := []any{"source", util.BoundedLogField(r.URL.Path), "error", contentpath.ErrUnsafeRedirect}
 			var unsafe *contentpath.UnsafeRedirectError
 			if errors.As(err, &unsafe) {
-				attrs = append(attrs, "target", unsafe.Target)
+				targetPath, _, _ := strings.Cut(unsafe.Target, "?")
+				attrs = append(attrs, "target", util.BoundedLogField(targetPath))
 			}
 			slog.Warn("blocked unsafe redirect target", attrs...)
 			w.WriteHeader(http.StatusBadRequest)

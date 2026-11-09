@@ -25,6 +25,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/module"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 //go:embed locales
@@ -236,7 +237,7 @@ func (m *Module) registerHooks() {
 
 			m.ctx.Logger.Info("auto-banning IP for honeypot trigger",
 				"ip", ip,
-				"form_slug", formSlug,
+				"form_slug", util.BoundedLogField(formSlug),
 			)
 
 			if err := m.autoBanIP(ip, triggeredPath, "honeypot:"+formSlug); err != nil {
@@ -817,7 +818,7 @@ func (m *Module) autoBanIP(ip, triggeredPath, matchedPattern string) error {
 	triggeredPath = truncate(triggeredPath, maxBanFieldLen-len(banNotePrefix))
 	notes := banNotePrefix + triggeredPath
 	countryCode := m.geoIP.LookupCountry(ip)
-	_, err := m.ctx.DB.Exec(`
+	result, err := m.ctx.DB.Exec(`
 		INSERT OR IGNORE INTO sentinel_banned_ips (ip_pattern, country_code, notes, url, banned_at, created_by)
 		VALUES (?, ?, ?, ?, ?, 0)
 	`, ip, countryCode, notes, triggeredPath, time.Now())
@@ -825,8 +826,11 @@ func (m *Module) autoBanIP(ip, triggeredPath, matchedPattern string) error {
 		return err
 	}
 
-	// Log to admin event log
-	if m.eventLogger != nil {
+	inserted, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if inserted > 0 && m.eventLogger != nil {
 		_ = m.eventLogger.LogEvent(context.Background(), model.EventLevelWarning, model.EventCategorySecurity,
 			"IP auto-banned by Sentinel", nil, ip, triggeredPath, map[string]any{
 				"pattern": matchedPattern,
@@ -886,7 +890,7 @@ func (m *Module) Middleware() func(http.Handler) http.Handler {
 
 			// 2. Check if IP is already banned (if ban check is enabled)
 			if m.IsBanCheckEnabled() && m.IsIPBanned(ip) {
-				m.ctx.Logger.Info("blocked banned IP", "ip", ip, "path", path)
+				m.ctx.Logger.Info("blocked banned IP", "ip", ip, "path", util.BoundedLogField(path))
 				http.Error(w, i18n.T("en", "sentinel.access_denied"), http.StatusForbidden)
 				return
 			}
@@ -899,7 +903,7 @@ func (m *Module) Middleware() func(http.Handler) http.Handler {
 					if m.isAdminOrEditor(r) {
 						m.ctx.Logger.Debug("skipping auto-ban for admin/editor user",
 							"ip", ip,
-							"path", path,
+							"path", util.BoundedLogField(path),
 							"pattern", matchedPattern,
 						)
 						next.ServeHTTP(w, r)
@@ -908,7 +912,7 @@ func (m *Module) Middleware() func(http.Handler) http.Handler {
 
 					m.ctx.Logger.Info("auto-banning IP for forbidden path",
 						"ip", ip,
-						"path", path,
+						"path", util.BoundedLogField(path),
 						"pattern", matchedPattern,
 					)
 					if err := m.autoBanIP(ip, path, matchedPattern); err != nil {

@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"path"
 	"strings"
+
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 var blockedUploadExtensions = map[string]struct{}{
@@ -77,7 +79,7 @@ func SecureUploads(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ext := strings.ToLower(path.Ext(r.URL.Path))
 		if _, blocked := blockedUploadExtensions[ext]; blocked {
-			slog.Warn("blocked upload file with active extension", "path", r.URL.Path, "ext", ext)
+			slog.Warn("blocked upload file with active extension", "path", util.BoundedLogField(r.URL.Path), "ext", ext)
 			http.NotFound(w, r)
 			return
 		}

@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/olegiv/ocms-go/internal/module"
+	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/testutil"
 	"github.com/olegiv/ocms-go/internal/testutil/moduleutil"
 )
@@ -568,6 +569,42 @@ func TestMiddlewareAutoBansIP(t *testing.T) {
 	// The IP should now be in the banned list
 	if !m.IsIPBanned("6.6.6.6") {
 		t.Error("IP 6.6.6.6 should be auto-banned after accessing exploit path")
+	}
+}
+
+func TestSentinelAutoBanAuditsOnlyNewBans(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	t.Cleanup(cleanup)
+	m := testModule(t, db)
+	m.SetEventLogger(service.NewEventService(db))
+	if err := m.updateSetting(settingBanCheckEnabled, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.reloadSettings(); err != nil {
+		t.Fatal(err)
+	}
+	if m.IsBanCheckEnabled() {
+		t.Fatal("ban check must be off to exercise duplicate inserts")
+	}
+	if err := m.createAutoBanPath("/exploit*", "exploit attempt", 0); err != nil {
+		t.Fatal(err)
+	}
+	handler := m.GetMiddleware()(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("auto-ban path reached the handler")
+	}))
+	for range 3 {
+		req := httptest.NewRequest(http.MethodGet, "/exploit/attack", nil)
+		req.RemoteAddr = "192.0.2.1:80"
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("denial returned %d", w.Code)
+		}
+	}
+	var bans, events int
+	if err := db.QueryRow(`SELECT (SELECT COUNT(*) FROM sentinel_banned_ips WHERE ip_pattern = '192.0.2.1'),
+		(SELECT COUNT(*) FROM events WHERE message = 'IP auto-banned by Sentinel')`).Scan(&bans, &events); err != nil || bans != 1 || events != 1 {
+		t.Fatalf("wanted one ban and audit row, got bans=%d events=%d err=%v", bans, events, err)
 	}
 }
 

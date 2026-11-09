@@ -471,7 +471,7 @@ func (h *TaxonomyHandler) SearchTags(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		slog.Error("failed to search tags", "error", err, "query", query)
+		slog.Error("failed to search tags", "error", err, "query", util.BoundedLogField(query))
 		writeJSONError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
@@ -1384,7 +1384,7 @@ func (h *TaxonomyHandler) SearchCategories(w http.ResponseWriter, r *http.Reques
 	}
 
 	if err != nil {
-		slog.Error("failed to search categories", "error", err, "query", query)
+		slog.Error("failed to search categories", "error", err, "query", util.BoundedLogField(query))
 		writeJSONError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}

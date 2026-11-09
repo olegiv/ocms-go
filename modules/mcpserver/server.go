@@ -15,6 +15,8 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // cacheScopePrivate marks list and discovery results as cacheable only by the
@@ -113,7 +115,7 @@ func (m *Module) requestGuard(next mcp.MethodHandler) mcp.MethodHandler {
 		defer func() {
 			if p := recover(); p != nil {
 				m.logger.Error("MCP request panicked",
-					"method", method,
+					"method", util.BoundedLogField(method),
 					"panic", "recovered",
 					"stack", string(debug.Stack()))
 				result, err = nil, internalRPCError()

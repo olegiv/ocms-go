@@ -1176,7 +1176,7 @@ func (h *FrontendHandler) PageByID(w http.ResponseWriter, r *http.Request) {
 
 	languagePrefix, ok := h.canonicalPageLanguagePrefix(ctx, page)
 	if !ok {
-		h.logger.Warn("invalid page slug or language code for PageByID redirect", "page_id", page.ID, "slug", page.Slug, "language_code", page.LanguageCode)
+		h.logger.Warn("invalid page slug or language code for PageByID redirect", "page_id", page.ID, "slug", util.BoundedLogField(page.Slug), "language_code", page.LanguageCode)
 		h.renderNotFound(w, r)
 		return
 	}
@@ -2887,7 +2887,7 @@ func (h *FrontendHandler) requireConfiguredSiteURL(w http.ResponseWriter, r *htt
 	siteURL := h.getConfiguredSiteURL(r.Context())
 	if siteURL == "" {
 		if h.logger != nil {
-			h.logger.Warn(docName+" requested without configured site_url", "path", r.URL.Path)
+			h.logger.Warn(docName+" requested without configured site_url", "path", util.BoundedLogField(r.URL.Path))
 		}
 		w.Header().Set("Cache-Control", "no-store")
 		http.Error(w, docName+" is unavailable until site_url is configured", http.StatusServiceUnavailable)
@@ -3097,8 +3097,8 @@ func (h *FrontendHandler) renderNotFound(w http.ResponseWriter, r *http.Request)
 	clientIP := middleware.GetClientIP(r)
 	h.logger.Info("page not found",
 		"status", http.StatusNotFound,
-		"method", r.Method,
-		"path", r.URL.Path,
+		"method", util.BoundedLogField(r.Method),
+		"path", util.BoundedLogField(r.URL.Path),
 		"ip", clientIP,
 	)
 
@@ -3108,7 +3108,7 @@ func (h *FrontendHandler) renderNotFound(w http.ResponseWriter, r *http.Request)
 		// Avoid unauthenticated event-log flooding on public 404s.
 		if userID != nil {
 			metadata := map[string]any{
-				"method": r.Method,
+				"method": util.BoundedLogField(r.Method),
 				"status": http.StatusNotFound,
 			}
 			_ = h.eventService.LogSystemEvent(r.Context(), "info", "Page not found", userID, clientIP, r.URL.Path, metadata)
@@ -3231,7 +3231,7 @@ func (h *FrontendHandler) redirectPageAlias(w http.ResponseWriter, r *http.Reque
 
 	prefix, ok := h.canonicalAliasLanguagePrefix(r, page)
 	if !ok {
-		h.logger.Warn("invalid page slug for alias redirect", "page_id", page.ID, "slug", page.Slug, "path", r.URL.Path)
+		h.logger.Warn("invalid page slug for alias redirect", "page_id", page.ID, "slug", util.BoundedLogField(page.Slug), "path", util.BoundedLogField(r.URL.Path))
 		return false
 	}
 

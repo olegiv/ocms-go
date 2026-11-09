@@ -172,14 +172,14 @@ func (c *clientResolver) resolveForExchange(ctx context.Context, id, code string
 	}
 	cached, err := c.service.q.GetOAuthClient(ctx, id)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return registeredClient{}, storageProblem(ctx, "failed to load OAuth client", err, "client_id", id)
+		return registeredClient{}, storageProblem(ctx, "failed to load OAuth client", err, "client_id", util.BoundedLogField(id))
 	}
 	if client, ok := c.preRegistered[id]; ok {
 		redirects, _ := json.Marshal(client.Redirects)
 		if err != nil || cached.Source != "cimd" || cached.Name != client.Name ||
 			cached.RedirectUris != string(redirects) || cached.ExpiresAt <= c.service.now().Unix() {
 			if saveErr := c.service.saveClient(ctx, client, "cimd", c.service.now().Add(15*time.Minute).Unix()); saveErr != nil {
-				return registeredClient{}, storageProblem(ctx, "failed to refresh pre-registered OAuth client", saveErr, "client_id", id)
+				return registeredClient{}, storageProblem(ctx, "failed to refresh pre-registered OAuth client", saveErr, "client_id", util.BoundedLogField(id))
 			}
 		}
 		return client, nil
@@ -192,7 +192,7 @@ func (c *clientResolver) resolveForExchange(ctx context.Context, id, code string
 			ClientID: id, CodeHash: tokenHash(code), Now: now,
 		})
 		if codeErr != nil {
-			return registeredClient{}, storageProblem(ctx, "failed to check code for expired OAuth client", codeErr, "client_id", id)
+			return registeredClient{}, storageProblem(ctx, "failed to check code for expired OAuth client", codeErr, "client_id", util.BoundedLogField(id))
 		}
 	}
 	if active {
@@ -203,7 +203,7 @@ func (c *clientResolver) resolveForExchange(ctx context.Context, id, code string
 		}
 		var redirects []string
 		if decodeErr := json.Unmarshal([]byte(cached.RedirectUris), &redirects); decodeErr != nil {
-			return registeredClient{}, failure(ctx, "server_error", "stored OAuth client has invalid redirect URIs", decodeErr, "client_id", id)
+			return registeredClient{}, failure(ctx, "server_error", "stored OAuth client has invalid redirect URIs", decodeErr, "client_id", util.BoundedLogField(id))
 		}
 		return registeredClient{
 			ID: id, Name: cached.Name, Redirects: redirects, AuthMethod: "none",
@@ -233,7 +233,7 @@ func (c *clientResolver) resolveForExchange(ctx context.Context, id, code string
 		}
 		client, ok := r.Val.(registeredClient)
 		if !ok {
-			return registeredClient{}, failure(ctx, "server_error", "OAuth client lookup returned an unexpected result", fmt.Errorf("unexpected result type %T", r.Val), "client_id", id)
+			return registeredClient{}, failure(ctx, "server_error", "OAuth client lookup returned an unexpected result", fmt.Errorf("unexpected result type %T", r.Val), "client_id", util.BoundedLogField(id))
 		}
 		return client, nil
 	}
@@ -342,7 +342,7 @@ func (c *clientResolver) fetch(ctx context.Context, id string) (registeredClient
 		return registeredClient{}, err
 	}
 	if err := c.service.saveClient(ctx, client, "cimd", c.service.now().Add(15*time.Minute).Unix()); err != nil {
-		logFault(ctx, "failed to cache OAuth client metadata", err, "client_id", id)
+		logFault(ctx, "failed to cache OAuth client metadata", err, "client_id", util.BoundedLogField(id))
 		return registeredClient{}, problem("temporarily_unavailable")
 	}
 	return client, nil
@@ -361,28 +361,36 @@ func (c *clientResolver) download(ctx context.Context, id string) (registeredCli
 	// invalid_client. Every failure is logged: the client sees only the code.
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return registeredClient{}, failure(ctx, "temporarily_unavailable", "OAuth client metadata fetch failed", err, "client_id", id)
+		// HTTP wraps the cause with the request URL. Keep one bounded copy
+		// of the ID and send remote faults through the WARN event budget.
+		var transportErr *url.Error
+		if errors.As(err, &transportErr) {
+			err = transportErr.Err
+		}
+		slog.WarnContext(ctx, "OAuth client metadata fetch failed", "error", util.BoundedLogField(err.Error()), "client_id", util.BoundedLogField(id))
+		return registeredClient{}, problem("temporarily_unavailable")
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= http.StatusInternalServerError || resp.StatusCode == http.StatusRequestTimeout || resp.StatusCode == http.StatusTooManyRequests {
-		slog.WarnContext(ctx, "OAuth client metadata host unavailable", "client_id", id, "status", resp.StatusCode)
+		slog.WarnContext(ctx, "OAuth client metadata host unavailable", "client_id", util.BoundedLogField(id), "status", resp.StatusCode)
 		return registeredClient{}, problem("temporarily_unavailable")
 	}
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, (64<<10)+1))
 	if err != nil {
-		return registeredClient{}, failure(ctx, "temporarily_unavailable", "OAuth client metadata read failed", err, "client_id", id)
+		slog.WarnContext(ctx, "OAuth client metadata read failed", "error", util.BoundedLogField(err.Error()), "client_id", util.BoundedLogField(id))
+		return registeredClient{}, problem("temporarily_unavailable")
 	}
 	if len(raw) > 64<<10 || resp.StatusCode != http.StatusOK {
-		slog.WarnContext(ctx, "OAuth client metadata rejected", "client_id", id, "status", resp.StatusCode, "oversize", len(raw) > 64<<10)
+		slog.WarnContext(ctx, "OAuth client metadata rejected", "client_id", util.BoundedLogField(id), "status", resp.StatusCode, "oversize", len(raw) > 64<<10)
 		return registeredClient{}, problem("invalid_client")
 	}
 	if !jsonContentType(resp.Header.Get("Content-Type")) {
-		slog.WarnContext(ctx, "OAuth client metadata is not served as JSON", "client_id", id)
+		slog.WarnContext(ctx, "OAuth client metadata is not served as JSON", "client_id", util.BoundedLogField(id))
 		return registeredClient{}, problem("invalid_client")
 	}
 	var client registeredClient
 	if json.Unmarshal(raw, &client) != nil || client.ID != id || !validCIMDClient(client) {
-		slog.WarnContext(ctx, "OAuth client metadata document invalid", "client_id", id)
+		slog.WarnContext(ctx, "OAuth client metadata document invalid", "client_id", util.BoundedLogField(id))
 		return registeredClient{}, problem("invalid_client")
 	}
 	client.AuthMethod = "none"

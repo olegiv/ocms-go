@@ -366,15 +366,20 @@ func TestFormsHandlerSubmit_RejectsOversizedFieldValue(t *testing.T) {
 	h := NewFormsHandler(db, nil, sm, nil, nil, nil, nil, nil)
 
 	payload := "message=" + strings.Repeat("a", maxPublicFormFieldValueBytes+1)
-	req := httptest.NewRequest(http.MethodPost, "/forms/contact-form", strings.NewReader(payload))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req = requestWithURLParams(req, map[string]string{"slug": "contact-form"})
-	w := httptest.NewRecorder()
-
-	h.Submit(w, req)
-
-	if w.Code != http.StatusRequestEntityTooLarge {
-		t.Errorf("status = %d; want %d", w.Code, http.StatusRequestEntityTooLarge)
+	for _, addr := range []string{"192.0.2.1:80", "192.0.2.1:81", "192.0.2.2:80"} {
+		req := httptest.NewRequest(http.MethodPost, "/forms/contact-form", strings.NewReader(payload))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.RemoteAddr = addr
+		req = requestWithURLParams(req, map[string]string{"slug": "contact-form"})
+		w := httptest.NewRecorder()
+		h.Submit(w, req)
+		if w.Code != http.StatusRequestEntityTooLarge {
+			t.Errorf("status = %d; want %d", w.Code, http.StatusRequestEntityTooLarge)
+		}
+	}
+	var events int
+	if err := db.QueryRow("SELECT COUNT(*) FROM events WHERE message = 'Public form submission blocked: field value too large'").Scan(&events); err != nil || events != 2 {
+		t.Fatalf("expected one event per source, got %d, err=%v", events, err)
 	}
 
 	count, err := queries.CountFormSubmissions(context.Background(), form.ID)

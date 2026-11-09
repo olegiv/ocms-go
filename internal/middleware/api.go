@@ -24,6 +24,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // ContextKeyAPIKey is the context key for API key data.
@@ -488,7 +489,7 @@ func logAPIKeySourceAnomalyEvent(
 		UserID:     sql.NullInt64{Valid: false},
 		Metadata:   string(metadata),
 		IpAddress:  currentIP,
-		RequestUrl: requestPath,
+		RequestUrl: util.BoundedLogField(requestPath),
 		CreatedAt:  time.Now(),
 	})
 	if err != nil {
@@ -636,7 +637,7 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 	clientIP := GetClientIP(r)
 	if isAPIAllowedCIDRsRequired() && !hasAPIAllowedCIDRsConfigured() {
 		slog.Warn("API key auth blocked: global source CIDR policy required but not configured",
-			"path", r.URL.Path,
+			"path", util.BoundedLogField(r.URL.Path),
 			"ip", clientIP)
 		if required {
 			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key access policy is not configured", nil)
@@ -648,7 +649,7 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 	if !isAPIClientAllowed(clientIP) {
 		slog.Warn("API key auth blocked by global source CIDR policy",
 			"ip", clientIP,
-			"path", r.URL.Path)
+			"path", util.BoundedLogField(r.URL.Path))
 		if required {
 			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key access is not allowed from this IP", nil)
 			return nil, true
@@ -695,7 +696,7 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 	if outcome == APIKeyThrottled {
 		slog.Warn("API key verification throttled due to concurrency limit",
 			"ip", clientIP,
-			"path", r.URL.Path)
+			"path", util.BoundedLogField(r.URL.Path))
 		if required {
 			WriteAPIError(w, http.StatusTooManyRequests, "rate_limit_exceeded", "Too many authentication attempts. Please slow down.", nil)
 			return nil, true
@@ -722,7 +723,7 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 	if isAPIKeyExpiryRequired() && !matchedKey.ExpiresAt.Valid {
 		slog.Warn("API key auth blocked: missing expiry while expiry policy enabled",
 			"key_id", matchedKey.ID,
-			"path", r.URL.Path,
+			"path", util.BoundedLogField(r.URL.Path),
 			"ip", clientIP)
 		if required {
 			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key must have an expiration date", nil)
@@ -743,7 +744,7 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 		if !matchedKey.ExpiresAt.Valid {
 			slog.Warn("API key auth blocked: missing expiry while max TTL policy enabled",
 				"key_id", matchedKey.ID,
-				"path", r.URL.Path,
+				"path", util.BoundedLogField(r.URL.Path),
 				"ip", clientIP)
 			if required {
 				WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key must have an expiration date", nil)
@@ -756,7 +757,7 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 		if matchedKey.ExpiresAt.Time.After(maxAllowedExpiry) {
 			slog.Warn("API key auth blocked: key lifetime exceeds max TTL policy",
 				"key_id", matchedKey.ID,
-				"path", r.URL.Path,
+				"path", util.BoundedLogField(r.URL.Path),
 				"ip", clientIP,
 				"created_at", matchedKey.CreatedAt,
 				"expires_at", matchedKey.ExpiresAt.Time,
@@ -773,7 +774,7 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 	if errors.Is(err, errAPIKeyChanged) {
 		slog.Warn("API key auth blocked: key changed while it was being authenticated",
 			"key_id", matchedKey.ID,
-			"path", r.URL.Path,
+			"path", util.BoundedLogField(r.URL.Path),
 			"ip", clientIP)
 		if required {
 			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key changed while it was being authenticated; retry the request", nil)
@@ -792,7 +793,7 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 	if isAPIKeySourceCIDRsRequired() && !hasSourceCIDRs {
 		slog.Warn("API key auth blocked: missing per-key source CIDR while policy enabled",
 			"key_id", matchedKey.ID,
-			"path", r.URL.Path,
+			"path", util.BoundedLogField(r.URL.Path),
 			"ip", clientIP)
 		if required {
 			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key must have at least one source CIDR restriction", nil)
@@ -803,7 +804,7 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 	if !allowed {
 		slog.Warn("API key auth blocked by per-key source CIDR allowlist",
 			"key_id", matchedKey.ID,
-			"path", r.URL.Path,
+			"path", util.BoundedLogField(r.URL.Path),
 			"ip", clientIP)
 		if required {
 			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key access is not allowed from this IP", nil)
@@ -817,7 +818,7 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 			"key_id", matchedKey.ID,
 			"previous_ip", previousIP,
 			"current_ip", clientIP,
-			"path", r.URL.Path)
+			"path", util.BoundedLogField(r.URL.Path))
 		if shouldRevokeAPIKeyOnSourceIPChange() && !hasSourceCIDRs {
 			if err := queries.DeactivateAPIKey(r.Context(), store.DeactivateAPIKeyParams{
 				UpdatedAt: time.Now(),
@@ -837,7 +838,7 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 				slog.Error("failed to deactivate API key after source IP anomaly",
 					"error", err,
 					"key_id", matchedKey.ID,
-					"path", r.URL.Path,
+					"path", util.BoundedLogField(r.URL.Path),
 					"ip", clientIP)
 				if required {
 					WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key access denied due to source IP anomaly", nil)
@@ -860,7 +861,7 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 					"key_id", matchedKey.ID,
 					"previous_ip", previousIP,
 					"current_ip", clientIP,
-					"path", r.URL.Path)
+					"path", util.BoundedLogField(r.URL.Path))
 				if required {
 					WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key was deactivated due to source IP anomaly", nil)
 					return nil, true
@@ -1268,7 +1269,7 @@ func (rl *GlobalRateLimiter) Middleware() func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ip := GetClientIP(r)
 			if !rl.cache.get(ip).Allow() {
-				slog.Debug("API rate limit exceeded", "ip", ip, "path", r.URL.Path)
+				slog.Debug("API rate limit exceeded", "ip", ip, "path", util.BoundedLogField(r.URL.Path))
 				WriteAPIError(w, http.StatusTooManyRequests, "rate_limit_exceeded", "Rate limit exceeded. Please slow down.", nil)
 				return
 			}
@@ -1284,7 +1285,7 @@ func (rl *GlobalRateLimiter) HTMLMiddleware() func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ip := GetClientIP(r)
 			if !rl.cache.get(ip).Allow() {
-				slog.Warn("public rate limit exceeded", "ip", ip, "path", r.URL.Path)
+				slog.Warn("public rate limit exceeded", "ip", ip, "path", util.BoundedLogField(r.URL.Path))
 				http.Error(w, "Too many requests. Please wait a moment and try again.", http.StatusTooManyRequests)
 				return
 			}

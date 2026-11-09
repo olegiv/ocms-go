@@ -44,6 +44,7 @@ import (
 // FormsHandler handles form management routes.
 type FormsHandler struct {
 	db              *sql.DB
+	eventService    *service.EventService
 	queries         *store.Queries
 	renderer        *render.Renderer
 	sessionManager  *scs.SessionManager
@@ -87,6 +88,7 @@ var sensitiveFormFieldTokens = []string{
 func NewFormsHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager, hr *module.HookRegistry, tm *theme.Manager, cm *cache.Manager, ms *service.MenuService, fh *FrontendHandler) *FormsHandler {
 	return &FormsHandler{
 		db:              db,
+		eventService:    service.NewEventService(db),
 		queries:         store.New(db),
 		renderer:        renderer,
 		sessionManager:  sm,
@@ -1123,17 +1125,15 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	if honeypot != "" {
 		clientIP := middleware.GetClientIP(r)
 		// Bot detected, silently pretend success
-		slog.Info("honeypot triggered", "form_slug", slug, "ip", clientIP)
-		_ = service.NewEventService(h.db).LogSecurityEvent(
+		slog.Info("honeypot triggered", "form_slug", util.BoundedLogField(slug), "ip", clientIP)
+		_ = h.eventService.LogAnonymousSecurityEvent(
 			r.Context(),
-			model.EventLevelWarning,
 			"Public form honeypot triggered",
-			nil,
 			clientIP,
 			middleware.GetRequestURL(r),
 			map[string]any{
 				"form_id":   form.ID,
-				"form_slug": slug,
+				"form_slug": util.BoundedLogField(slug),
 			},
 		)
 		// Fire hook for modules (e.g., Sentinel auto-ban)
@@ -1156,14 +1156,14 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		if !hasCaptchaField(fields) {
 			slog.Warn("form submission blocked: captcha required but field not configured",
 				"form_id", form.ID,
-				"form_slug", slug)
+				"form_slug", util.BoundedLogField(slug))
 			http.Error(w, "Form submission is temporarily unavailable", http.StatusServiceUnavailable)
 			return
 		}
 		if h.hookRegistry == nil || !h.hookRegistry.HasHandlers(hcaptcha.HookFormCaptchaVerify) {
 			slog.Warn("form submission blocked: captcha required but verifier unavailable",
 				"form_id", form.ID,
-				"form_slug", slug)
+				"form_slug", util.BoundedLogField(slug))
 			http.Error(w, "Form submission is temporarily unavailable", http.StatusServiceUnavailable)
 			return
 		}
@@ -1194,20 +1194,18 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		if len(value) > maxPublicFormFieldValueBytes {
 			slog.Warn("form submission blocked: field value too large",
 				"form_id", form.ID,
-				"form_slug", slug,
-				"field_name", field.Name,
+				"form_slug", util.BoundedLogField(slug),
+				"field_name", util.BoundedLogField(field.Name),
 				"field_value_len", len(value))
-			_ = service.NewEventService(h.db).LogSecurityEvent(
+			_ = h.eventService.LogAnonymousSecurityEvent(
 				r.Context(),
-				model.EventLevelWarning,
 				"Public form submission blocked: field value too large",
-				nil,
 				middleware.GetClientIP(r),
 				middleware.GetRequestURL(r),
 				map[string]any{
 					"form_id":         form.ID,
-					"form_slug":       slug,
-					"field_name":      field.Name,
+					"form_slug":       util.BoundedLogField(slug),
+					"field_name":      util.BoundedLogField(field.Name),
 					"field_value_len": len(value),
 				},
 			)
@@ -1218,18 +1216,16 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		if totalValueBytes > maxPublicFormSubmissionDataBytes {
 			slog.Warn("form submission blocked: total field payload too large",
 				"form_id", form.ID,
-				"form_slug", slug,
+				"form_slug", util.BoundedLogField(slug),
 				"total_value_bytes", totalValueBytes)
-			_ = service.NewEventService(h.db).LogSecurityEvent(
+			_ = h.eventService.LogAnonymousSecurityEvent(
 				r.Context(),
-				model.EventLevelWarning,
 				"Public form submission blocked: payload too large",
-				nil,
 				middleware.GetClientIP(r),
 				middleware.GetRequestURL(r),
 				map[string]any{
 					"form_id":           form.ID,
-					"form_slug":         slug,
+					"form_slug":         util.BoundedLogField(slug),
 					"total_value_bytes": totalValueBytes,
 				},
 			)
@@ -1303,18 +1299,16 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	if len(dataJSON) > maxPublicFormSubmissionDataBytes {
 		slog.Warn("form submission blocked: serialized payload too large",
 			"form_id", form.ID,
-			"form_slug", slug,
+			"form_slug", util.BoundedLogField(slug),
 			"data_json_bytes", len(dataJSON))
-		_ = service.NewEventService(h.db).LogSecurityEvent(
+		_ = h.eventService.LogAnonymousSecurityEvent(
 			r.Context(),
-			model.EventLevelWarning,
 			"Public form submission blocked: serialized payload too large",
-			nil,
 			middleware.GetClientIP(r),
 			middleware.GetRequestURL(r),
 			map[string]any{
 				"form_id":         form.ID,
-				"form_slug":       slug,
+				"form_slug":       util.BoundedLogField(slug),
 				"data_json_bytes": len(dataJSON),
 			},
 		)
@@ -1338,7 +1332,7 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("form submission saved", "form_id", form.ID, "form_slug", slug)
+	slog.Info("form submission saved", "form_id", form.ID, "form_slug", util.BoundedLogField(slug))
 
 	// Dispatch form.submitted webhook event
 	h.dispatchFormEvent(r.Context(), *form, submission.ID, values)

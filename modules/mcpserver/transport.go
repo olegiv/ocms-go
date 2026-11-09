@@ -19,6 +19,7 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // bearerRealm is the 401 challenge for the API-key branch. When OAuth is
@@ -223,8 +224,8 @@ func crossOriginGuard(logger *slog.Logger, next http.Handler) http.Handler {
 	protection.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		logger.Warn("MCP request rejected: cross-origin browser request",
 			"ip", middleware.GetClientIP(r),
-			"origin", r.Header.Get("Origin"),
-			"sec_fetch_site", r.Header.Get("Sec-Fetch-Site"))
+			"origin", util.BoundedLogField(r.Header.Get("Origin")),
+			"sec_fetch_site", util.BoundedLogField(r.Header.Get("Sec-Fetch-Site")))
 		middleware.WriteAPIError(w, http.StatusForbidden, codeForbidden,
 			"Cross-origin requests are not allowed", nil)
 	}))

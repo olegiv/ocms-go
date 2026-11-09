@@ -146,7 +146,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	// Check if account is locked
 	if h.loginProtection != nil {
 		if locked, remaining := h.loginProtection.IsAccountLocked(email, clientIP); locked {
-			_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Login attempt on locked account", nil, clientIP, middleware.GetRequestURL(r), map[string]any{"email": logEmail})
+			const message = "Login attempt on locked account"
+			// Sample repeated denials uniformly. The invalid-password and
+			// lockout-transition audits below are recorded independently.
+			if h.eventService.AllowAnonymousEvent(message, clientIP) {
+				_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, message, nil, clientIP, middleware.GetRequestURL(r), map[string]any{"email": logEmail})
+			}
 			flashError(w, r, h.renderer, redirectLogin, i18n.T(lang, "auth.account_locked", formatDuration(remaining)))
 			return
 		}
@@ -156,8 +161,11 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	user, err := h.queries.GetUserByEmail(r.Context(), email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			slog.Debug("login attempt for non-existent user", "email", logEmail)
-			_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Login failed: user not found", nil, clientIP, middleware.GetRequestURL(r), map[string]any{"email": logEmail})
+			const message = "Login failed: user not found"
+			if h.eventService.AllowAnonymousEvent(message, clientIP) {
+				slog.Debug("login attempt for non-existent user", "email", logEmail)
+				_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, message, nil, clientIP, middleware.GetRequestURL(r), map[string]any{"email": logEmail})
+			}
 		} else {
 			slog.Error("database error during login", "error", err)
 		}

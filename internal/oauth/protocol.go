@@ -124,13 +124,13 @@ func (s *Service) Authorize(ctx context.Context, req AuthorizationRequest, userI
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return "", failure(ctx, "temporarily_unavailable", "failed to begin OAuth authorization", err, "client_id", req.ClientID)
+		return "", failure(ctx, "temporarily_unavailable", "failed to begin OAuth authorization", err, "client_id", util.BoundedLogField(req.ClientID))
 	}
 	defer rollback(tx)
 	q := s.q.WithTx(tx)
 	user, err := q.GetUserByID(ctx, userID)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return "", failure(ctx, "temporarily_unavailable", "failed to load OAuth consenting account", err, "client_id", req.ClientID)
+		return "", failure(ctx, "temporarily_unavailable", "failed to load OAuth consenting account", err, "client_id", util.BoundedLogField(req.ClientID))
 	}
 	if err != nil || len(IntersectScopes(strings.Fields(req.Scope), user.Role)) != len(strings.Fields(req.Scope)) {
 		return "", problem("access_denied")
@@ -139,7 +139,7 @@ func (s *Service) Authorize(ctx context.Context, req AuthorizationRequest, userI
 	if req.client.dynamicallyRegistered {
 		client, loadErr := q.GetOAuthClient(ctx, req.ClientID)
 		if loadErr != nil && !errors.Is(loadErr, sql.ErrNoRows) {
-			return "", failure(ctx, "temporarily_unavailable", "failed to reload consenting OAuth client", loadErr, "client_id", req.ClientID)
+			return "", failure(ctx, "temporarily_unavailable", "failed to reload consenting OAuth client", loadErr, "client_id", util.BoundedLogField(req.ClientID))
 		}
 		if loadErr != nil || client.ExpiresAt <= now {
 			return "", problem("invalid_client")
@@ -149,7 +149,7 @@ func (s *Service) Authorize(ctx context.Context, req AuthorizationRequest, userI
 		UserID: user.ID, ClientID: req.ClientID, Scopes: req.Scope, Resource: s.Resource(),
 		SessionVersion: user.SessionVersion, CreatedAt: now, ExpiresAt: now + int64(s.options.RefreshTTL/time.Second)})
 	if err != nil {
-		return "", failure(ctx, "server_error", "failed to create OAuth grant", err, "client_id", req.ClientID)
+		return "", failure(ctx, "server_error", "failed to create OAuth grant", err, "client_id", util.BoundedLogField(req.ClientID))
 	}
 	ts := &tokenStore{s: s, q: q, grant: g}
 	manager, _ := s.engine(ts, req.client)
@@ -157,11 +157,11 @@ func (s *Service) Authorize(ctx context.Context, req AuthorizationRequest, userI
 		ClientID: req.ClientID, UserID: strconv.FormatInt(user.ID, 10), RedirectURI: req.RedirectURI,
 		Scope: req.Scope, CodeChallenge: req.Challenge, CodeChallengeMethod: lib.CodeChallengeS256})
 	if err != nil {
-		slog.ErrorContext(ctx, "failed to issue OAuth authorization code", "error", err, "client_id", req.ClientID)
+		slog.ErrorContext(ctx, "failed to issue OAuth authorization code", "error", err, "client_id", util.BoundedLogField(req.ClientID))
 		return "", protocolProblem(err)
 	}
 	if err := tx.Commit(); err != nil {
-		return "", failure(ctx, "server_error", "failed to commit OAuth authorization", err, "client_id", req.ClientID)
+		return "", failure(ctx, "server_error", "failed to commit OAuth authorization", err, "client_id", util.BoundedLogField(req.ClientID))
 	}
 	s.audit(ctx, g, "OAuth connection authorized", false)
 	return info.GetCode(), nil
@@ -229,7 +229,7 @@ func (s *Service) Token(w http.ResponseWriter, r *http.Request) {
 	}
 	tx, err := s.db.BeginTx(r.Context(), nil)
 	if err != nil {
-		WriteProblem(w, failure(r.Context(), "temporarily_unavailable", "failed to begin OAuth token exchange", err, "client_id", client.ID))
+		WriteProblem(w, failure(r.Context(), "temporarily_unavailable", "failed to begin OAuth token exchange", err, "client_id", util.BoundedLogField(client.ID)))
 		return
 	}
 	defer rollback(tx)
@@ -266,7 +266,7 @@ func (s *Service) Token(w http.ResponseWriter, r *http.Request) {
 		default:
 			// Storage faults were logged with their cause where they occurred;
 			// this records the rest (for example a failed code consumption).
-			slog.ErrorContext(r.Context(), "OAuth token exchange failed", "error", err, "grant_type", grant, "client_id", client.ID)
+			slog.ErrorContext(r.Context(), "OAuth token exchange failed", "error", err, "grant_type", grant, "client_id", util.BoundedLogField(client.ID))
 		}
 		WriteProblem(w, problem(code))
 		return
@@ -276,12 +276,12 @@ func (s *Service) Token(w http.ResponseWriter, r *http.Request) {
 		// to consent time so it covers this family without sliding on refresh.
 		expires := time.Unix(ts.grant.CreatedAt, 0).Add(DCRClientLifetime).Unix()
 		if extendErr := ts.q.ExtendDCROAuthClient(r.Context(), store.ExtendDCROAuthClientParams{ID: client.ID, ExpiresAt: expires}); extendErr != nil {
-			WriteProblem(w, failure(r.Context(), "server_error", "failed to extend OAuth client lifetime", extendErr, "client_id", client.ID))
+			WriteProblem(w, failure(r.Context(), "server_error", "failed to extend OAuth client lifetime", extendErr, "client_id", util.BoundedLogField(client.ID)))
 			return
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		WriteProblem(w, failure(r.Context(), "server_error", "failed to commit OAuth token exchange", err, "client_id", client.ID))
+		WriteProblem(w, failure(r.Context(), "server_error", "failed to commit OAuth token exchange", err, "client_id", util.BoundedLogField(client.ID)))
 		return
 	}
 	writeJSON(w, http.StatusOK, engine.GetTokenData(info))
@@ -388,7 +388,7 @@ func (s *Service) Revoke(w http.ResponseWriter, r *http.Request) {
 			err = s.q.RevokeOAuthGrant(ctx, store.RevokeOAuthGrantParams{ID: g.ID, RevokedAt: s.now().Unix()})
 		}
 		if err != nil {
-			WriteProblem(w, failure(ctx, "temporarily_unavailable", "failed to revoke OAuth grant", err, "grant_id", g.ID, "client_id", g.ClientID))
+			WriteProblem(w, failure(ctx, "temporarily_unavailable", "failed to revoke OAuth grant", err, "grant_id", g.ID, "client_id", util.BoundedLogField(g.ClientID)))
 			return
 		}
 		if revoked {

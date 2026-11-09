@@ -4,10 +4,56 @@
 package embed
 
 import (
+	"bytes"
+	"encoding/json"
+	"log/slog"
+	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/olegiv/ocms-go/internal/module"
+	"github.com/olegiv/ocms-go/internal/service"
+	"github.com/olegiv/ocms-go/internal/testutil"
 )
+
+func TestEmbedOriginDenialBoundsAndSamplesAudit(t *testing.T) {
+	db, closeDB := testutil.TestDB(t)
+	t.Cleanup(closeDB)
+	var output bytes.Buffer
+	m := New()
+	m.allowedOrigins = map[string]struct{}{"https://allowed.example": {}}
+	m.ctx = &module.Context{Events: service.NewEventService(db), Logger: slog.New(slog.NewJSONHandler(&output, nil))}
+	path := "/embed/dify/messages/" + strings.Repeat("x", 5000)
+	for range 2 {
+		r := httptest.NewRequest(http.MethodGet, path, nil)
+		r.Header.Set("Origin", "https://blocked.example/"+strings.Repeat("o", 5000))
+		r.Header.Set("Referer", "https://blocked.example/"+strings.Repeat("r", 5000))
+		w := httptest.NewRecorder()
+		m.handleDifySuggestedProxy(w, r)
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("denial returned %d", w.Code)
+		}
+	}
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM events").Scan(&count); err != nil || count != 1 {
+		t.Fatalf("expected one sampled event, got %d, err=%v", count, err)
+	}
+	var raw, storedPath string
+	if err := db.QueryRow("SELECT metadata, request_url FROM events").Scan(&raw, &storedPath); err != nil {
+		t.Fatal(err)
+	}
+	var metadata map[string]string
+	if err := json.Unmarshal([]byte(raw), &metadata); err != nil || storedPath != path[:256] ||
+		metadata["path"] != storedPath || len(metadata["origin"]) != 256 || len(metadata["referer"]) != 256 {
+		t.Fatal("unbounded or missing embed audit fields")
+	}
+	if strings.Contains(output.String(), strings.Repeat("o", 257)) ||
+		strings.Contains(output.String(), strings.Repeat("r", 257)) || strings.Contains(output.String(), strings.Repeat("x", 257)) {
+		t.Fatal("unbounded field reached the server log")
+	}
+}
 
 func TestParseAllowedOrigins(t *testing.T) {
 	t.Run("empty config", func(t *testing.T) {

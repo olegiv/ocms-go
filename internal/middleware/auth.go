@@ -21,6 +21,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // ContextKey is a type for context keys to avoid collisions.
@@ -346,8 +347,8 @@ func RequireRoleWithEventLog(minRole string, eventService *service.EventService)
 				// Log 403 for security monitoring (application logs)
 				slog.Warn("access denied",
 					"status", http.StatusForbidden,
-					"method", r.Method,
-					"path", r.URL.Path,
+					"method", util.BoundedLogField(r.Method),
+					"path", util.BoundedLogField(r.URL.Path),
 					"user_id", user.ID,
 					"user_role", user.Role,
 					"required_role", minRole,
@@ -357,7 +358,7 @@ func RequireRoleWithEventLog(minRole string, eventService *service.EventService)
 				// Log 403 to event log (visible in admin panel)
 				if eventService != nil {
 					metadata := map[string]any{
-						"method":        r.Method,
+						"method":        util.BoundedLogField(r.Method),
 						"status":        http.StatusForbidden,
 						"user_role":     user.Role,
 						"required_role": minRole,

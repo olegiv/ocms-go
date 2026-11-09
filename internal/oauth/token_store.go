@@ -19,6 +19,7 @@ import (
 	"github.com/go-oauth2/oauth2/v4/models"
 
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // tokenStore is private to one transaction and one token request.
@@ -84,7 +85,7 @@ func (t *tokenStore) GetByCode(ctx context.Context, raw string) (lib.TokenInfo, 
 	// retryable 5xx instead of telling the client the code is dead.
 	c, err := t.q.GetOAuthCode(ctx, tokenHash(raw))
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return nil, storageProblem(ctx, "failed to load OAuth authorization code", err, "client_id", t.clientID)
+		return nil, storageProblem(ctx, "failed to load OAuth authorization code", err, "client_id", util.BoundedLogField(t.clientID))
 	}
 	if err == nil && c.ConsumedAt != 0 {
 		return nil, t.revokeReplayedCode(ctx, c)
@@ -134,7 +135,7 @@ func (t *tokenStore) GetByCode(ctx context.Context, raw string) (lib.TokenInfo, 
 func (t *tokenStore) revokeReplayedCode(ctx context.Context, c store.OauthCode) error {
 	g, err := t.q.GetOAuthGrant(ctx, c.GrantID)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return storageProblem(ctx, "failed to load OAuth grant of a replayed authorization code", err, "client_id", t.clientID)
+		return storageProblem(ctx, "failed to load OAuth grant of a replayed authorization code", err, "client_id", util.BoundedLogField(t.clientID))
 	}
 	if err != nil || g.ClientID != t.clientID || g.Resource != t.resource || g.RevokedAt != 0 {
 		return liberrors.ErrInvalidAuthorizeCode
@@ -180,7 +181,7 @@ func (t *tokenStore) GetByRefresh(ctx context.Context, raw string) (lib.TokenInf
 	}
 	row, err := t.q.GetOAuthTokenByRefresh(ctx, tokenHash(raw))
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return nil, storageProblem(ctx, "failed to load OAuth refresh token", err, "client_id", t.clientID)
+		return nil, storageProblem(ctx, "failed to load OAuth refresh token", err, "client_id", util.BoundedLogField(t.clientID))
 	}
 	if err != nil {
 		return nil, liberrors.ErrInvalidRefreshToken

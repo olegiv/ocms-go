@@ -9,7 +9,38 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	chimw "github.com/go-chi/chi/v5/middleware"
 )
+
+func TestAccessLogBoundsOnlyItsRequestCopy(t *testing.T) {
+	path := "/" + strings.Repeat("x", 2000)
+	host := strings.Repeat("h", 500)
+	requestID := "\u202e\u2028\u2029" + strings.Repeat("i", 500)
+	h := RedactedRequestLogger(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.RequestURI != path[:256] || r.Host != host[:256] ||
+				chimw.GetReqID(r.Context()) != strings.Repeat("i", 256) {
+				t.Fatal("logger received unbounded request fields")
+			}
+			next.ServeHTTP(w, r)
+		})
+	})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.RequestURI != path || r.URL.Path != path || r.Host != host ||
+			chimw.GetReqID(r.Context()) != requestID {
+			t.Fatal("handler request fields changed")
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	r := httptest.NewRequest(http.MethodGet, path, nil)
+	r.Host = host
+	r = r.WithContext(context.WithValue(r.Context(), chimw.RequestIDKey, requestID))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("handler returned %d", w.Code)
+	}
+}
 
 func TestOAuthLoggerRedactsQueriesAndPreservesHandlerInput(t *testing.T) {
 	type loggerContextKey struct{}
