@@ -257,6 +257,22 @@ The script:
 All instances share `/opt/ocms/bin/ocms`, so instances the command does not list keep
 running the old binary until they restart.
 
+### Starter layouts in a shared release bundle
+
+Before uploading a bundle that includes Starter layouts, run this check from
+the core checkout. Pass the `dist/js` directory used to build the candidate
+binary and the staged layout files. Chain the upload after this check with
+`&&` or run both in a script with `set -e` so a mismatch stops the rollout.
+
+```bash
+go run ./scripts/deploy/check-starter-alpine \
+  "$asset_dir" "$layout_a" "$layout_b"
+```
+
+The check recomputes the SHA-384 integrity values for Alpine and Alpine Collapse.
+It reports the layout and script on a mismatch and fails if a file, script tag,
+or integrity attribute is missing.
+
 ### Single Instance — With Custom Content (from local machine)
 
 Use `deploy.sh` when you also need to sync custom themes:
