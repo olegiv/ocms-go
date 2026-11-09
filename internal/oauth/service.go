@@ -214,6 +214,7 @@ func IntersectScopes(scopes []string, role string) []string {
 type Problem struct {
 	Code, Description string
 	cause             error
+	retryAfterSeconds int64
 }
 
 func (p *Problem) Error() string { return p.Code }

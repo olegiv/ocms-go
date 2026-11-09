@@ -159,6 +159,18 @@ The [retention policy](connected-apps.md#retention-policy) describes atomic
 batches, preview dependencies, scheduling and rollback. This maintenance is
 deployed on MCP staging.
 
+Successful refreshes count against rolling one-hour budgets for the grant
+and the account. The default access lifetime allows 8 per grant and 80 per
+account. For shorter access lifetimes, the grant limit is at least enough
+for one renewal per half-lifetime, rounded up. The account limit is ten
+times the grant limit. Recent rotations from revoked grants still count
+toward the account budget. Initial code redemption is separate.
+
+When either budget is exhausted, the token endpoint returns HTTP 503
+(`temporarily_unavailable`) with `Retry-After`. Keep the current refresh
+token and retry after that delay. The refusal leaves the token family
+intact and preserves the spent-token hashes used to detect replay.
+
 Storage faults are retryable. A database error while checking an access
 token, code or refresh token, or while revoking, is logged with its cause and
 answered `temporarily_unavailable` (HTTP 503; the MCP endpoint answers 500),

@@ -54,6 +54,9 @@ func (t *tokenStore) Create(ctx context.Context, info lib.TokenInfo) error {
 		return liberrors.ErrInvalidGrant
 	}
 	if t.refresh != nil {
+		if err := t.checkRefreshBudget(ctx, now); err != nil {
+			return err
+		}
 		n, err := t.q.ConsumeOAuthRefresh(ctx, store.ConsumeOAuthRefreshParams{
 			RefreshUsedAt: now, AccessRevokedAt: now, ID: t.refresh.ID})
 		if err != nil {

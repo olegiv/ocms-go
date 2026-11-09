@@ -321,6 +321,12 @@ type OauthGrant struct {
 	LastUsedAt     int64  `json:"last_used_at"`
 }
 
+type OauthGrantRefreshActivity struct {
+	GrantID       string `json:"grant_id"`
+	UserID        int64  `json:"user_id"`
+	LastRefreshAt int64  `json:"last_refresh_at"`
+}
+
 type OauthToken struct {
 	ID              string `json:"id"`
 	GrantID         string `json:"grant_id"`

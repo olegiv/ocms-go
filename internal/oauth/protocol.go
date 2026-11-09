@@ -191,6 +191,9 @@ func WriteProblem(w http.ResponseWriter, err error) {
 	if p.Code == "server_error" || p.Code == "temporarily_unavailable" {
 		status = http.StatusServiceUnavailable
 	}
+	if p.retryAfterSeconds > 0 {
+		w.Header().Set("Retry-After", strconv.FormatInt(p.retryAfterSeconds, 10))
+	}
 	writeJSON(w, status, map[string]string{"error": p.Code, "error_description": p.Description})
 }
 
@@ -255,7 +258,8 @@ func (s *Service) Token(w http.ResponseWriter, r *http.Request) {
 		var p *Problem
 		switch {
 		case errors.As(err, &p):
-			code = p.Code
+			WriteProblem(w, p)
+			return
 		case errors.Is(err, liberrors.ErrInvalidAuthorizeCode) || errors.Is(err, liberrors.ErrInvalidRefreshToken) || errors.Is(err, liberrors.ErrInvalidRedirectURI) ||
 			errors.Is(err, liberrors.ErrInvalidGrant) ||
 			errors.Is(err, liberrors.ErrExpiredRefreshToken) || errors.Is(err, liberrors.ErrInvalidCodeChallenge) ||

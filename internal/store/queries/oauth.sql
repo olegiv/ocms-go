@@ -98,3 +98,18 @@ SELECT * FROM oauth_tokens WHERE refresh_hash = ?;
 -- name: ConsumeOAuthRefresh :execrows
 UPDATE oauth_tokens SET refresh_used_at = ?, access_revoked_at = ?
 WHERE id = ? AND refresh_used_at = 0;
+
+-- The limit-th newest successful rotation determines when the budget frees a
+-- slot, including when an existing family was already above the limit.
+-- name: GetOAuthGrantRefreshBudget :one
+SELECT refresh_used_at FROM oauth_tokens
+WHERE grant_id = sqlc.arg(grant_id) AND refresh_used_at > 0 AND refresh_used_at >= sqlc.arg(cutoff)
+ORDER BY refresh_used_at DESC LIMIT 1 OFFSET sqlc.arg(budget_offset);
+
+-- Include recent rotations from all grants of the account, even revoked ones.
+-- name: GetOAuthAccountRefreshBudget :one
+SELECT t.refresh_used_at FROM oauth_grant_refresh_activity activity
+JOIN oauth_tokens t ON t.grant_id = activity.grant_id
+WHERE activity.user_id = sqlc.arg(user_id) AND activity.last_refresh_at >= sqlc.arg(cutoff)
+AND t.refresh_used_at > 0 AND t.refresh_used_at >= sqlc.arg(cutoff)
+ORDER BY t.refresh_used_at DESC LIMIT 1 OFFSET sqlc.arg(budget_offset);

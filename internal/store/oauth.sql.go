@@ -218,6 +218,28 @@ func (q *Queries) ExtendDCROAuthClient(ctx context.Context, arg ExtendDCROAuthCl
 	return err
 }
 
+const getOAuthAccountRefreshBudget = `-- name: GetOAuthAccountRefreshBudget :one
+SELECT t.refresh_used_at FROM oauth_grant_refresh_activity activity
+JOIN oauth_tokens t ON t.grant_id = activity.grant_id
+WHERE activity.user_id = ?1 AND activity.last_refresh_at >= ?2
+AND t.refresh_used_at > 0 AND t.refresh_used_at >= ?2
+ORDER BY t.refresh_used_at DESC LIMIT 1 OFFSET ?3
+`
+
+type GetOAuthAccountRefreshBudgetParams struct {
+	UserID       int64 `json:"user_id"`
+	Cutoff       int64 `json:"cutoff"`
+	BudgetOffset int64 `json:"budget_offset"`
+}
+
+// Include recent rotations from all grants of the account, even revoked ones.
+func (q *Queries) GetOAuthAccountRefreshBudget(ctx context.Context, arg GetOAuthAccountRefreshBudgetParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getOAuthAccountRefreshBudget, arg.UserID, arg.Cutoff, arg.BudgetOffset)
+	var refresh_used_at int64
+	err := row.Scan(&refresh_used_at)
+	return refresh_used_at, err
+}
+
 const getOAuthClient = `-- name: GetOAuthClient :one
 SELECT id, name, redirect_uris, source, expires_at FROM oauth_clients WHERE id = ?
 `
@@ -274,6 +296,27 @@ func (q *Queries) GetOAuthGrant(ctx context.Context, id string) (OauthGrant, err
 		&i.LastUsedAt,
 	)
 	return i, err
+}
+
+const getOAuthGrantRefreshBudget = `-- name: GetOAuthGrantRefreshBudget :one
+SELECT refresh_used_at FROM oauth_tokens
+WHERE grant_id = ?1 AND refresh_used_at > 0 AND refresh_used_at >= ?2
+ORDER BY refresh_used_at DESC LIMIT 1 OFFSET ?3
+`
+
+type GetOAuthGrantRefreshBudgetParams struct {
+	GrantID      string `json:"grant_id"`
+	Cutoff       int64  `json:"cutoff"`
+	BudgetOffset int64  `json:"budget_offset"`
+}
+
+// The limit-th newest successful rotation determines when the budget frees a
+// slot, including when an existing family was already above the limit.
+func (q *Queries) GetOAuthGrantRefreshBudget(ctx context.Context, arg GetOAuthGrantRefreshBudgetParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getOAuthGrantRefreshBudget, arg.GrantID, arg.Cutoff, arg.BudgetOffset)
+	var refresh_used_at int64
+	err := row.Scan(&refresh_used_at)
+	return refresh_used_at, err
 }
 
 const getOAuthTokenByAccess = `-- name: GetOAuthTokenByAccess :one
