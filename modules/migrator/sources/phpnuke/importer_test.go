@@ -79,7 +79,7 @@ func (f *fakeReader) GetStoryAuthors(context.Context) ([]User, error) {
 func (f *fakeReader) GetPublishingAdmins(context.Context) ([]User, error) {
 	return f.admins, f.err("GetPublishingAdmins")
 }
-func (f *fakeReader) Prefix() string { return "tr_" }
+func (f *fakeReader) Prefix() string { return "nuke_" }
 
 // mockTracker records what an import claimed so the undo path can find it.
 type mockTracker struct {
@@ -425,7 +425,7 @@ func TestImportedUsersCannotSignIn(t *testing.T) {
 	userMap := make(map[string]int64)
 
 	reader := &fakeReader{authors: []User{
-		{ID: 2, Username: ns("Olegiv"), Name: ns("Oleg"), Email: ns("olegiv@tunisie.ru")},
+		{ID: 2, Username: ns("Olegiv"), Name: ns("Oleg"), Email: ns("author@example.com")},
 		{ID: 5, Username: ns("sveta"), Name: ns(""), Email: ns("sveta@example.com")},
 	}}
 	if err := NewSource().importUsers(ctx, queries, reader, userMap,
@@ -436,7 +436,7 @@ func TestImportedUsersCannotSignIn(t *testing.T) {
 		t.Fatalf("UsersImported = %d, want 2; errors: %v", result.UsersImported, result.Errors)
 	}
 
-	for _, email := range []string{"olegiv@tunisie.ru", "sveta@example.com"} {
+	for _, email := range []string{"author@example.com", "sveta@example.com"} {
 		user, err := queries.GetUserByEmail(ctx, email)
 		if err != nil {
 			t.Fatalf("imported user %q missing: %v", email, err)
@@ -748,7 +748,7 @@ func TestImportCategoriesDistinguishesMissingTableFromReadFailure(t *testing.T) 
 		result := &types.ImportResult{}
 		reader := &fakeReader{
 			topics:      topics,
-			pageCatsErr: &mysql.MySQLError{Number: mysqlErrNoSuchTable, Message: "Table 'tr_pages_categories' doesn't exist"},
+			pageCatsErr: &mysql.MySQLError{Number: mysqlErrNoSuchTable, Message: "Table 'nuke_pages_categories' doesn't exist"},
 		}
 		if err := NewSource().importCategories(context.Background(), queries, reader,
 			defaultLang(t, queries), make(map[int64]int64), make(map[int64]int64),
@@ -763,7 +763,7 @@ func TestImportCategoriesDistinguishesMissingTableFromReadFailure(t *testing.T) 
 		}
 		// Prefix() was added to sourceReader solely so this names the real
 		// table; without the assertion a regression would pass unnoticed.
-		if !strings.Contains(result.Notices[0], "tr_pages_categories") {
+		if !strings.Contains(result.Notices[0], "nuke_pages_categories") {
 			t.Errorf("the notice should name the missing table: %q", result.Notices[0])
 		}
 		if result.CategoriesImported != 1 {
@@ -2260,7 +2260,7 @@ func TestPublishingAdminReadFailuresAreClassified(t *testing.T) {
 	}{
 		{
 			name: "absent table is a notice",
-			err:  &mysql.MySQLError{Number: mysqlErrNoSuchTable, Message: "Table 'tr_authors' doesn't exist"},
+			err:  &mysql.MySQLError{Number: mysqlErrNoSuchTable, Message: "Table 'nuke_authors' doesn't exist"},
 		},
 		{
 			name:      "permission denied is an error",
@@ -2360,8 +2360,8 @@ func TestAdminsSharingAnEmailKeepDistinctBylines(t *testing.T) {
 	queries, _ := setupDB(t)
 	ctx := context.Background()
 	reader := &fakeReader{admins: []User{
-		{Username: ns("God"), Name: ns("Oleg"), Email: ns("webmaster@site.ru")},
-		{Username: ns("Sveta"), Name: ns("Sveta"), Email: ns("webmaster@site.ru")},
+		{Username: ns("God"), Name: ns("Oleg"), Email: ns("webmaster@example.com")},
+		{Username: ns("Sveta"), Name: ns("Sveta"), Email: ns("webmaster@example.com")},
 	}}
 
 	var firstRun map[string]int64
@@ -2412,7 +2412,7 @@ func TestAdminsSharingAnEmailKeepDistinctBylines(t *testing.T) {
 		if user.Role == model.RoleAdmin {
 			continue // the seeded operator
 		}
-		if user.Email == "webmaster@site.ru" {
+		if user.Email == "webmaster@example.com" {
 			continue // the first claimant keeps the real address
 		}
 		if !strings.HasSuffix(user.Email, ".invalid") {
@@ -2429,8 +2429,8 @@ func TestAdminsSharingAnEmailKeepDistinctBylines(t *testing.T) {
 func TestDistinctInertEmailIsStableAndUndeliverable(t *testing.T) {
 	t.Run("shape", func(t *testing.T) {
 		for _, tc := range []struct{ name, username, email, wantPrefix, wantDomain string }{
-			{"ordinary", "Sveta", "webmaster@site.ru", "sveta-", "@site.ru.invalid"},
-			{"case folds", "SVETA", "webmaster@SITE.RU", "sveta-", "@site.ru.invalid"},
+			{"ordinary", "Sveta", "webmaster@example.com", "sveta-", "@example.com.invalid"},
+			{"case folds", "SVETA", "webmaster@EXAMPLE.COM", "sveta-", "@example.com.invalid"},
 			{"no domain to borrow", "Sveta", "not-an-address", "sveta-", "@phpnuke.invalid"},
 			// The illegal characters go, and so does the empty label they leave
 			// behind: "evil..site" would not name a host.
@@ -2456,7 +2456,7 @@ func TestDistinctInertEmailIsStableAndUndeliverable(t *testing.T) {
 	// Every address must end up somewhere no mail can follow.
 	t.Run("undeliverable", func(t *testing.T) {
 		for _, username := range []string{"Sveta", "Олег", "", "  ", "x@y"} {
-			if got := distinctInertEmail(username, "a@b.ru"); !strings.HasSuffix(got, ".invalid") {
+			if got := distinctInertEmail(username, "a@example.com"); !strings.HasSuffix(got, ".invalid") {
 				t.Errorf("distinctInertEmail(%q) = %q, which is deliverable", username, got)
 			}
 		}
@@ -2464,8 +2464,8 @@ func TestDistinctInertEmailIsStableAndUndeliverable(t *testing.T) {
 
 	t.Run("deterministic", func(t *testing.T) {
 		for _, username := range []string{"Sveta", "Олег", "john.doe"} {
-			first := distinctInertEmail(username, "a@b.ru")
-			if again := distinctInertEmail(username, "a@b.ru"); again != first {
+			first := distinctInertEmail(username, "a@example.com")
+			if again := distinctInertEmail(username, "a@example.com"); again != first {
 				t.Errorf("%q produced %q then %q; a re-run would create a second account",
 					username, first, again)
 			}
@@ -2484,7 +2484,7 @@ func TestDistinctInertEmailIsStableAndUndeliverable(t *testing.T) {
 		}
 		seen := make(map[string]string, len(usernames))
 		for _, username := range usernames {
-			address := distinctInertEmail(username, "webmaster@site.ru")
+			address := distinctInertEmail(username, "webmaster@example.com")
 			if owner, clash := seen[address]; clash && authorKey(owner) != authorKey(username) {
 				t.Errorf("%q and %q both map to %s, so one loses every byline",
 					owner, username, address)
@@ -2593,7 +2593,7 @@ func TestThreeAdminsSharingAnEmailStayDistinct(t *testing.T) {
 	names := []string{"alice", "john.doe", "john_doe"}
 	admins := make([]User, len(names))
 	for i, name := range names {
-		admins[i] = User{Username: ns(name), Name: ns(name), Email: ns("webmaster@site.ru")}
+		admins[i] = User{Username: ns(name), Name: ns(name), Email: ns("webmaster@example.com")}
 	}
 	reader := &fakeReader{admins: admins}
 
@@ -2740,7 +2740,7 @@ func TestTaxonomyOverflowSlugIsReproducible(t *testing.T) {
 func TestAbsentOptionalContentTablesDoNotAbortTheImport(t *testing.T) {
 	absent := func(table string) error {
 		return &mysql.MySQLError{Number: mysqlErrNoSuchTable,
-			Message: "Table 'tr_" + table + "' doesn't exist"}
+			Message: "Table 'nuke_" + table + "' doesn't exist"}
 	}
 
 	for _, tc := range []struct {
@@ -2968,29 +2968,29 @@ func TestAdminProfileFillsGapsInTheRegisteredRow(t *testing.T) {
 		{
 			name:       "the blank email comes from the admin row",
 			registered: User{ID: 1, Username: ns("sveta"), Name: ns("Sveta"), Email: ns("")},
-			admin:      User{Username: ns("sveta"), Name: ns("S. Admin"), Email: ns("sveta@site.ru")},
-			wantEmail:  "sveta@site.ru",
+			admin:      User{Username: ns("sveta"), Name: ns("S. Admin"), Email: ns("sveta@example.com")},
+			wantEmail:  "sveta@example.com",
 			wantName:   "Sveta",
 		},
 		{
 			name:       "a whitespace-only email is still blank",
 			registered: User{ID: 1, Username: ns("sveta"), Name: ns("Sveta"), Email: ns("   ")},
-			admin:      User{Username: ns("sveta"), Email: ns("sveta@site.ru")},
-			wantEmail:  "sveta@site.ru",
+			admin:      User{Username: ns("sveta"), Email: ns("sveta@example.com")},
+			wantEmail:  "sveta@example.com",
 			wantName:   "Sveta",
 		},
 		{
 			name:       "the registered row still wins where it has a value",
-			registered: User{ID: 1, Username: ns("sveta"), Name: ns("Sveta"), Email: ns("sveta@personal.ru")},
-			admin:      User{Username: ns("sveta"), Name: ns("Webmaster"), Email: ns("webmaster@site.ru")},
-			wantEmail:  "sveta@personal.ru",
+			registered: User{ID: 1, Username: ns("sveta"), Name: ns("Sveta"), Email: ns("sveta@personal.example")},
+			admin:      User{Username: ns("sveta"), Name: ns("Webmaster"), Email: ns("webmaster@example.com")},
+			wantEmail:  "sveta@personal.example",
 			wantName:   "Sveta",
 		},
 		{
 			name:       "a blank display name falls back to the admin row",
-			registered: User{ID: 1, Username: ns("sveta"), Name: ns(" "), Email: ns("sveta@personal.ru")},
-			admin:      User{Username: ns("SVETA"), Name: ns("Sveta Admin"), Email: ns("webmaster@site.ru")},
-			wantEmail:  "sveta@personal.ru",
+			registered: User{ID: 1, Username: ns("sveta"), Name: ns(" "), Email: ns("sveta@personal.example")},
+			admin:      User{Username: ns("SVETA"), Name: ns("Sveta Admin"), Email: ns("webmaster@example.com")},
+			wantEmail:  "sveta@personal.example",
 			wantName:   "Sveta Admin",
 		},
 	} {

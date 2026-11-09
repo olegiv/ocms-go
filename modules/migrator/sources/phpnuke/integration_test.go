@@ -9,9 +9,9 @@
 //
 //	OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!! \
 //	OCMS_MIGRATOR_ALLOWED_DB_HOSTS=127.0.0.1 \
-//	PHPNUKE_TEST_HOST=127.0.0.1 PHPNUKE_TEST_PORT=8181 \
+//	PHPNUKE_TEST_HOST=127.0.0.1 PHPNUKE_TEST_PORT=3306 \
 //	PHPNUKE_TEST_USER=admin PHPNUKE_TEST_PASSWORD=... \
-//	PHPNUKE_TEST_DB=admin_tunisie_ru PHPNUKE_TEST_PREFIX=tr_ \
+//	PHPNUKE_TEST_DB=nuke PHPNUKE_TEST_PREFIX=nuke_ \
 //	PHPNUKE_FILES=/path/to/htdocs \
 //	go test -tags phpnuke_integration -v ./modules/migrator/sources/phpnuke/
 package phpnuke

@@ -30,12 +30,12 @@ func newSourceStub(t *testing.T, schema ...string) *Reader {
 			t.Fatalf("failed to apply schema %q: %v", statement, err)
 		}
 	}
-	return &Reader{db: db, prefix: "tr_"}
+	return &Reader{db: db, prefix: "nuke_"}
 }
 
 func TestNewReaderRejectsUnsafeTablePrefix(t *testing.T) {
 	for _, prefix := range []string{
-		"tr_`; DROP TABLE users; --",
+		"nuke_`; DROP TABLE users; --",
 		"tr-",
 		"tr ",
 		"tr'",
@@ -56,13 +56,13 @@ func TestNewReaderRejectsUnsafeTablePrefix(t *testing.T) {
 }
 
 func TestReaderTableQuotesPrefixedName(t *testing.T) {
-	reader := &Reader{prefix: "tr_"}
+	reader := &Reader{prefix: "nuke_"}
 	got, err := reader.table("stories")
 	if err != nil {
 		t.Fatalf("table() error = %v", err)
 	}
-	if got != "`tr_stories`" {
-		t.Errorf("table() = %q, want %q", got, "`tr_stories`")
+	if got != "`nuke_stories`" {
+		t.Errorf("table() = %q, want %q", got, "`nuke_stories`")
 	}
 
 	if _, err := reader.table("stories; DROP TABLE users"); err == nil {
@@ -79,11 +79,11 @@ func TestReaderPrefixIsSanitizerOutput(t *testing.T) {
 
 func TestGetStoriesReadsBothBodyColumns(t *testing.T) {
 	reader := newSourceStub(t, `
-		CREATE TABLE tr_stories (
+		CREATE TABLE nuke_stories (
 			sid INTEGER PRIMARY KEY, catid INTEGER, aid TEXT, title TEXT, time DATETIME,
 			hometext TEXT, bodytext TEXT, topic INTEGER, informant TEXT, notes TEXT
 		)`,
-		`INSERT INTO tr_stories VALUES
+		`INSERT INTO nuke_stories VALUES
 			(2, 5, 'Olegiv', 'Second', '2010-01-02 03:04:05', '<p>teaser</p>', '<p>rest</p>', 8, 'sveta', ''),
 			(1, 0, 'Olegiv', NULL, NULL, NULL, '<p>only body</p>', 3, '', '')`)
 
@@ -118,8 +118,8 @@ func TestGetStoriesReadsBothBodyColumns(t *testing.T) {
 
 func TestGetTopicsHandlesNullLabels(t *testing.T) {
 	reader := newSourceStub(t, `
-		CREATE TABLE tr_topics (topicid INTEGER PRIMARY KEY, topicname TEXT, topictext TEXT, topicimage TEXT)`,
-		`INSERT INTO tr_topics VALUES
+		CREATE TABLE nuke_topics (topicid INTEGER PRIMARY KEY, topicname TEXT, topictext TEXT, topicimage TEXT)`,
+		`INSERT INTO nuke_topics VALUES
 			(1, 'rHotels', 'Отели', 'hotels.gif'),
 			(2, 'rOnlyName', NULL, ''),
 			(3, NULL, NULL, '')`)
@@ -144,8 +144,8 @@ func TestGetTopicsHandlesNullLabels(t *testing.T) {
 
 func TestGetEncyclopediaTermsGroupsByEntry(t *testing.T) {
 	reader := newSourceStub(t, `
-		CREATE TABLE tr_encyclopedia_text (tid INTEGER PRIMARY KEY, eid INTEGER, title TEXT, text TEXT)`,
-		`INSERT INTO tr_encyclopedia_text VALUES
+		CREATE TABLE nuke_encyclopedia_text (tid INTEGER PRIMARY KEY, eid INTEGER, title TEXT, text TEXT)`,
+		`INSERT INTO nuke_encyclopedia_text VALUES
 			(1, 1, 'Привет!', 'hello'),
 			(2, 1, 'Как дела?', 'how are you'),
 			(3, 2, 'Number', 'one')`)
@@ -170,16 +170,16 @@ func TestGetEncyclopediaTermsGroupsByEntry(t *testing.T) {
 // wholesale would create hundreds of accounts that never wrote anything.
 func TestGetStoryAuthorsSelectsOnlyCreditedAccounts(t *testing.T) {
 	reader := newSourceStub(t, `
-		CREATE TABLE tr_users (user_id INTEGER PRIMARY KEY, username TEXT, name TEXT, user_email TEXT)`,
-		`CREATE TABLE tr_stories (
+		CREATE TABLE nuke_users (user_id INTEGER PRIMARY KEY, username TEXT, name TEXT, user_email TEXT)`,
+		`CREATE TABLE nuke_stories (
 			sid INTEGER PRIMARY KEY, catid INTEGER, aid TEXT, title TEXT, time DATETIME,
 			hometext TEXT, bodytext TEXT, topic INTEGER, informant TEXT, notes TEXT
 		)`,
-		`INSERT INTO tr_users VALUES
-			(1, 'Olegiv', 'Oleg', 'olegiv@tunisie.ru'),
+		`INSERT INTO nuke_users VALUES
+			(1, 'Olegiv', 'Oleg', 'author@example.com'),
 			(2, 'sveta', 'Sveta', 'sveta@example.com'),
 			(3, 'lurker', 'Lurker', 'lurker@example.com')`,
-		`INSERT INTO tr_stories VALUES
+		`INSERT INTO nuke_stories VALUES
 			(1, 0, 'Olegiv', 'A', NULL, '', '', 1, 'sveta', ''),
 			(2, 0, 'Olegiv', 'B', NULL, '', '', 1, '', '')`)
 
@@ -204,11 +204,11 @@ func TestGetStoryAuthorsSelectsOnlyCreditedAccounts(t *testing.T) {
 
 func TestCountsUsePrefixedTables(t *testing.T) {
 	reader := newSourceStub(t,
-		`CREATE TABLE tr_stories (sid INTEGER PRIMARY KEY)`,
-		`CREATE TABLE tr_topics (topicid INTEGER PRIMARY KEY)`,
-		`CREATE TABLE tr_pages (pid INTEGER PRIMARY KEY)`,
-		`INSERT INTO tr_stories VALUES (1), (2), (3)`,
-		`INSERT INTO tr_topics VALUES (1)`)
+		`CREATE TABLE nuke_stories (sid INTEGER PRIMARY KEY)`,
+		`CREATE TABLE nuke_topics (topicid INTEGER PRIMARY KEY)`,
+		`CREATE TABLE nuke_pages (pid INTEGER PRIMARY KEY)`,
+		`INSERT INTO nuke_stories VALUES (1), (2), (3)`,
+		`INSERT INTO nuke_topics VALUES (1)`)
 
 	ctx := context.Background()
 	if got, err := reader.StoryCount(ctx); err != nil || got != 3 {
@@ -231,10 +231,10 @@ func TestCountsReportMissingTable(t *testing.T) {
 
 func TestGetCategoriesReadsBothTaxonomyTables(t *testing.T) {
 	reader := newSourceStub(t,
-		`CREATE TABLE tr_stories_cat (catid INTEGER PRIMARY KEY, title TEXT)`,
-		`CREATE TABLE tr_pages_categories (cid INTEGER PRIMARY KEY, title TEXT, description TEXT)`,
-		`INSERT INTO tr_stories_cat VALUES (2, 'Новости'), (3, 'Information')`,
-		`INSERT INTO tr_pages_categories VALUES (1, 'Информация', '')`)
+		`CREATE TABLE nuke_stories_cat (catid INTEGER PRIMARY KEY, title TEXT)`,
+		`CREATE TABLE nuke_pages_categories (cid INTEGER PRIMARY KEY, title TEXT, description TEXT)`,
+		`INSERT INTO nuke_stories_cat VALUES (2, 'Новости'), (3, 'Information')`,
+		`INSERT INTO nuke_pages_categories VALUES (1, 'Информация', '')`)
 
 	ctx := context.Background()
 	storyCats, err := reader.GetStoryCategories(ctx)
@@ -256,11 +256,11 @@ func TestGetCategoriesReadsBothTaxonomyTables(t *testing.T) {
 
 func TestGetStaticPagesReadsEverySection(t *testing.T) {
 	reader := newSourceStub(t, `
-		CREATE TABLE tr_pages (
+		CREATE TABLE nuke_pages (
 			pid INTEGER PRIMARY KEY, cid INTEGER, title TEXT, subtitle TEXT, active INTEGER,
 			page_header TEXT, text TEXT, page_footer TEXT, signature TEXT, date DATETIME
 		)`,
-		`INSERT INTO tr_pages VALUES
+		`INSERT INTO nuke_pages VALUES
 			(1, 2, 'Title', 'Subtitle', 1, '<h1>h</h1>', '<p>body</p>', '<p>f</p>', 'sig', '2012-01-01 00:00:00')`)
 
 	pages, err := reader.GetStaticPages(context.Background())
@@ -291,24 +291,24 @@ func TestGetStaticPagesReadsEverySection(t *testing.T) {
 // database that has been through upgrades and hand-written SQL.
 func TestReadsSurviveNullColumns(t *testing.T) {
 	reader := newSourceStub(t,
-		`CREATE TABLE tr_stories (sid INTEGER PRIMARY KEY, catid INTEGER, aid TEXT, title TEXT,
+		`CREATE TABLE nuke_stories (sid INTEGER PRIMARY KEY, catid INTEGER, aid TEXT, title TEXT,
 			time DATETIME, hometext TEXT, bodytext TEXT, topic INTEGER, informant TEXT)`,
-		`INSERT INTO tr_stories VALUES (1,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL)`,
-		`CREATE TABLE tr_pages (pid INTEGER PRIMARY KEY, cid INTEGER, title TEXT, subtitle TEXT,
+		`INSERT INTO nuke_stories VALUES (1,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL)`,
+		`CREATE TABLE nuke_pages (pid INTEGER PRIMARY KEY, cid INTEGER, title TEXT, subtitle TEXT,
 			active INTEGER, page_header TEXT, text TEXT, page_footer TEXT, signature TEXT, date DATETIME)`,
-		`INSERT INTO tr_pages VALUES (1,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL)`,
-		`CREATE TABLE tr_topics (topicid INTEGER PRIMARY KEY, topicname TEXT, topictext TEXT)`,
-		`INSERT INTO tr_topics VALUES (1,NULL,NULL)`,
-		`CREATE TABLE tr_stories_cat (catid INTEGER PRIMARY KEY, title TEXT)`,
-		`INSERT INTO tr_stories_cat VALUES (1,NULL)`,
-		`CREATE TABLE tr_pages_categories (cid INTEGER PRIMARY KEY, title TEXT, description TEXT)`,
-		`INSERT INTO tr_pages_categories VALUES (1,NULL,NULL)`,
-		`CREATE TABLE tr_encyclopedia (eid INTEGER PRIMARY KEY, title TEXT, description TEXT, active INTEGER)`,
-		`INSERT INTO tr_encyclopedia VALUES (1,NULL,NULL,NULL)`,
-		`CREATE TABLE tr_encyclopedia_text (tid INTEGER PRIMARY KEY, eid INTEGER, title TEXT, text TEXT)`,
-		`INSERT INTO tr_encyclopedia_text VALUES (1,NULL,NULL,NULL)`,
-		`CREATE TABLE tr_users (user_id INTEGER PRIMARY KEY, username TEXT, name TEXT, user_email TEXT)`,
-		`INSERT INTO tr_users VALUES (1,NULL,NULL,NULL)`)
+		`INSERT INTO nuke_pages VALUES (1,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL)`,
+		`CREATE TABLE nuke_topics (topicid INTEGER PRIMARY KEY, topicname TEXT, topictext TEXT)`,
+		`INSERT INTO nuke_topics VALUES (1,NULL,NULL)`,
+		`CREATE TABLE nuke_stories_cat (catid INTEGER PRIMARY KEY, title TEXT)`,
+		`INSERT INTO nuke_stories_cat VALUES (1,NULL)`,
+		`CREATE TABLE nuke_pages_categories (cid INTEGER PRIMARY KEY, title TEXT, description TEXT)`,
+		`INSERT INTO nuke_pages_categories VALUES (1,NULL,NULL)`,
+		`CREATE TABLE nuke_encyclopedia (eid INTEGER PRIMARY KEY, title TEXT, description TEXT, active INTEGER)`,
+		`INSERT INTO nuke_encyclopedia VALUES (1,NULL,NULL,NULL)`,
+		`CREATE TABLE nuke_encyclopedia_text (tid INTEGER PRIMARY KEY, eid INTEGER, title TEXT, text TEXT)`,
+		`INSERT INTO nuke_encyclopedia_text VALUES (1,NULL,NULL,NULL)`,
+		`CREATE TABLE nuke_users (user_id INTEGER PRIMARY KEY, username TEXT, name TEXT, user_email TEXT)`,
+		`INSERT INTO nuke_users VALUES (1,NULL,NULL,NULL)`)
 
 	ctx := context.Background()
 	for _, tc := range []struct {
@@ -334,9 +334,9 @@ func TestReadsSurviveNullColumns(t *testing.T) {
 // TestNullColumnsDegradeToEmptyValues proves the accessors, not just the scan.
 func TestNullColumnsDegradeToEmptyValues(t *testing.T) {
 	reader := newSourceStub(t,
-		`CREATE TABLE tr_stories (sid INTEGER PRIMARY KEY, catid INTEGER, aid TEXT, title TEXT,
+		`CREATE TABLE nuke_stories (sid INTEGER PRIMARY KEY, catid INTEGER, aid TEXT, title TEXT,
 			time DATETIME, hometext TEXT, bodytext TEXT, topic INTEGER, informant TEXT)`,
-		`INSERT INTO tr_stories VALUES (1,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL)`)
+		`INSERT INTO nuke_stories VALUES (1,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL)`)
 
 	stories, err := reader.GetStories(context.Background())
 	if err != nil {
@@ -361,9 +361,9 @@ func TestNullColumnsDegradeToEmptyValues(t *testing.T) {
 // a story, reduced to the columns the reader selects.
 func authorsSchema(rows ...string) []string {
 	return append([]string{
-		`CREATE TABLE tr_users (user_id INTEGER PRIMARY KEY, username TEXT, name TEXT, user_email TEXT)`,
-		`CREATE TABLE tr_authors (aid TEXT PRIMARY KEY, name TEXT, email TEXT)`,
-		`CREATE TABLE tr_stories (
+		`CREATE TABLE nuke_users (user_id INTEGER PRIMARY KEY, username TEXT, name TEXT, user_email TEXT)`,
+		`CREATE TABLE nuke_authors (aid TEXT PRIMARY KEY, name TEXT, email TEXT)`,
+		`CREATE TABLE nuke_stories (
 			sid INTEGER PRIMARY KEY, catid INTEGER, aid TEXT, title TEXT, time DATETIME,
 			hometext TEXT, bodytext TEXT, topic INTEGER, informant TEXT, notes TEXT
 		)`,
@@ -379,10 +379,10 @@ func authorsSchema(rows ...string) []string {
 // lost its byline and was attributed to the fallback oCMS account instead.
 func TestGetPublishingAdminsReadsTheAuthorsTable(t *testing.T) {
 	reader := newSourceStub(t, authorsSchema(
-		`INSERT INTO tr_authors VALUES
-			('God', 'Site Admin', 'admin@tunisie.ru'),
+		`INSERT INTO nuke_authors VALUES
+			('God', 'Site Admin', 'admin@example.com'),
 			('idle', 'Never Published', 'idle@example.com')`,
-		`INSERT INTO tr_stories VALUES
+		`INSERT INTO nuke_stories VALUES
 			(1, 0, 'God', 'Published by an admin with no users row', NULL, '', '', 1, '', '')`)...)
 
 	admins, err := reader.GetPublishingAdmins(context.Background())
@@ -393,7 +393,7 @@ func TestGetPublishingAdminsReadsTheAuthorsTable(t *testing.T) {
 		t.Fatalf("got %d admins, want only the one credited on a story: %+v", len(admins), admins)
 	}
 	if admins[0].Login() != "God" || admins[0].DisplayName() != "Site Admin" ||
-		admins[0].Address() != "admin@tunisie.ru" {
+		admins[0].Address() != "admin@example.com" {
 		t.Errorf("admin = %q %q <%s>, want the authors-table profile",
 			admins[0].Login(), admins[0].DisplayName(), admins[0].Address())
 	}
@@ -405,7 +405,7 @@ func TestGetPublishingAdminsReadsTheAuthorsTable(t *testing.T) {
 // context, and guessing "absent" for either loses bylines without saying so.
 func TestGetPublishingAdminsReportsEveryFailure(t *testing.T) {
 	reader := newSourceStub(t,
-		`CREATE TABLE tr_authors (aid TEXT PRIMARY KEY, name TEXT, email TEXT)`)
+		`CREATE TABLE nuke_authors (aid TEXT PRIMARY KEY, name TEXT, email TEXT)`)
 
 	if _, err := reader.GetPublishingAdmins(context.Background()); err == nil {
 		t.Fatal("an unreadable read returned no error, so the failure would pass as 'no admins'")
