@@ -10,12 +10,13 @@ owned draft creation/update/translation with `mcp:drafts`, retained retries,
 CAS, provenance and existing taxonomy/media. Publishing and deletion remain
 human actions. See [Draft authoring](draft-authoring.md) for exact contracts;
 [OAuth](oauth.md) records the completed R1.1 authentication acceptance and
-PHASE5 notes retain R1.5/R1.6 results. R1.7's latest verified staging build
-is `6c611040` (2026-11-05). Normal publication preserved the HTML and
-translation freshness. On `be0e9cc3`, translation review passed and the
-owner approved and manually
-published the component: final EN 27/9, RU 43/7 and DE 44/6 are Published,
-with both translations Current. See the
+PHASE5 notes retain R1.5/R1.6 results. The
+[latest verified staging rollout](launch/r17-acceptance.md#staging-rollout-of-b58b7b51)
+is `b58b7b51` (2026-11-08). An earlier publication save on `6c611040`
+preserved the HTML and translation freshness. On `be0e9cc3`, translation
+review passed and the owner approved and manually published the component.
+Final EN 27/9, RU 43/7 and DE 44/6 are Published, with both translations
+Current. See the
 [publication record](launch/r17-acceptance.md#human-staging-publication-and-final-demo--2026-11-05)
 and earlier [rollout record](launch/r17-acceptance.md#staging-translation-review-verification-on-be0e9cc3--2026-11-04).
 Earlier `ba044434` checks passed fresh Claude web/ChatGPT web OAuth/MFA
@@ -57,9 +58,15 @@ verification and production draft are recorded in the
   fresh password/MFA sign-in, scoped consent, rotating refresh and account
   revocation. The default remains off. The key or grant owner must currently
   be an editor or admin; OAuth permissions also follow current grant scopes
-  and account credential version.
-- **Drafts are hidden by default.** An agent can see a draft only if an admin
-  turns the drafts policy on **and** the agent's key holds `pages:read`.
+  and account credential version. OAuth bearers follow a separate path from
+  API keys. The global `OCMS_API_ALLOWED_CIDRS` allowlist and per-key source
+  CIDRs do not apply to OAuth. Both paths still use the endpoint's per-IP
+  rate limit. See [OAuth](oauth.md).
+- **Drafts are hidden by default.** Generic page tools show unpublished
+  content only when **Expose drafts to AI agents** is on and the credential
+  holds `pages:read`. With draft authoring enabled, a credential with
+  `mcp:drafts` can also use `get_my_draft` and `list_my_drafts` to read its
+  owner's AI-editable unscheduled drafts independently of that setting.
 - **Admin page** at `/admin/mcp`. It shows the endpoint and ready-made client
   configuration, and holds the drafts policy, instructions for agents, the tool
   catalog and the connected-apps overview (OAuth connections and the API keys
@@ -77,14 +84,13 @@ upgrade never opens a new remote endpoint on its own.
 
 1. Go to **Admin → Modules** and turn on **MCP Server**. Until you do,
    `/api/mcp` returns 404.
-2. Go to **Admin → API Keys** and create a key with the **MCP** permission
-   (`mcp:access`). That alone lets agents read published content. Add
-   **Pages → Read pages, including unpublished drafts** (`pages:read`) only if
-   agents should see drafts (see below).
-3. Configure the client (see [Connecting clients](#connecting-clients)), or
-   enable [browser OAuth](oauth.md). The
-   admin page at **Admin → Modules → MCP Server** (`/admin/mcp`) shows ready-made
-   snippets for the endpoint.
+2. Choose a credential with `mcp:access`. Create a key with the **MCP**
+   permission in **Admin → API Keys**, or enable [browser OAuth](oauth.md)
+   and authorize a connection with that scope. Grant `pages:read` only for
+   clients that need generic reads of unpublished content.
+3. Configure the client using the endpoint and snippets in
+   **Admin → Modules → MCP Server** (`/admin/mcp`). See
+   [Connecting clients](#connecting-clients).
 
 Set the **Site URL** (`OCMS_SITE_URL` or **Admin → Config**) to an absolute
 `http(s)` URL. Without a usable one, the admin page shows the endpoint as a bare
@@ -197,7 +203,7 @@ bearer headers. OAuth connections reserve the `Authorization` header, so use
 | `get_page_draft_schema` | — | — | Strict draft schemas and localized issue catalog |
 | `get_style_guide` | `language_code` | — | Editorial guide with fallback identity |
 | `list_presets` | `language_code` | — | Seeded article presets and language overrides |
-| `get_site_info` | — | `GET /api/v2/auth` | Site name, description, URL and default language; active languages; the key's name, prefix, permissions and expiry; whether drafts are visible; server details |
+| `get_site_info` | — | `GET /api/v2/auth` | Site and language details, credential type and permissions, general draft visibility, and server details |
 | `search_pages` | `query` (1–200 chars), `language_code`, `page`, `per_page` (≤ 50) | — (MCP only) | Pages matching the words, each with a plain-text excerpt |
 | `list_pages` | `status`, `language_code`, `category_id`, `tag_id`, `page`, `per_page` (≤ 100), `include_taxonomy` | `GET /pages` | Page summaries without bodies, newest first |
 | `get_page` | `id` **or** `slug`, `body_format` (`html` \| `markdown`) | `GET /pages/{id}`, `GET /pages/slug/{slug}` | Page with body, SEO metadata, author name, categories and tags |
@@ -267,17 +273,17 @@ the message can quote server data.
 
 | Content | Visible over MCP |
 |---|---|
-| Published pages | Always, to any key with `mcp:access` |
-| Drafts (and scheduled, unpublished pages) | Only if **Expose drafts to AI agents** is on **and** the key holds `pages:read` |
-| Own AI-editable unscheduled drafts in authoring context | Also available with `mcp:drafts`; this exception does not broaden generic page reads |
+| Published pages | Available to an authorized credential with `mcp:access` |
+| Drafts and scheduled unpublished pages through generic page tools | **Expose drafts to AI agents** is on and the credential holds `pages:read` |
+| Own AI-editable unscheduled drafts through `get_my_draft` and `list_my_drafts` | Draft authoring is enabled and the credential holds `mcp:drafts` |
 | Media, tags, categories | Always; they are public reads in REST v2 too |
 | Editorial guides/presets | Read-only guidance with `mcp:access` |
 | User directories, forms/submissions, general configuration, API key directories | No corresponding tool |
 
-When drafts are not visible, the server removes `pages:read` from the key's
-effective permissions before calling the page services. The services then apply
-their published-only rule, so a draft is reported as "not found", and search
-and listings skip it. A `list_pages` request with `status: "draft"` is refused
+When generic page tools cannot see drafts, the server removes `pages:read`
+from the credential's effective permissions before calling the page services.
+Those services apply their published-only rule, so a draft returns
+"not found" and search and listings skip it. A `list_pages` request with `status: "draft"` is refused
 with `forbidden`. Tag and category page counts still include drafts (see
 [Known limitations](#known-limitations)).
 
@@ -290,7 +296,10 @@ it is blocked in demo mode.
 
 | Setting | Default | Description |
 |---|---|---|
-| Expose drafts to AI agents | Off | Lets keys that hold `pages:read` read unpublished drafts |
+| Expose drafts to AI agents | Off | Lets credentials with `pages:read` read unpublished drafts through generic page tools |
+| Enable draft authoring | Off | Enables owned draft tools for credentials with `mcp:drafts` |
+| External links in new draft bodies | Keep | Sets how draft writes handle external hyperlinks |
+| Let AI clients create share links | On | Controls issuance and redemption of agent-issued links |
 | Instructions for AI agents | Empty | Up to 2400 characters of guidance sent to every client in the `initialize` / `server/discover` response, after the built-in orientation |
 
 Saving rebuilds the MCP server first, stores the settings second and swaps the
@@ -318,8 +327,10 @@ The page also shows:
 - snippets for Claude Code and JSON configuration, with a placeholder instead
   of a key;
 - the tool catalog;
-- every API key that holds `mcp:access`, with name, prefix, permissions, last
-  use, expiry and status. Key material is never shown.
+- the [connected-apps overview](connected-apps.md), with owner, scopes, creation,
+  last use, expiry and revocation for OAuth connections and MCP API keys.
+  Credential values, hashes and key prefixes are omitted.
+- share links issued by AI clients.
 
 ## Server card
 
@@ -362,18 +373,20 @@ security headers) runs before all of it.
 | Per-IP rate limit, applied before key verification (Argon2) | 429 |
 | In-flight cap | 503 + `Retry-After` |
 | Cross-origin browser check (`Sec-Fetch-Site` / `Origin`) | 403 |
-| API key authentication (`middleware.APIKeyAuth`) | 401 + `WWW-Authenticate: Bearer realm="oCMS MCP"` / 403 / 429 |
-| `mcp:access` permission | 403 |
-| Per-key rate limit | 429 |
+| Stored module activation and settings | 404 or 503 |
+| API-key authentication, current account and `mcp:access` | 401 + `WWW-Authenticate: Bearer realm="oCMS MCP"` / 403 / 429 |
+| OAuth bearer verification and `mcp:access` | 401 with resource metadata, 403 for insufficient scope, 500 for storage faults |
+| Per-key or per-account rate limit | 429 |
 | Request body cap | 413 |
 | JSON-RPC batch | 400 `batch_not_supported` |
+| OAuth tool scope check | 403 with an `insufficient_scope` challenge |
 
 | Limit | Value |
 |---|---|
 | Request body | 512 KiB wire cap; 2 MiB SDK hard ceiling |
 | Concurrent requests | 32 |
 | Per-IP rate | 20 requests/s, burst 40 |
-| Per-key rate | 10 requests/s, burst 30 |
+| Per-key rate or OAuth per-account rate | 10 requests/s, burst 30 |
 | Tool call time | 25 s per call. A client disconnect or the 30 s global timeout also cancels the call, and cancellation reaches its database queries on every protocol version. |
 
 Other controls:
@@ -445,7 +458,7 @@ Tool call outcomes:
 | `rejected` | A JSON-RPC error, such as an unknown tool. |
 | `cancelled` | The client disconnected, the request timed out, or the call hit the 25-second cap. |
 | `internal_error` | A server-side failure. |
-| `unauthenticated` | The call had no authenticated key. |
+| `unauthenticated` | The call had no authenticated credential. |
 
 Some requests never reach the tool-call log:
 
@@ -588,8 +601,8 @@ OAuth/API-key metadata and revocation at `/account/connected-apps`, with an
 administrator overview/revoke in `/admin/mcp`. Credential hashes/values are
 absent from these views. Core maintenance drains retired OAuth evidence in
 bounded transactions while retaining all active-family replay evidence.
-Management/retention is deployed on staging. The latest verified runtime
-is `6c611040`, including the verified editor preservation fix. The
+Management and retention are deployed on staging. See the
+[latest rollout](launch/r17-acceptance.md#staging-rollout-of-b58b7b51). The
 `be0e9cc3` translation review made RU 43/6 and DE 44/5 Current against
 EN 27/7. The owner published the demo, and the ordinary publication check
 passed on `6c611040`. The demo walkthrough and production draft are complete.

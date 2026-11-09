@@ -19,7 +19,7 @@
         {"id": "mcp.config_error", "message": "Failed to read the site configuration; check the server log.", "translation": "Failed to read the site configuration; check the server log."},
         {"id": "mcp.settings_load_error", "message": "The saved MCP settings could not be read, so saving is disabled and MCP requests return 503 until the database can be read again. The form shows the last loaded settings, or the safe defaults if none could be loaded. Reload this page to retry, and check the server log.", "translation": "The saved MCP settings could not be read, so saving is disabled and MCP requests return 503 until the database can be read again. The form shows the last loaded settings, or the safe defaults if none could be loaded. Reload this page to retry, and check the server log."},
         {"id": "mcp.endpoint_title", "message": "Endpoint", "translation": "Endpoint"},
-        {"id": "mcp.endpoint_help", "message": "Streamable HTTP transport in stateless mode. Every request needs an API key with the MCP permission.", "translation": "Streamable HTTP transport in stateless mode. Every request needs an API key with the MCP permission."},
+        {"id": "mcp.endpoint_help", "message": "Stateless Streamable HTTP. Use an API key with mcp:access or, when OAuth is enabled, an OAuth access token with that scope.", "translation": "Stateless Streamable HTTP. Use an API key with mcp:access or, when OAuth is enabled, an OAuth access token with that scope."},
         {"id": "mcp.endpoint_label", "message": "Endpoint URL", "translation": "Endpoint URL"},
         {"id": "mcp.mode_label", "message": "Mode", "translation": "Mode"},
         {"id": "mcp.read_only", "message": "Read-only", "translation": "Read-only"},

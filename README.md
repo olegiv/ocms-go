@@ -327,10 +327,10 @@ gh attestation verify ocms-linux-amd64.tar.gz --repo olegiv/ocms-go
 
 ## Upgrading sites with no `OCMS_ENV`
 
-Set `OCMS_ENV` explicitly before upgrading (I-10). An unset or empty value
-now selects production. Keep `development` for local-only sites. For a
-public site, select `production` after checking the database and
-configuration on an isolated copy.
+Set `OCMS_ENV` explicitly before upgrading (I-10). Unset or empty selects
+production. Only `development`, `staging` and `production` are accepted.
+Other values fail startup. Use `development` for local-only sites. The
+checks below apply to staging and production.
 
 - **Page HTML:** The production startup audit rejects suspicious markup in
   any stored page, including drafts. Remove or replace flagged markup such
@@ -346,10 +346,10 @@ configuration on an isolated copy.
   production default of 90 days, measured from creation to expiry. Such
   keys are rejected at authentication. Every key also needs at least one
   per-key source CIDR. Check all active keys and the global API allowlist.
-- **Sign-in and MFA:** Set up HTTPS before switching. The session cookie
-  changes to Secure `__Host-session`, so existing sessions end and sign-in
-  requires HTTPS. Production enables HSTS. Every account must pass MFA at
-  sign-in, and accounts without MFA are prompted to enroll.
+- **Sign-in and MFA.** Existing sessions end on upgrade because session
+  tokens are now hashed in storage. Staging and production use a Secure
+  `__Host-session` cookie and HSTS. Set up HTTPS before switching. By default,
+  accounts must pass MFA at sign-in and enroll if needed.
 - **Outbound integrations:** Startup refuses non-HTTPS URLs for active
   webhooks, scheduled HTTP tasks and embed providers. Set
   `OCMS_WEBHOOK_FORM_DATA_MODE` to `redacted` or `none`. The production
@@ -389,10 +389,10 @@ controls the issuer, not cleanup of previously stored evidence.
 | `OCMS_OAUTH_CIMD_ALLOWED_HOSTS` | Exact HTTPS client metadata host allowlist: bare lowercase hostnames, comma or space separated; unset uses the default, set empty allows no live discovery (pre-registered clients and DCR only) | `claude.ai,chatgpt.com` | No |
 | `OCMS_OAUTH_PRE_REGISTERED_CLIENTS` | JSON array of owner-reviewed public client metadata; at most 20 documents / 64 KiB | Empty | No |
 | `OCMS_OAUTH_ALLOW_DCR` | Allow bounded public-client dynamic registration | `false` | No |
-| `OCMS_OAUTH_DCR_INITIAL_ACCESS_TOKEN` | Require a separate Bearer credential for new dynamic client registrations. Generate with `openssl rand -hex 32` | Empty | No |
+| `OCMS_OAUTH_DCR_INITIAL_ACCESS_TOKEN` | Require a separate bearer credential for new dynamic client registrations. Generate with `openssl rand -hex 32`. An invalid value fails startup even with OAuth off. | Empty | No |
 | `OCMS_OAUTH_ACCESS_TTL` | OAuth access lifetime in seconds (60–86400) | `3600` | No |
 | `OCMS_OAUTH_REFRESH_TTL_DAYS` | Absolute rotating refresh-family lifetime (1–90 days) | `30` | No |
-| `OCMS_PREVIEW_LINK_TTL_HOURS` | Preview share-link lifetime in hours (1–24), capped by the issuing credential's expiry | `24` | No |
+| `OCMS_PREVIEW_LINK_TTL_HOURS` | Preview share-link lifetime in hours. Values outside 1–24 fail startup. Issuer credential expiry can shorten the lifetime. | `24` | No |
 | `OCMS_AI_DISABLED` | Disable draft authoring while retaining normal content reads | `false` | No |
 | `OCMS_DO_SEED` | Seed database with default admin and config | `false` | No |
 | `OCMS_SEED_ADMIN_PASSWORD` | Password for the admin `OCMS_DO_SEED` creates instead of the documented default (min 12 characters) | - | No |
@@ -761,7 +761,13 @@ The REST surface is `/api/v2`. The OpenAPI 3.1 spec is generated from Go types v
 
 ## MCP Server
 
-The opt-in **MCP Server** module lets AI agents read site content over the [Model Context Protocol](https://modelcontextprotocol.io). Enable it in **Admin > Modules**, then create an API key with the **MCP** permission (`mcp:access`) in **Admin > API Keys**. The admin page at `/admin/mcp` shows the endpoint, client configuration snippets, the tool catalog, and the draft access, authoring, link policy and instructions settings.
+The opt-in **MCP Server** module provides content reads and gated draft
+authoring over the [Model Context Protocol](https://modelcontextprotocol.io).
+Enable it in **Admin > Modules** and connect with an API key holding
+`mcp:access` or an OAuth grant with that scope when OAuth is enabled.
+The admin page at `/admin/mcp` shows the endpoint, client snippets, the
+tool catalog, and the draft access, authoring, link policy and instructions
+settings. The command below uses an API key.
 
 ```bash
 claude mcp add --transport http ocms https://example.com/api/mcp \
@@ -785,23 +791,16 @@ revision-pinned preview URLs. Explicit expiring share links and review panels
 are available in R1.6; see [editorial review](docs/editorial-review.md) and
 [draft authoring](docs/draft-authoring.md) for contracts and safeguards.
 Set `OCMS_OAUTH_ENABLED=true` and a canonical HTTPS `OCMS_SITE_URL` for browser
-authorization alongside API keys. Connections can be revoked at
-`/account/security`. R1.1 OAuth and R1.5 staging authoring results are recorded;
-R1.6 Claude/ChatGPT web draft/review and fragment/POST sharing checks also
-passed on `31c55f8c9f67` (2026-11-02).
+authorization alongside API keys. Manage and revoke connections from
+`/account/connected-apps` or, as an administrator, from `/admin/mcp`.
+The global `OCMS_API_ALLOWED_CIDRS` allowlist and per-key source CIDRs
+apply to API keys. OAuth bearers use separate account and scope checks.
 R1.7 adds [connected-app management and bounded OAuth retention](docs/connected-apps.md),
-plus an [oCMS author workflow](docs/skills/ocms-author/SKILL.md). It is deployed
-on MCP staging at `16ac7161`. On `39d82c94`, fresh web OAuth/sharing checks
-and full EN/RU/DE draft workflows ran in native Desktop, ChatGPT and both CLIs'
-OAuth/bearer modes. Audit repairs and local publication/lifecycle tests pass.
-The inline alt-text fix is deployed: both web clients verified resaved demo
-drafts 27/43/44 at revisions 6/4/3, with matching rendered preview alt text.
-RU/DE now need stale-translation review. Desktop reconnect uses Chrome.
-Fresh editorial review, human publication/recording and the
-[release decisions](docs/launch/release-decisions.md) remain open;
-see the [current acceptance record](docs/launch/r17-acceptance.md), [OAuth](docs/oauth.md),
-the [web staging record](.claude/docs/PHASE5.md#r17-fly-staging-and-web-client-acceptance--2026-11-02)
-and [native/CLI record](.claude/docs/PHASE5.md#r17-native-desktop-and-cli-acceptance--2026-11-02).
+plus an [oCMS author workflow](docs/skills/ocms-author/SKILL.md).
+The [staging acceptance record](docs/launch/r17-acceptance.md) identifies the
+latest verified build and the builds used for native Desktop reconnect,
+translation review, demo publication and recording. See the
+[release decisions](docs/launch/release-decisions.md) for sign-off.
 See [docs/mcp-module.md](docs/mcp-module.md) for visibility rules, limits and logging.
 
 ## Theme Development

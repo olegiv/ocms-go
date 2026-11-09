@@ -214,6 +214,6 @@ Errcheck pass. Govulncheck finds no reachable/imported-package vulnerability
 and one uncalled module advisory. Full details and limits are in the evidence
 record; these checks are not an independent repository security audit.
 
-This local implementation does not claim a new staging deployment or fresh
-real-client R1.4 compatibility. CMS creation/update/translation tools are implemented locally in R1.5;
-review previews and connected-app release work remain R1.6/R1.7.
+These results are for the local R1.4 fixture. See
+[editorial review](editorial-review.md) and [connected apps](connected-apps.md) for the
+subsequent preview and connected-app rollout records.

@@ -86,7 +86,7 @@ event; a missing site URL leaves the schedule in place.
 
 ## Preserving unchanged editor HTML
 
-The local follow-up retains original body bytes when a TinyMCE save changes
+The editor retains original body bytes when a TinyMCE save changes
 only status or metadata. Actual body edits still serialize normally. The
 server applies the existing body policy and then preserves stored line
 endings when they are the only remaining difference. Source text/SEO edits
@@ -191,8 +191,10 @@ Run the normal startup migration before accepting requests, and do not run
 an old URL-issuing binary concurrently against the upgraded database.
 
 The default lifetime is 24 hours, bounded by the issuing credential's expiry.
-Set `OCMS_PREVIEW_LINK_TTL_HOURS` to 1–24 to shorten it. Limits are ten active
-links and sixty issuances per user per rolling hour. The editor returns 429
+Set `OCMS_PREVIEW_LINK_TTL_HOURS` to 1–24 to shorten it. Each user has
+separate limits for links issued from editor sessions and links issued by
+apps. Each group allows ten active links and sixty issuances per rolling
+hour. API keys and OAuth grants share the app limit. The editor returns 429
 with a separate reason for each limit. The active limit requires revoking a
 link or waiting for one to expire. The hourly limit includes revoked links
 and returns a `Retry-After` delay; revocation cannot clear it. If both apply,

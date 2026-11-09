@@ -6,6 +6,14 @@ official MCP Go SDK for bearer verification and protected-resource discovery.
 OAuth is off by default. Existing API keys remain available with their CIDR,
 expiry, anomaly-revocation and rate-limit policies.
 
+OAuth bearer requests to `/api/mcp` do not pass through API-key
+authentication. `OCMS_API_ALLOWED_CIDRS` and per-key source CIDRs apply only
+to API keys. OAuth validates the access token, resource, grant, current
+account and scopes, and applies both per-IP and per-account rate limits.
+The API-key configuration requirements at startup still apply in staging
+and production.
+Demo mode refuses browser authorization and consent.
+
 The OAuth layer authenticates apps; [R1.5 draft tools](draft-authoring.md)
 separately provide gated CMS writes. No tool publishes or calls a text model
 provider. The following acceptance record covers the earlier R1.1 build. On 2026-10-31,
@@ -144,12 +152,12 @@ expiry; rotation does not extend it. Reuse by the matching client and resource
 revokes the entire family durably, including when the response is
 `invalid_grant`. A different client cannot revoke a family by presenting its
 refresh token. Keep SQLite and its normal backup policy; there is no token
-encryption key to rotate. R1.7 adds bounded retention locally: codes expire
-from storage after a 24-hour evidence window; retired grant families after
-30 days. Every token/spent-refresh row of an active family is retained.
+encryption key to rotate. R1.7 applies bounded retention. Codes expire
+from storage after a 24-hour evidence window and retired grant families
+after 30 days. Every token/spent-refresh row of an active family is retained.
 The [retention policy](connected-apps.md#retention-policy) describes atomic
 batches, preview dependencies, scheduling and rollback. This maintenance is
-not deployed yet; R1.1's retained-row staging limitation remains until rollout.
+deployed on MCP staging.
 
 Storage faults are retryable. A database error while checking an access
 token, code or refresh token, or while revoking, is logged with its cause and
@@ -288,17 +296,17 @@ integrations. If clients need DCR, configure an initial access token.
 
 ## Draft authoring and scope upgrades
 
-When draft authoring is enabled, the first MCP OAuth challenge asks for
-`mcp:access` and `mcp:drafts` together. Clients that follow the challenge can
-request both permissions in one sign-in and consent flow. Existing grants
-continue to use their previously approved scopes.
+When draft authoring is enabled, AI is enabled and demo mode is off, an MCP
+request without an `Authorization` header is challenged for `mcp:access`
+and `mcp:drafts`. Clients can request both permissions in one sign-in and
+consent flow. Existing grants keep their previously approved scopes.
 
 R1.5 removes the temporary compatibility probe and its flag. Actual draft
 creation/update/translation now uses the shared writer, an admin authoring
 toggle and `mcp:drafts`; see [Draft authoring](draft-authoring.md).
-Missing tool scope returns HTTP 403 with a Bearer `insufficient_scope`
-challenge naming `mcp:access`, `mcp:drafts` and resource metadata. Clients
-request fresh consent and retry; read-only grants do not expand automatically.
+Missing tool scope returns a Bearer `insufficient_scope` challenge in the
+HTTP 403 response or the MCP tool error metadata. Both name `mcp:access`,
+`mcp:drafts` and resource metadata. Request fresh consent and retry.
 API keys retain their existing tool errors and source/expiry policies.
 `OCMS_AI_DISABLED=true` blocks draft operations while retaining general reads.
 
@@ -355,10 +363,9 @@ dedicated editor privately. Then deploy the same image and volume with
 seed data and a reviewed content-only export; keep production
 user/session/token databases out of staging.
 
-The owner has deferred the editor account for this bounded R1.1 probe. Record
-the actual admin role in client results and leave manual editor-role coverage
-unverified. Required MFA, non-default credentials and the scope/CMS-write
-restrictions still apply.
+The initial R1.1 probe deferred a separate editor account. Later authoring
+acceptance used the dedicated Editor account with required MFA. See the
+[acceptance record](launch/r17-acceptance.md) for coverage by client and build.
 
 The owner sets `OCMS_SESSION_SECRET` and `OCMS_MFA_KEY` through Fly secrets;
 they must be distinct random values of at least 32 bytes. Keep them out of
@@ -431,7 +438,7 @@ Use `$uri`, never `$request`, `$request_uri`, `$args`, `$http_referer`,
 Authorization or request bodies for these routes. Apply equivalent redaction
 to upstream load balancers and observability tools.
 
-## Acceptance evidence and pending authoring checks
+## Acceptance evidence
 
 R1.1 OAuth acceptance is complete on the commits recorded in PHASE5, including
 Claude Desktop/web, ChatGPT web, both CLI OAuth/bearer lifecycles and external
@@ -439,13 +446,11 @@ IPv6/TLS/forwarding verification. The retired compatibility probe established
 authentication/scope/revocation behavior, not real CMS draft persistence.
 
 R1.5 tests actual CMS draft flows with the Go SDK and isolated HTTP fixtures.
-Fresh Claude Desktop/ChatGPT cloud authoring acceptance remains pending a
-separately approved staging deployment. Record client/browser versions, OS,
-account tier, transport, auth mode, deployed commit and module settings.
-Use the dedicated development account and shared authenticator; preserve the
-owner's existing connections. Test create → read → metadata/body update →
-retained retry → linked translation → revocation → denied next call → reconnect.
-Use two grants for the same user to continue one draft. Verify another user's
-and non-opted-in human drafts remain inaccessible; publishing stays manual.
-Default preview URLs require an editor session; sharing remains unavailable
-until R1.6. Record unavailable client capabilities as pending, never passed.
+The [R1.7 acceptance record](launch/r17-acceptance.md) records Desktop, web
+and CLI authoring and reconnect checks by build. Default preview URLs
+require an editor session. R1.6 adds separately issued, expiring
+[share links](editorial-review.md#explicit-secure-sharing).
+For future checks, record the client, auth mode, deployed commit and module
+settings. Use the dedicated development account and shared authenticator,
+preserve the owner's connections, and record unavailable capabilities as
+pending.

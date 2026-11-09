@@ -1,7 +1,8 @@
 # Connected apps and OAuth retention
 
-R1.7's latest verified MCP staging build is `6c611040` (2026-11-05).
-An ordinary publication save preserved the HTML and translation freshness.
+The [latest verified MCP staging build](launch/r17-acceptance.md#staging-rollout-of-b58b7b51)
+is `b58b7b51` (2026-11-08). An earlier publication save on `6c611040`
+preserved the HTML and translation freshness.
 On `be0e9cc3`, dedicated Editor login and normal translation review
 passed at revisions EN 27/7, RU 43/6 and DE 44/5. The owner later approved
 and manually published them on 2026-11-05. Final revisions 9/7/6 are
@@ -72,8 +73,8 @@ separate normal login/MFA/consent flow; this page creates no credentials.
 OAuth last use includes successful credential validation and token exchange,
 with access-validation touches throttled to once per minute. API-key last use
 retains the existing asynchronous authentication timestamp. Neither timestamp
-proves a content mutation. Current policy, role, scopes, expiry, CIDR and
-anomaly rules still govern access after a connection is listed.
+proves a content mutation. Access still depends on current policy, role,
+scopes and expiry. CIDR and IP-change revocation rules apply to API keys.
 
 ## Retention policy
 

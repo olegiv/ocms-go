@@ -21,17 +21,18 @@ import (
 	"github.com/olegiv/ocms-go/internal/model"
 )
 
-// bearerRealm is advertised in WWW-Authenticate on 401 responses (RFC 6750).
-// There is deliberately no resource_metadata parameter: the endpoint takes
-// API keys, not OAuth tokens, so clients must not start an OAuth flow.
+// bearerRealm is the 401 challenge for the API-key branch. When OAuth is
+// enabled, mixedAuthentication advertises resource_metadata on its own branch.
 const bearerRealm = `Bearer realm="oCMS MCP"`
 
 // buildHTTPHandler assembles the endpoint's middleware chain, outermost
 // first:
 //
 //	no-store → POST only → per-IP limit → in-flight cap → cross-origin check
-//	→ stored activation/settings → API key auth (+ WWW-Authenticate on 401)
-//	→ mcp:access → TokenInfo → per-key limit → no batches → OAuth tool scopes → request context
+//	→ stored activation/settings
+//	→ API key auth → current account → mcp:access → TokenInfo → per-key limit
+//	  or OAuth bearer verification with mcp:access → per-user limit
+//	→ body cap and batch rejection → OAuth tool scopes → request context
 //	→ SDK Streamable HTTP handler (stateless, JSON responses)
 //
 // Cheap rejections run before API key verification (Argon2), so probing the

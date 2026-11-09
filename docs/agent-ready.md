@@ -42,10 +42,12 @@ Both keys live in the admin `Config` table and can be edited via
 
 ## MCP transport status
 
-oCMS ships an MCP transport as the opt-in **MCP Server** module: Streamable
-HTTP at `POST /api/mcp` with read-only tools (see
-[mcp-module.md](mcp-module.md)). The server card is always served and
-follows the module's state:
+The opt-in **MCP Server** module serves Streamable HTTP at `POST /api/mcp`.
+Credentials need `mcp:access` through an API key or, when enabled, OAuth.
+The endpoint provides content reads and can also expose owned draft
+creation, updates, translations and explicit share links when draft
+authoring is enabled and the credential has `mcp:drafts`.
+See [MCP module](mcp-module.md). The server card follows the module's state.
 
 - **Module active:** the card names the endpoint in the SEP-1649 `transport`
   object (`"type": "streamable-http"`, `"endpoint": "https://…/api/mcp"`). It

@@ -59,7 +59,11 @@ func TestCompatibilityProbeIsRetired(t *testing.T) {
 	if _, ok := reflect.TypeFor[config.Config]().FieldByName("MCPSpikeTools"); ok {
 		t.Fatal("retired probe configuration remains")
 	}
-	for _, name := range []string{"../../fly.staging.toml", "../../fly.staging.bootstrap.toml", "../../docker-compose.yml", "../../internal/config/config.go"} {
+	for _, name := range []string{
+		"../../.env.example", "../../.env.example.prod",
+		"../../fly.staging.toml", "../../fly.staging.bootstrap.toml",
+		"../../docker-compose.yml", "../../internal/config/config.go",
+	} {
 		content, err := os.ReadFile(name)
 		if err != nil {
 			t.Fatal(err)

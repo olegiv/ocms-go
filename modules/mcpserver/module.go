@@ -8,8 +8,8 @@
 // official Go SDK (github.com/modelcontextprotocol/go-sdk). The tools are thin
 // adapters over core authoring and REST v2 domain services. Existing content tools
 // share REST validation, visibility rules and caching; tool schemas are generated
-// from the same huma struct tags REST v2 validates with. Access requires an
-// API key holding the mcp:access permission.
+// from the same huma struct tags REST v2 validates with. Access requires
+// mcp:access on an API key or, with OAuth enabled, an OAuth access token.
 package mcpserver
 
 import (

@@ -26,9 +26,12 @@ import (
 )
 
 const DefaultTTL = 24 * time.Hour
+
+// MaxActiveLinks limits active links per user and issuer kind.
 const MaxActiveLinks = 10
 
-// MaxIssuedPerHour bounds link issuance per user over a rolling hour.
+// MaxIssuedPerHour bounds issuance per user and issuer kind over a rolling
+// hour. API keys and OAuth grants share one limit, separate from editor sessions.
 const MaxIssuedPerHour = 60
 
 // SharePath never includes a credential. Browsers send its fragment in a POST body.

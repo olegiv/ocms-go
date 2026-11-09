@@ -6,7 +6,8 @@ can publish, schedule, delete, change ownership or enable AI access to a page.
 R1.5 staging acceptance is recorded in PHASE5 implementation notes. R1.6 adds
 editorial review and secure previews. Claude web and ChatGPT web draft/review
 checks passed on `ff4de3b1368c`; fresh fragment/POST sharing passed on
-`31c55f8c9f67` (2026-11-02). Broader release acceptance remains R1.7 work.
+`31c55f8c9f67` (2026-11-02). The [R1.7 acceptance record](launch/r17-acceptance.md)
+lists subsequent Desktop and CLI authoring checks by build.
 
 ## Enable and authorize
 
@@ -273,6 +274,8 @@ R1.6 local tests and browser evidence are under `output/r16-validation/`.
 The [R1.6 transport rollout record](../.claude/docs/PHASE5.md#r16-preview-transport-fly-rollout--2026-11-02)
 records fresh Claude/ChatGPT sharing, anonymous pinned rendering, revocation,
 expiry and Fly proxy-log checks on `31c55f8c9f67`, including the empty proxy URL
-fields and the browser evidence for token-free request targets. Native
-Desktop/CLI authoring and broader release checks remain R1.7 work. No further
-deployment or Git publication is authorized by these instructions.
+fields and the browser evidence for token-free request targets.
+See the [R1.7 acceptance record](launch/r17-acceptance.md) for the native
+Desktop and CLI authoring checks and the
+[release decisions](launch/release-decisions.md) for release verification.
+Deployment and Git publication require separate approval.

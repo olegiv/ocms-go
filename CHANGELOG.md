@@ -10,16 +10,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Production is the default (I-10).** Set `OCMS_ENV` explicitly before
-  upgrading a site that left it unset or empty. Production can refuse
-  startup on flagged page HTML, including drafts, or missing CAPTCHA
+  upgrading. Unset or empty selects production. Only `development`,
+  `staging` and `production` are accepted. Other values fail startup.
+  Staging and production apply the same hardening. Startup can fail on
+  flagged page HTML, including drafts, or missing CAPTCHA
   verification even with no public forms. Rendering sanitizes legacy HTML,
   and even a title-only editor save can persist the sanitized body. API
   keys without expiry, with a lifetime over 90 days, or without a per-key
-  source CIDR fail authentication. Existing sessions end. Every account
-  must pass MFA at sign-in, and accounts without MFA must enroll. Sign-in
-  requires HTTPS because the session cookie becomes Secure `__Host-session`.
-  Production also enables HSTS. Startup refuses non-HTTPS URLs for active
-  webhooks, scheduled HTTP tasks and embed providers, and refuses
+  source CIDR fail authentication. Session tokens are now hashed in storage,
+  so existing sessions end on upgrade. Staging and production require MFA
+  at sign-in by default, with enrollment for accounts without MFA. Both modes
+  use a Secure `__Host-session` cookie and HSTS. Startup refuses non-HTTPS
+  URLs for active webhooks, scheduled HTTP tasks and embed providers, and refuses
   `OCMS_WEBHOOK_FORM_DATA_MODE=full` under the production defaults.
   Check the MFA key, trusted proxies and required allowlists before switching.
   See the [upgrade checklist](README.md#upgrading-sites-with-no-ocms_env).
@@ -28,6 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   expressions and its current integrity hash.
 
 ### Added
+- **New configuration options.** `OCMS_OAUTH_DCR_INITIAL_ACCESS_TOKEN`
+  enables protected dynamic registration when DCR is on. Generate it with
+  `openssl rand -hex 32`. An invalid value fails startup even when OAuth is
+  off. `OCMS_PREVIEW_LINK_TTL_HOURS` accepts 1–24 (default 24).
+  `OCMS_SEED_ADMIN_PASSWORD` accepts a password of at least 12 characters.
+  Set `OCMS_REQUIRE_SEED_ADMIN_PASSWORD=true` to require it when seeding.
 - **Connected apps and OAuth retention (R1.7).** Account-owned OAuth
   and MCP API-key metadata/revocation, administrator oversight, and bounded
   transactional cleanup that preserves active-family refresh-replay evidence.
@@ -56,20 +64,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   issues, safe Markdown with existing media references, explicit link policy,
   loss-aware Markdown reads and metadata updates that preserve rich HTML.
   Shared sanitization preserves explicit link relations through saves and
-  rendering. MCP page-authoring tools remain R1.5; see `docs/draft-contract.md`.
+  rendering. See `docs/draft-contract.md`.
 - **Atomic page-write foundations (R1.2).** Complete page revisions and
   provenance, editor conflict handling, owner/admin AI-edit consent, retained
   idempotency and revision tracking across API, scheduler, imports and cleanup.
-  REST updates to AI-editable pages require `base_revision`. This is foundation
-  work; MCP page-authoring tools remain scheduled for R1.5. See
+  REST updates to AI-editable pages require `base_revision`. See
   `docs/page-writes.md`.
 - **Opt-in MCP OAuth (R1.1).** Authorization code with S256 PKCE, scoped
   browser consent after fresh password/MFA sign-in, issuer/resource discovery,
   bounded client metadata and optional public-client registration. SQLite
   stores only opaque credential hashes; atomic code redemption, refresh
   rotation/reuse revocation and current account checks protect access.
-  Connections can be revoked from Account → Security. The development/staging compatibility probe used
-  for R1.1 acceptance was retired in R1.5. Existing API key policies remain in force.
+  Connections can be revoked from Account → Connected apps. The temporary
+  compatibility probe used for R1.1 acceptance was retired in R1.5.
   R1.1 real-client acceptance is complete; see `docs/oauth.md` and the
   current client matrix in `.claude/docs/PHASE5.md`.
 

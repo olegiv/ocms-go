@@ -225,7 +225,8 @@ func (s *Service) UpdateTag(ctx context.Context, a v2.Actor, id int64, in Update
 	}, nil
 }
 
-// DeleteTag removes a tag. Page_tags associations fall to the DB cascade.
+// DeleteTag unlinks the tag from assigned pages in a page-write transaction.
+// Affected pages receive system revisions and their caches are invalidated.
 func (s *Service) DeleteTag(ctx context.Context, a v2.Actor, id int64) error {
 	if err := s.requireWritePerm(ctx, a); err != nil {
 		return err

@@ -21,7 +21,7 @@ content no-ops. New pages start at revision 1. Webhooks, audit events and cache
 invalidation run after commit. Replays do not repeat mutation side effects.
 
 `TestPageWritersUseTransactionQueries` also checks tracking order across
-`internal`, `modules`, `custom` and `cmd`. Its structural scan follows transaction
+`internal`, `modules`, `custom`, `cmd` and `scripts`. Its structural scan follows transaction
 and query aliases and page IDs through the supported writer patterns. Tracking
 in another transaction, on another page, or only in a conditional branch cannot
 authorize a later write. Inserts must register their returned page with
@@ -106,8 +106,9 @@ has no exception for another user's drafts. Explicit status, `published_at`
 or `scheduled_at` input, including explicit JSON null, is rejected. Successful
 agent saves force draft status and clear both lifecycle timestamps. Shared
 validation covers title, enums, routes/aliases, active language, sanitized HTML
-and the existing featured-image minimum. Later iterations add the PageDraft
-schema, reference validation, normalization and issue catalog.
+and the existing featured-image minimum. The PageDraft schema, reference
+validation, normalization and issue catalog are in the
+[draft contract](draft-contract.md).
 
 ## History, restores and provenance
 
@@ -193,14 +194,12 @@ general proof of dynamically constructed SQL or arbitrary external modules.
 
 - `TestPageWritersUseTransactionQueries` (`internal/pagewrite/writer_drift_test.go`)
   follows transaction query receivers and closures across `internal`,
-  `modules` and `custom`. It checks only that a call to one of the listed
-  page-mutating queries (`CreatePage`, `UpdatePage`, `PublishPage`, tag,
-  category, alias, translation and media queries, and so on) uses queries bound
-  to a `pagewrite.Tx` or a manually managed transaction, and that no literal
-  SQL outside the language rename mutates a page table. It does not check that
-  the page was tracked before the change, that `Finish` ran, that a revision or
-  provenance row was recorded, or that publication was validated: an
-  unconditional `PublishPage` call through `work.Q` passes it.
+  `modules`, `custom`, `cmd` and `scripts`. It checks the transaction boundary
+  and tracking order for known page-mutating queries. It also flags literal
+  SQL mutations of page tables outside the language rename. The behavioral
+  fixtures below cover committed revisions and provenance.
+  The separate `TestPagePublicationUsesLifecycleGuards` check rejects
+  unconditional `PublishPage` calls through `work.Q`.
 - `TestPagePublicationUsesLifecycleGuards` (`cmd/ocms/publish_page_drift_test.go`)
   is the test that forbids the unconditional `PublishPage` query, in every git-tracked
   non-test Go file (outside a git checkout, every such file outside the directories the shared repository walker skips).
@@ -264,7 +263,7 @@ The whole-checkout GolangCI run retains five pre-existing findings in account
 layout/MFA tests and the local weather module; no new finding is accepted.
 Govulncheck reports no reachable vulnerability, with one uncalled module
 advisory. This is local verification, not staging acceptance of AI authoring.
-R1.5 adds local MCP content tools; fresh real-client acceptance remains pending.
+See the [R1.7 acceptance record](launch/r17-acceptance.md) for later real-client checks.
 
 
 Final local results on 2026-11-01: **59 test packages passed**, including
