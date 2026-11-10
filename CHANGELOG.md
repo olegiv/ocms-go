@@ -7,54 +7,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.32.0] - 2026-11-10 - MCP authoring and editorial review
+
+Connect an MCP client to create, edit and translate drafts in oCMS. Editors
+can review revisions and their sources, preview changes, and share
+revocable previews before publication.
+
 ### Changed
 
+- Back up the database before upgrading. To return to 0.31.x, restore
+  that backup.
 - **Event Log retention on upgrade.** Earlier releases kept events indefinitely.
   Existing recognized diagnostics older than 90 days become eligible for
   deletion on the first run. Security and audit records (including sign-in,
   MFA, API-key, account and configuration changes, and share-link actions)
-  and unclassified events are kept by default. Configure the two windows with
+  are kept by default, and unclassified events are always kept. Configure the
+  two windows with
   `OCMS_EVENT_DIAGNOSTIC_RETENTION_DAYS` and `OCMS_EVENT_AUDIT_RETENTION_DAYS`
   (`0` keeps the class). Set `OCMS_EVENT_CLEANUP_ENABLED=false` before
   restarting to disable cleanup. Deletion can only be reversed from a backup.
-  SQLite keeps freed pages for reuse. See [Event Log retention](docs/scheduler.md#event-log-retention)
+  SQLite keeps freed pages for reuse. See [Event Log retention](https://github.com/olegiv/ocms-go/blob/v0.32.0/docs/scheduler.md#event-log-retention)
   for monitoring and reclaiming disk space.
+- **Everyone signs in again after upgrading.** Session tokens are now
+  hashed in storage, so existing sessions end in every environment.
 - **Production is the default (I-10).** Set `OCMS_ENV` explicitly before
   upgrading. Unset or empty selects production. Only `development`,
   `staging` and `production` are accepted. Other values fail startup.
-  Staging and production apply the same hardening. Startup can fail on
-  flagged page HTML, including drafts, or missing CAPTCHA
-  verification even with no public forms. Rendering sanitizes legacy HTML,
-  and even a title-only editor save can persist the sanitized body. API
-  keys without expiry, with a lifetime over 90 days, or without a per-key
-  source CIDR fail authentication. Session tokens are now hashed in storage,
-  so existing sessions end on upgrade. Staging and production require MFA
-  at sign-in by default, with enrollment for accounts without MFA. Both modes
-  use a Secure `__Host-session` cookie and HSTS. Startup refuses non-HTTPS
-  URLs for active webhooks, scheduled HTTP tasks and embed providers, and refuses
-  `OCMS_WEBHOOK_FORM_DATA_MODE=full` under the production defaults.
+  Staging and production apply the same hardening. Earlier releases
+  applied these defaults only to `production`, so sites with
+  `OCMS_ENV=staging` need the same checks. Startup can fail on flagged
+  page HTML, including drafts, or missing CAPTCHA verification even with
+  no public forms. It also fails while the seeded default admin password
+  is still active. Rendering sanitizes legacy HTML, and even a title-only
+  editor save can persist the sanitized body. API keys without expiry,
+  with a lifetime over 90 days, or without a per-key source CIDR fail
+  authentication. Staging and production require MFA at sign-in by default.
+  When existing sessions end, users without MFA will need to enroll.
+  Both modes use a Secure `__Host-session` cookie and HSTS. Startup
+  refuses non-HTTPS URLs for active webhooks, scheduled HTTP tasks and embed
+  providers, and refuses `OCMS_WEBHOOK_FORM_DATA_MODE=full` under the
+  production defaults.
   Check the MFA key, trusted proxies and required allowlists before switching.
-  See the [upgrade checklist](README.md#upgrading-sites-with-no-ocms_env).
+  See the [upgrade checklist](https://github.com/olegiv/ocms-go/blob/v0.32.0/README.md#upgrading-sites-with-no-ocms_env).
 - **Stricter script CSP (L-7).** Production and staging omit `'unsafe-eval'`.
-  Custom themes using the shipped Alpine asset need CSP-compatible
-  expressions and its current integrity hash.
+  The bundled `alpine.min.js` is now the Alpine CSP build in every
+  environment, including development. Custom themes need CSP-compatible
+  Alpine expressions and the asset's new integrity hash. See
+  [custom theme scripting](https://github.com/olegiv/ocms-go/blob/v0.32.0/docs/custom-themes.md#javascript-best-practices).
+- CSRF failures are logged at WARN instead of ERROR, so they no longer
+  reach the `OCMS_ERROR_LOG_PATH` file, and the Event Log keeps at most
+  one per 30 seconds. Repeated sign-ins to unknown or locked accounts and
+  rejected public form and embed proxy requests are recorded once per
+  source every 30 seconds. Wrong passwords and lockouts are always
+  recorded.
+- JSON and ZIP page imports apply the same HTML sanitization and
+  suspicious-markup blocking as editor saves, so an import that earlier
+  releases accepted can be refused under the production defaults.
+- Update the Go dependencies and browser assets, including HTMX 4.0.1,
+  TinyMCE 8.10.1, Swagger UI 5.34.1 and Tailwind CSS 4.3.5.
+  `golang.org/x/crypto` moves to an untagged revision without the unused
+  OpenPGP package. Chi stays at 5.5.0. CVE-2026-122132 affects its
+  `RedirectSlashes` middleware, which oCMS does not use. Chi will be
+  updated once the [upstream fix](https://github.com/go-chi/chi/pull/1238)
+  is released.
 
 ### Added
-- **New configuration options.** `OCMS_OAUTH_DCR_INITIAL_ACCESS_TOKEN`
-  enables protected dynamic registration when DCR is on. Generate it with
-  `openssl rand -hex 32`. An invalid value fails startup even when OAuth is
-  off. `OCMS_PREVIEW_LINK_TTL_HOURS` accepts 1–24 (default 24).
-  `OCMS_SEED_ADMIN_PASSWORD` accepts a password of at least 12 characters.
-  Set `OCMS_REQUIRE_SEED_ADMIN_PASSWORD=true` to require it when seeding.
+- **New configuration options.** MCP OAuth stays off until
+  `OCMS_OAUTH_ENABLED=true`. It needs `OCMS_SITE_URL` (HTTPS outside
+  development loopback) and the active MCP module, and startup refuses it
+  in demo mode. Once enabled, client metadata is fetched only from
+  `claude.ai` and `chatgpt.com` unless `OCMS_OAUTH_CIMD_ALLOWED_HOSTS` is
+  set (empty allows none). `OCMS_OAUTH_PRE_REGISTERED_CLIENTS` lists
+  reviewed clients. Dynamic registration (`OCMS_OAUTH_ALLOW_DCR`) is off
+  by default, and `OCMS_OAUTH_DCR_INITIAL_ACCESS_TOKEN` limits it to
+  holders of the token. Generate the token with `openssl rand -hex 32`.
+  An invalid value fails startup even when OAuth is off. Access tokens
+  last `OCMS_OAUTH_ACCESS_TTL` seconds (default 3600) and refresh families
+  `OCMS_OAUTH_REFRESH_TTL_DAYS` days (default 30). Draft authoring stays
+  off until enabled in **Admin → MCP Server**, and `OCMS_AI_DISABLED=true`
+  blocks draft tools. `OCMS_PREVIEW_LINK_TTL_HOURS` accepts 1–24 (default
+  24). `OCMS_SEED_ADMIN_PASSWORD` accepts a password of at least 12
+  characters. Set `OCMS_REQUIRE_SEED_ADMIN_PASSWORD=true` to require it
+  when seeding.
 - **Connected apps and OAuth retention (R1.7).** Account-owned OAuth
   and MCP API-key metadata/revocation, administrator oversight, and bounded
   transactional cleanup that preserves active-family refresh-replay evidence.
-  Adds a bundled author workflow and prepared launch/acceptance documents.
-  The EN/RU/DE authoring matrix passed on `39d82c94`. Native-initiated
-  Desktop reconnect and Claude Code/Codex OAuth and bearer checks passed
-  on `ba044434`. The owner published the reviewed demo on staging, and
-  `6c611040` passed an ordinary publication save with both translations
-  Current. See `docs/launch/r17-acceptance.md` for build-specific results.
+  See [Connected apps](https://github.com/olegiv/ocms-go/blob/v0.32.0/docs/connected-apps.md).
 - **Editorial review and previews (R1.6).** Review recorded provenance,
   validation and claims by revision. Open session previews or create
   expiring, revocable share links for a selected revision. Share tokens
@@ -63,45 +101,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from the editor and record its updated source basis and reviewer.
 - **Draft authoring (R1.5).** Opt-in owned draft creation, updates, linked
   translations and private reads over MCP, with original-input retries, revision
-  checks, rolling user quotas and separate provenance. Removes compatibility
-  scratch tools/flag and returns session preview URLs. See
-  `docs/draft-authoring.md`.
+  checks, rolling user quotas and separate provenance. Returns session
+  preview URLs. See
+  [Draft authoring](https://github.com/olegiv/ocms-go/blob/v0.32.0/docs/draft-authoring.md).
 - **Authoring context (R1.4).** Database-only reference grounding with shared
   frontend routing, recorded revisions, bounded existing taxonomy/media and
   duplicate/overlap feedback. Adds editorial style guides/presets, three MCP
-  prompts, resource/tool parity and language filters. R1.5 consumes this context for CMS draft writes; see `docs/authoring-context.md`.
+  prompts, resource and tool parity, and language filters. Draft writes use
+  this context. See [Authoring context](https://github.com/olegiv/ocms-go/blob/v0.32.0/docs/authoring-context.md).
 - **Draft validation engine (R1.3).** Strict create/update inputs, localized
   issues, safe Markdown with existing media references, explicit link policy,
   loss-aware Markdown reads and metadata updates that preserve rich HTML.
   Shared sanitization preserves explicit link relations through saves and
-  rendering. See `docs/draft-contract.md`.
+  rendering. See [Draft contract](https://github.com/olegiv/ocms-go/blob/v0.32.0/docs/draft-contract.md).
 - **Atomic page-write foundations (R1.2).** Complete page revisions and
   provenance, editor conflict handling, owner/admin AI-edit consent, retained
   idempotency and revision tracking across API, scheduler, imports and cleanup.
   REST updates to AI-editable pages require `base_revision`. See
-  `docs/page-writes.md`.
+  [Page writes](https://github.com/olegiv/ocms-go/blob/v0.32.0/docs/page-writes.md).
 - **Opt-in MCP OAuth (R1.1).** Authorization code with S256 PKCE, scoped
   browser consent after fresh password/MFA sign-in, issuer/resource discovery,
   bounded client metadata and optional public-client registration. SQLite
   stores only opaque credential hashes; atomic code redemption, refresh
   rotation/reuse revocation and current account checks protect access.
-  Connections can be revoked from Account → Connected apps. The temporary
-  compatibility probe used for R1.1 acceptance was retired in R1.5.
-  R1.1 real-client acceptance is complete. See `docs/oauth.md` for the
-  acceptance summary.
+  Connections can be revoked from Account → Connected apps.
+  See [OAuth configuration](https://github.com/olegiv/ocms-go/blob/v0.32.0/docs/oauth.md).
+- Check staged Starter layouts against the bundled Alpine and Alpine Collapse
+  files before upload. The preflight command rejects stale integrity hashes.
 
 ### Fixed
 - Preserve punctuation and localized text in inline-image alt attributes
-  through sanitization, draft reads and Markdown resaves. Both web clients
-  verified repaired EN/RU/DE drafts and rendered previews on `16ac7161`.
+  through sanitization, draft reads and Markdown resaves.
 - Preserve unchanged page HTML on status and metadata saves so publication
-  does not falsely mark translations stale. Verified on staging `6c611040`.
-- Resolve R1.7 audit and first-party NilAway findings: constrain custom CSS
-  rendering, ZIP imports, redirect resolution, OAuth client capacity, page
-  cache invalidation, API-key policy transactions and site-owner execution
-  of backup/process helpers. Hardening is deployed at `39d82c94`.
+  does not falsely mark translations stale.
+- Preserve existing images and aliases during page edits and restores. Keep
+  submitted editor input available when a save is refused or interrupted.
 - Reject malformed API-key permission arrays instead of retaining partial
   permissions after JSON decoding fails or encounters a non-string entry.
+- Restore admin controls under the stricter CSP and allow the GA4 hosts needed
+  by the Analytics module's optional advertising features.
+
+### Security
+- Limit OAuth refresh issuance per grant and account. When the budget is
+  exhausted, return `Retry-After` without consuming the client's refresh
+  token. Bind remote client-metadata requests to configured hosts.
+- Limit API-key share links to the issuing key's expiration, including links
+  that were already stored.
+- Verify deployment binaries before installation, restrict access to backups
+  and bootstrap data, and scrub credentials from production-to-development
+  database copies.
+- Tighten custom CSS rendering, ZIP imports, redirect handling, API-key
+  policy transactions and site-owner execution of backup and process helpers.
 
 ## [0.31.0] - 2026-11-04 - Editor formatting and page-text search
 
@@ -2261,7 +2311,8 @@ structural dependency.
 - **Import/Export**: JSON/ZIP with conflict resolution
 - **Caching**: In-memory + Redis support
 
-[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.31.0...HEAD
+[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.32.0...HEAD
+[0.32.0]: https://github.com/olegiv/ocms-go/compare/v0.31.0...v0.32.0
 [0.31.0]: https://github.com/olegiv/ocms-go/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/olegiv/ocms-go/compare/v0.29.1...v0.30.0
 [0.29.1]: https://github.com/olegiv/ocms-go/compare/v0.29.0...v0.29.1
