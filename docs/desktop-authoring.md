@@ -1,6 +1,5 @@
 # Connected-app draft authoring
 
-R1.5 and R1.6 staging acceptance is recorded in PHASE5 implementation notes.
 R1.6 passed the tested Claude web and ChatGPT web draft/review flows on
 `ff4de3b1368c` and fresh fragment/POST sharing checks on `31c55f8c9f67`
 (2026-11-02). Both clients' links opened anonymously at the pinned revision;
@@ -106,7 +105,7 @@ proxy records had empty URL fields, so they do not establish proxy redaction.
 The proxy probes replayed the browser-observed targets with non-credential
 content; the browser traces establish the URL-safety property directly.
 Both new links were revoked and existing drafts, reviews and OAuth grants
-were preserved. See the [rollout record](../.claude/docs/PHASE5.md#r16-preview-transport-fly-rollout--2026-11-02).
+were preserved.
 Later native Desktop and CLI results on `df6e5d86` appear in the R1.7 matrix
 below; earlier-build results do not establish that coverage.
 
@@ -171,10 +170,7 @@ findings and first-party NilAway diagnostics were fixed before deployment.
 Native reconnect and dependency revalidation passed on their recorded
 builds. Translation review passed on `be0e9cc3` and editor preservation
 passed on `6c611040`. The [release decisions](launch/release-decisions.md)
-record the candidate checks and the production draft. See the earlier
-[web staging record](../.claude/docs/PHASE5.md#r17-fly-staging-and-web-client-acceptance--2026-11-02)
-and [native/CLI record](../.claude/docs/PHASE5.md#r17-native-desktop-and-cli-acceptance--2026-11-02)
-for build identity, evidence limits, cleanup and remaining gates.
+record the candidate checks and the production draft.
 
 Record actual client/version/tier, build/tree, settings, capabilities and date
 per row. Follow normal authentication with the dedicated staging account and

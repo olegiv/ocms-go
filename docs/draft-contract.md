@@ -194,8 +194,6 @@ locale, documentation and outbound/write-boundary drift checks supplement
 these behavioral tests. Parser and Markdown fuzz targets and validation/render
 benchmarks run offline.
 
-Current results and source identity are recorded in the R1.3 implementation
-notes in `.claude/docs/PHASE5.md` and local ignored `output/r13-validation/`.
 No new MCP CMS write endpoint, production/staging migration or deployment is
 part of this iteration.
 

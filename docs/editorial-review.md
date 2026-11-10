@@ -267,9 +267,7 @@ of proxy redaction. Error probes replayed the observed HTTP targets with
 non-credential content because browser header injection was unsupported.
 Browser network traces provide the direct evidence that the new transport
 keeps credentials out of request targets. Both disposable links are revoked;
-content, review data and existing OAuth grants were preserved. See the
-[rollout record](../.claude/docs/PHASE5.md#r16-preview-transport-fly-rollout--2026-11-02)
-for build identity, direct checks and remaining R1.7 coverage.
+content, review data and existing OAuth grants were preserved.
 
 Local browser checks additionally covered 24 requests through a simulated
 upstream, including a pre-application 503, with no bearer in URL or referrer

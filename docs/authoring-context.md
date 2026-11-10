@@ -196,9 +196,7 @@ in the editorial guide/preset resources.
 
 ## Verification and scope
 
-Executed test evidence and source identity are recorded under ignored
-`output/r14-validation/` and in the R1.4 implementation notes in
-`.claude/docs/PHASE5.md`. Checks cover real frontend routing parity, visibility,
+Checks cover real frontend routing parity, visibility,
 reference snapshots, bounded/paged data, media conversion, overlap warnings,
 seed/override/rollback behavior, CSRF and roles, prompt goldens, protocol parity,
 revoked credentials, capabilities, cancellation and log scrubbing.

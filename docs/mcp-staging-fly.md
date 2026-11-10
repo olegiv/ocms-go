@@ -413,8 +413,7 @@ sign-in/MFA → consent → context → owned draft save/read/update/translation
 revisions. Check anonymous preview denial; explicit sharing is available from
 R1.6. The earlier R1.7 rollout at `df6e5d86` (2026-11-02) retained the
 fragment/POST transport fix and legacy-link revocation migration introduced
-by `31c55f8c9f67`. Earlier draft/review results on `ff4de3b1368c` and sharing
-results on `31c55f8c9f67` are recorded in PHASE5. The earlier error-canary check
+by `31c55f8c9f67`. The earlier error-canary check
 showed Fly Proxy recording a full legacy preview path before oCMS redaction;
 the new transport keeps bearer credentials out of that request target.
 
@@ -426,9 +425,7 @@ returned 404, and both new links are revoked. Eight real proxy errors and
 all 247 captured app/proxy records contained neither test bearer. The proxy
 records had empty URL fields; this does not prove proxy redaction. The error
 probes replayed the observed targets with non-credential content because the
-browser controller could not inject the Fly test header. See the
-[rollout record](../.claude/docs/PHASE5.md#r16-preview-transport-fly-rollout--2026-11-02)
-for exact image/snapshot identity, evidence limits and cleanup.
+browser controller could not inject the Fly test header.
 
 The `df6e5d86` rollout passed bounded Claude web/ChatGPT web context,
 draft/translation, replay/conflict, pinned sharing and own-grant revocation
@@ -438,8 +435,7 @@ English/Russian account management, Editor denial from the admin overview,
 manual/scheduled retention and owner-connection preservation were checked.
 Both test shares and the temporary base grant were revoked. An exact-value
 log-buffer check found neither test share bearer nor password; no new
-upstream-error probe or full-release pass is claimed. See the
-[R1.7 staging record](../.claude/docs/PHASE5.md#r17-fly-staging-and-web-client-acceptance--2026-11-02).
+upstream-error probe or full-release pass is claimed.
 
 The subsequent native/CLI acceptance used the same `df6e5d86` binary, without
 another deployment. Claude Code 2.1.316 and Codex 0.166.0 passed bounded draft
@@ -452,14 +448,13 @@ Editor and shared authenticator were used throughout, with exactly
 `mcp:access mcp:drafts`; owner connections and older drafts were preserved.
 Test shares and the temporary base grant are revoked. Six overlapping bounded
 log slices showed no credential patterns; no new proxy-error experiment was
-run. See the
-[native/CLI record](../.claude/docs/PHASE5.md#r17-native-desktop-and-cli-acceptance--2026-11-02).
+run.
 
 For subsequent approved deployments, exclude concurrent old URL-issuing
 writers, let startup migrate first, and repeat the fixed-path upstream-error
 and real-client sharing checks. Keep HTTP body dumps disabled. Record actual
-client/version/build/results in PHASE5 and mark unavailable capabilities
-pending. The [current acceptance record](launch/r17-acceptance.md) covers
+client, version, build and results in the acceptance record. Mark unavailable
+capabilities as pending. The [current acceptance record](launch/r17-acceptance.md) covers
 the later full EN/RU/DE draft demo, taxonomy/media, publication/lifecycle
 tests and `16ac7161` alt-text verification. Its
 [final ba044434 follow-up](launch/r17-acceptance.md#final-native-and-cli-verification--2026-11-04)

@@ -87,8 +87,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rotation/reuse revocation and current account checks protect access.
   Connections can be revoked from Account → Connected apps. The temporary
   compatibility probe used for R1.1 acceptance was retired in R1.5.
-  R1.1 real-client acceptance is complete; see `docs/oauth.md` and the
-  current client matrix in `.claude/docs/PHASE5.md`.
+  R1.1 real-client acceptance is complete. See `docs/oauth.md` for the
+  acceptance summary.
 
 ### Fixed
 - Preserve punctuation and localized text in inline-image alt attributes

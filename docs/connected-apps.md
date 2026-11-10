@@ -24,11 +24,9 @@ EN/RU/DE draft flows and fresh web revocation/reconnect evidence on
 `39d82c94`. The `16ac7161` follow-up verified repaired inline alt text through
 Claude web, ChatGPT web and rendered previews of the resaved demo drafts.
 Earlier bounded Claude web and ChatGPT web checks passed on `df6e5d86`
-for these paths; see the
-[staging record](../.claude/docs/PHASE5.md#r17-fly-staging-and-web-client-acceptance--2026-11-02).
+for these paths.
 Native Desktop authoring and Claude Code/Codex OAuth and bearer checks also
-passed on that build, with a Chrome workaround for Desktop reconnect; see the
-[native/CLI record](../.claude/docs/PHASE5.md#r17-native-desktop-and-cli-acceptance--2026-11-02).
+passed on that build, with a Chrome workaround for Desktop reconnect.
 The [final ba044434 follow-up](launch/r17-acceptance.md#final-native-and-cli-verification--2026-11-04)
 passed native Desktop OAuth and both CLIs' OAuth/bearer modes. Native Connect
 completed the normal browser confirmation, password/shared MFA, consent and
@@ -159,5 +157,5 @@ earlier build-specific evidence. The `be0e9cc3` rollout completes staging
 content/translation review. The later manual publication and final demo
 walkthrough are complete. The editor preservation fix passed on
 `6c611040`, and the article was saved as an unscheduled production draft. See the
-[phase notes](../.claude/docs/PHASE5.md), [client checklist](desktop-authoring.md),
+[client checklist](desktop-authoring.md),
 [OAuth contract](oauth.md) and [demo script](launch/demo-script.md).

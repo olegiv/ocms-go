@@ -231,7 +231,4 @@ all three targets. The approved scoped disposition and revalidation
 conditions above apply. Logs and hashes are under ignored
 `output/r17-validation/release-stop-20261105/`.
 
-The [Release 1 STOP review](../../.claude/docs/PHASE5.md#release-1-stop--2026-11-05)
-records the tested code, the launch draft and wiki synchronization as a
-separate follow-up. Release version, integration and tag decisions await
-the owner's sign-off.
+Release version, integration and tag decisions await the owner's sign-off.

@@ -3,9 +3,8 @@
 R1.5 lets connected agents save drafts for review through the same atomic page
 writer as the editor and REST API. oCMS does no text generation. No MCP tool
 can publish, schedule, delete, change ownership or enable AI access to a page.
-R1.5 staging acceptance is recorded in PHASE5 implementation notes. R1.6 adds
-editorial review and secure previews. Claude web and ChatGPT web draft/review
-checks passed on `ff4de3b1368c`; fresh fragment/POST sharing passed on
+R1.6 adds editorial review and secure previews. Claude web and ChatGPT web
+draft and review checks passed on `ff4de3b1368c`. Fragment/POST sharing passed on
 `31c55f8c9f67` (2026-11-02). The [R1.7 acceptance record](launch/r17-acceptance.md)
 lists subsequent Desktop and CLI authoring checks by build.
 
@@ -266,15 +265,10 @@ retain the 25-second cancellation bound; retry a timeout with the same UUID.
 
 Local tests cover SDK flows, lost responses, escaped large bodies, scope/
 ownership/lifecycle matrices, queued policy changes, CAS/translation races,
-rollback, quotas, translation fingerprints and provenance classes. The local
-HTTP/browser evidence and exact tested source are recorded under ignored
-`output/r15-validation/` and in PHASE5 implementation notes.
-R1.5 cloud authoring acceptance is recorded in PHASE5 implementation notes.
-R1.6 local tests and browser evidence are under `output/r16-validation/`.
-The [R1.6 transport rollout record](../.claude/docs/PHASE5.md#r16-preview-transport-fly-rollout--2026-11-02)
-records fresh Claude/ChatGPT sharing, anonymous pinned rendering, revocation,
-expiry and Fly proxy-log checks on `31c55f8c9f67`, including the empty proxy URL
-fields and the browser evidence for token-free request targets.
+rollback, quotas, translation fingerprints and provenance classes.
+The [desktop authoring acceptance record](desktop-authoring.md#acceptance-record-after-authorized-deployment)
+summarizes R1.6 sharing, anonymous pinned rendering, revocation, expiry and
+proxy-log checks on `31c55f8c9f67`.
 See the [R1.7 acceptance record](launch/r17-acceptance.md) for the native
 Desktop and CLI authoring checks and the
 [release decisions](launch/release-decisions.md) for release verification.

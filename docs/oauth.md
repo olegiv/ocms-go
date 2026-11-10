@@ -29,8 +29,7 @@ Editor account and the shared Keychain authenticator described in
 end. External Internet IPv6/TLS and real-client-IP handling also passed on
 2026-11-01 from an independent probe, including forged IPv4, IPv6 and mixed
 forwarding headers. R1.1 acceptance is complete against the recorded builds.
-See the current matrix in `.claude/docs/PHASE5.md`; SDK tests alone do not
-establish client support.
+See [Acceptance evidence](#acceptance-evidence) for the scope of client testing.
 
 ## Enable
 
@@ -454,7 +453,7 @@ to upstream load balancers and observability tools.
 
 ## Acceptance evidence
 
-R1.1 OAuth acceptance is complete on the commits recorded in PHASE5, including
+R1.1 OAuth acceptance covered
 Claude Desktop/web, ChatGPT web, both CLI OAuth/bearer lifecycles and external
 IPv6/TLS/forwarding verification. The retired compatibility probe established
 authentication/scope/revocation behavior, not real CMS draft persistence.

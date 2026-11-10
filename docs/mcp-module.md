@@ -9,8 +9,7 @@ Content reads remain available under their existing policy. R1.5 adds opt-in
 owned draft creation/update/translation with `mcp:drafts`, retained retries,
 CAS, provenance and existing taxonomy/media. Publishing and deletion remain
 human actions. See [Draft authoring](draft-authoring.md) for exact contracts;
-[OAuth](oauth.md) records the completed R1.1 authentication acceptance and
-PHASE5 notes retain R1.5/R1.6 results. The
+[OAuth](oauth.md) records the completed R1.1 authentication acceptance. The
 [latest verified staging rollout](launch/r17-acceptance.md#staging-rollout-of-b58b7b51)
 is `b58b7b51` (2026-11-08). An earlier publication save on `6c611040`
 preserved the HTML and translation freshness. On `be0e9cc3`, translation
@@ -598,8 +597,8 @@ policy; authoring context also supports the caller's own opted-in plain drafts.
 
 OAuth acceptance is complete for R1.1; see [OAuth](oauth.md). Real CMS draft
 creation/update/translation tools have R1.5 staging results. R1.6 editorial
-review/previews are deployed on staging, with tested Claude/ChatGPT web flows
-and the [transport rollout checks](../.claude/docs/PHASE5.md#r16-preview-transport-fly-rollout--2026-11-02).
+review and previews were tested with Claude and ChatGPT on staging.
+See [desktop authoring acceptance](desktop-authoring.md#acceptance-record-after-authorized-deployment).
 Current native Desktop/CLI draft coverage is in the
 [R1.7 record](launch/r17-acceptance.md).
 This section grants no deployment or remote Git action.
