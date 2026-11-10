@@ -1,9 +1,10 @@
 # R1 release decisions
 
-Updated 2026-11-09. The OpenPGP disposition below is owner-approved for the
-reviewed build, with the staging-target recheck recorded below; other
-decisions retain their stated status. This record does not authorize
-commit, push, deployment or publication. The
+Updated 2026-11-10. Release 1 shipped as v0.32.0 on 2026-11-10. That
+release no longer includes the OpenPGP package, so the earlier OpenPGP
+disposition below is historical; other decisions retain their stated
+status. This record does not authorize commit, push, deployment or
+publication. The
 [acceptance record](r17-acceptance.md) binds results to the tested build.
 
 ## Latest staging verification
@@ -42,15 +43,10 @@ vulnerable imported Go packages/reachable symbols and zero npm findings;
 the approved OpenPGP module-only warning remains. Interactive Klaro
 consent/SRI and the earlier full EN/RU/DE matrix retain their build scope.
 
-The owner explicitly approved `OCMS_REQUIRE_FORM_CAPTCHA=false` only for
-this staging app with zero public forms. MFA remains required. No CAPTCHA
-keys were configured and the tracked profile's secure default was not
-changed; future redeploys need the explicit approved exception or a real
-verifier. This is not a production CAPTCHA exception or a publication
-approval. Native-initiated Desktop reconnect and staging translation review
-are passed. Owner approval, manual staging publication and the final demo
-walkthrough are complete. The editor preservation fix passed staging
-verification on `6c611040`.
+MFA remains required on staging. Native-initiated Desktop reconnect and
+staging translation review are passed. Owner approval, manual staging
+publication and the final demo walkthrough are complete. The editor
+preservation fix passed staging verification on `6c611040`.
 
 ## Inline-image accessibility
 
@@ -74,14 +70,14 @@ publication.
 
 | Advisory | Actual exposure and disposition | Decision status |
 |---|---|---|
-| GO-2026-5932 / `golang.org/x/crypto/openpgp` | Keep `golang.org/x/crypto v0.58.0` for Argon2 password hashing and bcrypt imports. oCMS does not import OpenPGP; the tested build has no vulnerable imported packages or reachable symbols. OpenPGP imports are outside this disposition. | Owner-approved not applicable; revalidated on `ba044434` for Linux/amd64, CGO disabled; future revalidation conditions remain |
+| GO-2026-5932 / `golang.org/x/crypto/openpgp` | v0.32.0 uses the untagged `golang.org/x/crypto` revision `v0.58.1-0.20261009181718-2f1f834330b2`, which no longer contains the OpenPGP package. oCMS imports only `argon2` and `bcrypt` from the module, and govulncheck reported no vulnerabilities for the release candidate. | Resolved in v0.32.0. The earlier owner-approved not-applicable disposition is historical; see below |
 | GHSA-g3hv-75wg-m249 / transitive `minimatch` | `035ac1dd` imports master fix `a325de44`: vendor the existing Klaro 0.7.22 browser JS/CSS and BSD license, removing its unused Babel/ESLint/minimatch npm chain. No major override or advisory suppression. | Resolved; `ba044434` npm audit reports zero findings and reviewed vendor bytes match |
 | CVE-2026-122132 / `github.com/go-chi/chi/v5` | The advisory applies to `v5.5.0`. oCMS does not register `RedirectSlashes`, and that middleware is absent from the checked Linux/amd64 binary. | Owner-approved pin at `v5.5.0` pending a fixed release. See [Chi open redirect](#chi-open-redirect-cve-2026-122132). |
 
 ### Chi open redirect (CVE-2026-122132)
 
-Mend flagged `github.com/go-chi/chi/v5 v5.5.0` for an open redirect in
-`RedirectSlashes`. A request path with an encoded tab can cause the
+A dependency scanner flagged `github.com/go-chi/chi/v5 v5.5.0` for an open
+redirect in `RedirectSlashes`. A request path with an encoded tab can cause the
 middleware to send a redirect that a browser resolves to an external host.
 The Go vulnerability database did not list this CVE for Chi on 2026-11-09,
 so the clean `govulncheck` result did not cover it. See the
@@ -98,6 +94,8 @@ the release build. Reassess sooner if the server starts using this
 middleware.
 
 ### Historical OpenPGP and minimatch checks
+
+These checks predate v0.32.0, which no longer includes the OpenPGP package.
 
 The owner approved retaining the required crypto module and recording this
 advisory as not applicable to the reviewed local build. The scope is the
@@ -192,13 +190,13 @@ staging views, not continuous footage of the human clicks. The original
 acceptance they cover the final demo segment without claiming a continuous
 end-to-end film.
 
-The article is saved as an unscheduled production draft. The API
+The article is saved as an unscheduled draft. The API
 readback verified the article, metadata, taxonomy and inline workflow
 illustration. The public URL and both anonymous API routes returned HTTP 404.
 The draft was absent from published listings, RSS and Atom. Browser preview
 awaits staff sign-in. The
 [local HTML](article-draft.html) and [metadata](article-draft.json) record
-the source. Production publication awaits editorial approval.
+the source. Publication awaits editorial approval.
 
 ## Editor publication follow-up
 
@@ -231,4 +229,4 @@ all three targets. The approved scoped disposition and revalidation
 conditions above apply. Logs and hashes are under ignored
 `output/r17-validation/release-stop-20261105/`.
 
-Release version, integration and tag decisions await the owner's sign-off.
+Release 1 shipped as v0.32.0 on 2026-11-10.

@@ -386,11 +386,10 @@ OAuth/MCP-key metadata and transaction-checked owner/admin revocation through
 `/account/connected-apps` and `/admin/mcp`. `internal/oauth/retention.go` and
 `core:oauth_cleanup` drain retired families in bounded atomic batches, retaining
 every token/spent-refresh hash of active families. API-key permission parsing
-rejects malformed/non-string arrays. See `docs/connected-apps.md`, the bundled
-`docs/skills/ocms-author/SKILL.md` and the R1.7 phase notes for verification and
-remaining release gates. Release 1 still awaits owner sign-off on the release
-version, integration and tag. Git writes, deployments and production
-publication require their own approvals.
+rejects malformed/non-string arrays. See `docs/connected-apps.md` and the
+bundled `docs/skills/ocms-author/SKILL.md`. Release 1 shipped as v0.32.0 on
+2026-11-10. Git writes, deployments and production publication require their
+own approvals.
 
 ### Health Check Routes
 

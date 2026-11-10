@@ -1,6 +1,6 @@
 # Article outline: From an AI brief to a reviewed multilingual article
 
-The article was saved as an unscheduled production draft.
+The article was saved as an unscheduled draft.
 The [local HTML source](article-draft.html) and
 [metadata](article-draft.json) record the material used. The
 [39d82c94 staging record](r17-acceptance.md) now supplies full EN/RU/DE draft

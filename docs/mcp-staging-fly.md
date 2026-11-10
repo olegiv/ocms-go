@@ -22,16 +22,13 @@ RU 43/7 and DE 44/6 are Published, both translations Current. See the
 [publication record](launch/r17-acceptance.md#human-staging-publication-and-final-demo--2026-11-05).
 Earlier client/dependency results in the
 [R1.7 acceptance record](launch/r17-acceptance.md) retain their build scope;
-the focused rollout did not rerun them. The rollout used the explicitly
-approved staging-only `OCMS_REQUIRE_FORM_CAPTCHA=false`
-override with zero public forms; required MFA remains enabled. The tracked
-profile still defaults to requiring CAPTCHA. The
+the focused rollout did not rerun them. Required MFA remains enabled. The
 [final follow-up](launch/r17-acceptance.md#final-native-and-cli-verification--2026-11-04)
 passed native-initiated Desktop reconnect and authoring, both CLIs'
 OAuth/bearer paths and scoped dependency revalidation on `ba044434` without
 another deployment during that follow-up. Historical client tables retain
 their original builds. Owner approval, publication and the final demo
-walkthrough are complete. The launch article was saved as an unscheduled production draft.
+walkthrough are complete. The launch article was saved as an unscheduled draft.
 
 | File | Role |
 |---|---|

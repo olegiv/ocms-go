@@ -26,7 +26,7 @@ EN/RU/DE workflow to `39d82c94`, and alt-text resaves to `16ac7161`. The final
 native/CLI follow-up created EN/RU pairs; it did not repeat new DE creation.
 Owner approval, manual staging publication, the final demo walkthrough
 and editor preservation verification are complete. The launch article was saved
-as an unscheduled production draft.
+as an unscheduled draft.
 The [release decisions](release-decisions.md) record the candidate checks,
 scoped dependency disposition and sign-off.
 
@@ -307,13 +307,7 @@ The approved prerequisites were applied before startup:
   IPv4 `/32`. Existing session, MFA and trusted-proxy secret digests matched.
 - Developer, Embed and Migrator modules were disabled; the Developer theme
   remained active. No other module setting was changed by this preparation.
-- The owner explicitly approved `OCMS_REQUIRE_FORM_CAPTCHA=false` only
-  for this staging app, which had zero public forms. No CAPTCHA keys were
-  configured. Required MFA stayed enabled and seeding/DCR stayed disabled.
-  The tracked `fly.staging.toml` still requires CAPTCHA: this rollout used
-  an explicit deployment override, not a changed default. A future redeploy
-  must retain that approved exception while there are no public forms, or
-  configure a real verifier before requiring CAPTCHA.
+- Required MFA stayed enabled and seeding/DCR stayed disabled.
 - Startup applied core migration `20261023120000_create_page_search` and
   MCP module migration 3. The new `agent_share_links` setting was enabled.
 
@@ -484,10 +478,8 @@ preserved. Volume snapshot `[snapshot ID redacted]` preceded rollout.
 The binary/image identity is recorded above. All three Fly checks passed;
 public `/health/live` and `/health/ready` returned 200.
 
-Required MFA stayed enabled, seeding stayed disabled, and the existing
-owner-approved staging-only `OCMS_REQUIRE_FORM_CAPTCHA=false` exception
-was retained with zero public forms. No tracked configuration or secret
-was changed by the rollout.
+Required MFA stayed enabled and seeding stayed disabled. No tracked
+configuration or secret was changed by the rollout.
 
 Fresh normal password login and the shared development authenticator
 restored dedicated Editor user 2, `ocms-agent@example.test`. The preceding
@@ -704,9 +696,8 @@ that exact commit, built at `2026-11-08T06:19:05Z` from tree
   Recovery snapshot `[snapshot ID redacted]` was created at
   `2026-11-08T06:16:51Z` with five-day retention.
 - Zero active forms were recorded before and after rollout. Staging retained
-  its approved `OCMS_REQUIRE_FORM_CAPTCHA=false` override and required MFA.
-  DCR, seeding and demo mode stayed disabled. The DCR admission migration
-  `20261107180000` applied on the existing volume.
+  required MFA. DCR, seeding and demo mode stayed disabled. The DCR admission
+  migration `20261107180000` applied on the existing volume.
 
 | Check | Verified result |
 | --- | --- |

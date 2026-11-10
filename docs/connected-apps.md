@@ -156,6 +156,6 @@ preserved. Full EN/RU/DE and publication/lifecycle coverage retain their
 earlier build-specific evidence. The `be0e9cc3` rollout completes staging
 content/translation review. The later manual publication and final demo
 walkthrough are complete. The editor preservation fix passed on
-`6c611040`, and the article was saved as an unscheduled production draft. See the
+`6c611040`, and the article was saved as an unscheduled draft. See the
 [client checklist](desktop-authoring.md),
 [OAuth contract](oauth.md) and [demo script](launch/demo-script.md).

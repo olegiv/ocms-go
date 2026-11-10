@@ -170,7 +170,7 @@ findings and first-party NilAway diagnostics were fixed before deployment.
 Native reconnect and dependency revalidation passed on their recorded
 builds. Translation review passed on `be0e9cc3` and editor preservation
 passed on `6c611040`. The [release decisions](launch/release-decisions.md)
-record the candidate checks and the production draft.
+record the candidate checks and the article draft.
 
 Record actual client/version/tier, build/tree, settings, capabilities and date
 per row. Follow normal authentication with the dedicated staging account and

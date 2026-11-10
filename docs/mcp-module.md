@@ -35,7 +35,7 @@ The inline alt-text repair passed both web clients' resaves/readbacks and
 rendered previews on `16ac7161`. The focused `be0e9cc3` rollout did not
 repeat GUI/native/CLI reconnect, dependency, sharing or proxy-error checks;
 earlier results retain their tested builds. The final demo, editor
-verification and production draft are recorded in the
+verification and the article draft are recorded in the
 [release decisions](launch/release-decisions.md).
 
 ## Features
@@ -612,7 +612,7 @@ Management and retention are deployed on staging. See the
 [latest rollout](launch/r17-acceptance.md#staging-rollout-of-b58b7b51). The
 `be0e9cc3` translation review made RU 43/6 and DE 44/5 Current against
 EN 27/7. The owner published the demo, and the ordinary publication check
-passed on `6c611040`. The demo walkthrough and production draft are complete.
+passed on `6c611040`. The demo walkthrough and the article draft are complete.
 Earlier client results retain their recorded builds.
 
 
