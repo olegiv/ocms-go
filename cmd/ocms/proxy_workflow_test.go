@@ -6,6 +6,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -71,9 +72,18 @@ func (f proxyWorkflowFixture) write(name, contents string) {
 	}
 }
 
+// script installs a fake command. It replaces the file by rename instead of
+// rewriting it in place: dash reads a script as it runs, so a process still
+// running the previous version would otherwise read the new contents from
+// the middle and fail with a syntax error.
 func (f proxyWorkflowFixture) script(name, contents string) {
 	f.t.Helper()
-	if err := os.WriteFile(filepath.Join(f.bin, name), []byte(contents), 0o755); err != nil {
+	target := filepath.Join(f.bin, name)
+	staged := target + ".new"
+	if err := os.WriteFile(staged, []byte(contents), 0o755); err != nil {
+		f.t.Fatal(err)
+	}
+	if err := os.Rename(staged, target); err != nil {
 		f.t.Fatal(err)
 	}
 }
@@ -336,6 +346,31 @@ func TestProxyAuditOwnsReportDestination(t *testing.T) {
 	}
 	if target, err := os.Readlink(link); err != nil || target != "TODO.md" {
 		t.Errorf("report-shaped symlink: target %q, error %v", target, err)
+	}
+}
+
+// TestFixtureScriptReplacementKeepsRunningCopy pins the rename in script:
+// replacing a fake command must not change what an already-open copy reads,
+// as an interrupted scan may still be running when the next one is staged.
+func TestFixtureScriptReplacementKeepsRunningCopy(t *testing.T) {
+	f := newProxyWorkflowFixture(t)
+	const first = "#!/bin/sh\nprintf 'partial scan\\n'\n"
+	f.script("govulncheck", first)
+	running, err := os.Open(filepath.Join(f.bin, "govulncheck"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = running.Close() }()
+	f.script("govulncheck", "#!/bin/sh\nprintf 'replacement scan output\\n'\n")
+	got, err := io.ReadAll(running)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != first {
+		t.Errorf("open copy read %q after replacement, want %q", got, first)
+	}
+	if replaced := string(readWorkflowFile(t, filepath.Join(f.bin, "govulncheck"))); !strings.Contains(replaced, "replacement scan output") {
+		t.Errorf("fake command was not replaced: %q", replaced)
 	}
 }
 
