@@ -308,7 +308,7 @@ gh attestation verify ocms-linux-amd64.tar.gz --repo olegiv/ocms-go
 3. Install required tools:
    ```bash
    go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
-   go install github.com/a-h/templ/cmd/templ@v0.3.1070
+   go install github.com/a-h/templ/cmd/templ@v0.3.1100
    go install github.com/pressly/goose/v3/cmd/goose@latest
    ```
 

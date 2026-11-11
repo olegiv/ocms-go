@@ -142,8 +142,8 @@ templ frontendNav(base BaseTemplateData) {
 	<header class="fe-header sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
 		<div class="fe-container fe-header-inner mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
 			<a href={ templ.SafeURL(base.HomeURL) } class="fe-logo flex items-center gap-2 text-lg font-bold tracking-tight text-foreground no-underline hover:opacity-80 transition-opacity">
-				if base.SiteLogo != "" {
-					<img src={ base.SiteLogo } alt={ base.SiteName } class="fe-logo-img h-8 w-auto"/>
+				if logo := siteLogoURL(base.SiteLogo); logo != "" {
+					<img src={ logo } alt={ base.SiteName } class="fe-logo-img h-8 w-auto"/>
 				} else {
 					{ base.SiteName }
 				}
