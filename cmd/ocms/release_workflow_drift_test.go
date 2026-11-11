@@ -375,9 +375,9 @@ var ciTestGateCommand = regexp.MustCompile(`(?m)^[ \t]*\./scripts/test-gate\.sh[
 // OCMS_REQUIRE_SHARED_TOOLING setting of the Test step, and this fails.
 func TestCIChecksOutSharedTooling(t *testing.T) {
 	wf := readWorkflow(t, "go.yml")
-	build, ok := wf.Jobs["build"]
+	build, ok := wf.Jobs["verify"]
 	if !ok {
-		t.Fatal("go.yml has no build job")
+		t.Fatal("go.yml has no verify job")
 	}
 	checkoutCommand := regexp.MustCompile(`(?m)^\s*git submodule update --init\b.*\.claude/shared\s*$`)
 	checkout, tests := -1, -1
@@ -409,7 +409,7 @@ func TestCIChecksOutSharedTooling(t *testing.T) {
 // tests skip or let their failures pass CI.
 func TestCIRunsChromeRegressions(t *testing.T) {
 	wf := readWorkflow(t, "go.yml")
-	for _, step := range wf.Jobs["build"].Steps {
+	for _, step := range wf.Jobs["verify"].Steps {
 		if !ciTestGateCommand.MatchString(step.Run) {
 			continue
 		}
@@ -495,9 +495,9 @@ func TestAssetBuildUsesLockedToolsWithoutLifecycleScripts(t *testing.T) {
 // names it.
 func TestCIRacesConcurrentCode(t *testing.T) {
 	wf := readWorkflow(t, "go.yml")
-	build, ok := wf.Jobs["build"]
+	build, ok := wf.Jobs["verify"]
 	if !ok {
-		t.Fatal("go.yml has no build job")
+		t.Fatal("go.yml has no verify job")
 	}
 	raced := map[string]bool{}
 	for _, step := range build.Steps {
