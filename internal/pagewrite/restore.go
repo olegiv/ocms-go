@@ -95,8 +95,10 @@ func (t *Tx) Restore(ctx context.Context, page store.Page, version store.PageVer
 			if loadErr != nil {
 				return restoreReferenceError(loadErr, "featured image", "pages.restore_missing_featured_image", *saved.FeaturedImageID)
 			}
-			if err = CheckFeaturedImageDimensions(media.Width.Int64, media.Height.Int64, media.Width.Valid && media.Height.Valid); err != nil {
-				return err
+			if !page.FeaturedImageID.Valid || page.FeaturedImageID.Int64 != media.ID {
+				if err = CheckFeaturedImage(media.MimeType, media.Width.Int64, media.Height.Int64, media.Width.Valid && media.Height.Valid); err != nil {
+					return err
+				}
 			}
 			params.FeaturedImageID = sql.NullInt64{Int64: *saved.FeaturedImageID, Valid: true}
 		}

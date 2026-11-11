@@ -28,6 +28,10 @@ import (
 	"github.com/olegiv/ocms-go/internal/model"
 )
 
+// ErrInvalidImage identifies corrupt, unsupported or over-limit image content.
+// Read, storage and encoding faults retain their original server-error identity.
+var ErrInvalidImage = errors.New("invalid image")
+
 // MaxImageWidth and MaxImageHeight are the stored-image dimension caps. They
 // are exported so callers that downscale can report the limit they fitted to.
 const (
@@ -157,19 +161,19 @@ func (p *Processor) ProcessImageWithOptions(reader io.Reader, uuid, filename str
 		return nil, fmt.Errorf("failed to read image data: %w", err)
 	}
 	if len(data) > maxDecodableBytes {
-		return nil, fmt.Errorf("image exceeds maximum size of %d bytes", int64(maxDecodableBytes))
+		return nil, fmt.Errorf("%w: image exceeds maximum size of %d bytes", ErrInvalidImage, int64(maxDecodableBytes))
 	}
 
 	// Detect format
 	format := detectFormat(data)
 	if format == "" {
-		return nil, fmt.Errorf("unsupported image format")
+		return nil, fmt.Errorf("%w: unsupported image format", ErrInvalidImage)
 	}
 
 	// Validate dimensions before full decode to prevent decode bomb DoS.
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
-		return nil, fmt.Errorf("failed to read image config: %w", err)
+		return nil, fmt.Errorf("%w: failed to read image config: %w", ErrInvalidImage, err)
 	}
 	fit, err := validateDecodable(cfg.Width, cfg.Height, opts)
 	if err != nil {
@@ -179,7 +183,7 @@ func (p *Processor) ProcessImageWithOptions(reader io.Reader, uuid, filename str
 	// Decode image
 	img, err := imaging.Decode(bytes.NewReader(data))
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode image: %w", err)
+		return nil, fmt.Errorf("%w: failed to decode image: %w", ErrInvalidImage, err)
 	}
 
 	// Read EXIF orientation and auto-rotate
@@ -349,22 +353,22 @@ func ValidateImage(reader io.Reader) (width, height int, mimeType string, result
 		return 0, 0, "", fmt.Errorf("failed to read image data: %w", err)
 	}
 	if len(data) > maxDecodableBytes {
-		return 0, 0, "", fmt.Errorf("image exceeds maximum size of %d bytes", int64(maxDecodableBytes))
+		return 0, 0, "", fmt.Errorf("%w: image exceeds maximum size of %d bytes", ErrInvalidImage, int64(maxDecodableBytes))
 	}
 	format := detectFormat(data)
 	if format == "" {
-		return 0, 0, "", errors.New("unsupported image format")
+		return 0, 0, "", fmt.Errorf("%w: unsupported image format", ErrInvalidImage)
 	}
 	config, _, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
-		return 0, 0, "", fmt.Errorf("failed to read image config: %w", err)
+		return 0, 0, "", fmt.Errorf("%w: failed to read image config: %w", ErrInvalidImage, err)
 	}
 	if _, err := validateDecodable(config.Width, config.Height, ProcessOptions{}); err != nil {
 		return 0, 0, "", err
 	}
 	decoded, err := imaging.Decode(bytes.NewReader(data))
 	if err != nil {
-		return 0, 0, "", fmt.Errorf("failed to decode image: %w", err)
+		return 0, 0, "", fmt.Errorf("%w: failed to decode image: %w", ErrInvalidImage, err)
 	}
 	bounds := decoded.Bounds()
 	width, height = bounds.Dx(), bounds.Dy()
@@ -578,7 +582,7 @@ func fitBounds(width, height int) (int, int) {
 // uploads behave exactly as before.
 func validateDecodable(width, height int, opts ProcessOptions) (fit bool, err error) {
 	if width <= 0 || height <= 0 {
-		return false, fmt.Errorf("invalid image dimensions: %dx%d", width, height)
+		return false, fmt.Errorf("%w: invalid image dimensions: %dx%d", ErrInvalidImage, width, height)
 	}
 	if err := validateImageDimensions(width, height); err == nil {
 		return false, nil
@@ -586,11 +590,11 @@ func validateDecodable(width, height int, opts ProcessOptions) (fit bool, err er
 		return false, err
 	}
 	if width > maxDecodableDimension || height > maxDecodableDimension {
-		return false, fmt.Errorf("image dimensions exceed maximum decodable: %dx%d (max %dx%d)",
+		return false, fmt.Errorf("%w: image dimensions exceed maximum decodable: %dx%d (max %dx%d)", ErrInvalidImage,
 			width, height, maxDecodableDimension, maxDecodableDimension)
 	}
 	if int64(width)*int64(height) > maxDecodablePixels {
-		return false, fmt.Errorf("image pixel count exceeds maximum decodable: %d (max %d)",
+		return false, fmt.Errorf("%w: image pixel count exceeds maximum decodable: %d (max %d)", ErrInvalidImage,
 			int64(width)*int64(height), maxDecodablePixels)
 	}
 	return true, nil
@@ -598,13 +602,13 @@ func validateDecodable(width, height int, opts ProcessOptions) (fit bool, err er
 
 func validateImageDimensions(width, height int) error {
 	if width <= 0 || height <= 0 {
-		return fmt.Errorf("invalid image dimensions: %dx%d", width, height)
+		return fmt.Errorf("%w: invalid image dimensions: %dx%d", ErrInvalidImage, width, height)
 	}
 	if width > maxImageWidth || height > maxImageHeight {
-		return fmt.Errorf("image dimensions exceed maximum allowed: %dx%d (max %dx%d)", width, height, maxImageWidth, maxImageHeight)
+		return fmt.Errorf("%w: image dimensions exceed maximum allowed: %dx%d (max %dx%d)", ErrInvalidImage, width, height, maxImageWidth, maxImageHeight)
 	}
 	if int64(width)*int64(height) > maxImagePixels {
-		return fmt.Errorf("image pixel count exceeds maximum allowed: %d (max %d)", int64(width)*int64(height), maxImagePixels)
+		return fmt.Errorf("%w: image pixel count exceeds maximum allowed: %d (max %d)", ErrInvalidImage, int64(width)*int64(height), maxImagePixels)
 	}
 	return nil
 }

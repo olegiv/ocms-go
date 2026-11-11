@@ -1333,6 +1333,46 @@
             "translation": "Очистить все"
         },
         {
+            "id": "media.picker_upload_image",
+            "message": "Upload Image",
+            "translation": "Загрузить изображение"
+        },
+        {
+            "id": "media.picker_upload_hint",
+            "message": "JPG, PNG, GIF, WebP, ICO · Max 20 MB",
+            "translation": "JPG, PNG, GIF, WebP, ICO · До 20 МБ"
+        },
+        {
+            "id": "media.picker_upload_hint_raster",
+            "message": "JPG, PNG, GIF, WebP · Max 20 MB",
+            "translation": "JPG, PNG, GIF, WebP · До 20 МБ"
+        },
+        {
+            "id": "media.picker_upload_forbidden",
+            "message": "Image uploads are not allowed.",
+            "translation": "Загрузка изображений запрещена."
+        },
+        {
+            "id": "media.picker_upload_error",
+            "message": "Upload failed. Choose the image to try again.",
+            "translation": "Не удалось загрузить изображение. Выберите его повторно."
+        },
+        {
+            "id": "media.picker_upload_too_large",
+            "message": "Image exceeds the 20 MB upload limit.",
+            "translation": "Размер изображения превышает 20 МБ."
+        },
+        {
+            "id": "media.picker_upload_invalid",
+            "message": "Image is invalid, corrupt or exceeds the maximum dimensions. Choose a JPG, PNG, GIF, WebP or ICO image.",
+            "translation": "Изображение имеет неверный формат, повреждено или превышает максимальные размеры. Выберите JPG, PNG, GIF, WebP или ICO."
+        },
+        {
+            "id": "media.picker_upload_invalid_raster",
+            "message": "Image is invalid, corrupt or exceeds the maximum dimensions. Choose a JPG, PNG, GIF or WebP image.",
+            "translation": "Изображение имеет неверный формат, повреждено или превышает максимальные размеры. Выберите JPG, PNG, GIF или WebP."
+        },
+        {
             "id": "media.uploading",
             "message": "Uploading...",
             "translation": "Загрузка..."
@@ -3911,6 +3951,11 @@
             "id": "error.saving_value",
             "message": "Error saving value",
             "translation": "Ошибка сохранения значения"
+        },
+        {
+            "id": "pages.error.featured_image_ico",
+            "message": "ICO images cannot be used as featured images. Choose JPEG, PNG, GIF or WebP.",
+            "translation": "Изображения ICO нельзя использовать в качестве главного изображения. Выберите JPEG, PNG, GIF или WebP."
         },
         {
             "id": "pages.error.featured_image_too_small",

@@ -7,8 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Upload images inside Featured Image, Open Graph, content-editor and theme
+  pickers without leaving the form or losing unsaved changes (#211).
+
 ### Changed
 
+- Return `422 validation_error` (field `file`) from `POST /api/v2/media` for
+  corrupt, undecodable or over-limit images instead of `500`.
+- Stop showing internal error text when an admin media upload or variant
+  regeneration fails. Server faults show a generic message (HTMX `500`);
+  problems the editor can fix, such as a corrupt image, show a specific one
+  (HTMX `400`). Regenerating variants for an ICO now returns `400` instead of
+  `500`.
+- Refuse ICO when a featured image is assigned or changed in the admin editor,
+  REST v2 or a version restore, matching the AI draft rules. An unchanged ICO
+  featured image is kept on edit and restore, but an AI-editable page cannot be
+  published with it. Theme and favicon ICO use is unaffected.
 - Update TinyMCE to 8.10.2 and Sass to 1.108.2.
 
 ### Security

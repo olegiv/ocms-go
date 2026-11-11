@@ -94,6 +94,7 @@ Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the [Good f
   - Automatic thumbnail and variant generation
   - Folder organization
   - Featured image support for pages
+  - Upload images from the Featured, Open Graph, editor and theme pickers without leaving the form
 - **Menu Builder**: Create navigation menus with drag-and-drop ordering
   - Hierarchical menu structures
   - Link to pages or external URLs

@@ -106,7 +106,7 @@ has no exception for another user's drafts. Explicit status, `published_at`
 or `scheduled_at` input, including explicit JSON null, is rejected. Successful
 agent saves force draft status and clear both lifecycle timestamps. Shared
 validation covers title, enums, routes/aliases, active language, sanitized HTML
-and the existing featured-image minimum. The PageDraft schema, reference
+and the featured-image format and minimum. The PageDraft schema, reference
 validation, normalization and issue catalog are in the
 [draft contract](draft-contract.md).
 

@@ -4,9 +4,14 @@
 package media_test
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
+	"github.com/danielgtaylor/huma/v2"
+	"net/http"
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 	"time"
@@ -180,6 +185,52 @@ func TestDeleteMediaWithoutAuth(t *testing.T) {
 			}
 			if actor.APIKey != nil && de.Kind != v2.ErrForbidden {
 				t.Errorf("read-only caller should get Forbidden, got %d", de.Kind)
+			}
+		})
+	}
+}
+
+func TestUploadImageFailuresReachRESTValidation(t *testing.T) {
+	for _, failure := range []string{"corrupt", "dimensions", "storage"} {
+		t.Run(failure, func(t *testing.T) {
+			db, cleanup := testutil.TestDB(t)
+			t.Cleanup(cleanup)
+			q := store.New(db)
+			now := time.Now()
+			owner, err := q.CreateUser(t.Context(), store.CreateUserParams{Email: "validation@example.test", PasswordHash: "unused", Name: "Editor", Role: model.RoleEditor, CreatedAt: now, UpdatedAt: now})
+			if err != nil {
+				t.Fatal(err)
+			}
+			directory := t.TempDir()
+			data := []byte("\x89PNG\r\n\x1a\ncorrupted")
+			if failure == "dimensions" {
+				data = testutil.PNGImage(t, 10001, 1)
+			}
+			if failure == "storage" {
+				directory = filepath.Join(directory, "private-upload-storage")
+				if err := os.WriteFile(directory, []byte("blocked"), 0600); err != nil {
+					t.Fatal(err)
+				}
+				data = pngBytes(t)
+			}
+			svc := media.NewService(db, q, nil, directory)
+			actor := v2.Actor{APIKey: &store.ApiKey{ID: 1, CreatedBy: owner.ID}, Permissions: []string{model.PermissionMediaWrite}}
+			_, err = svc.Upload(t.Context(), actor, media.UploadMediaMetadata{}, media.UploadedFile{Reader: memoryFile{bytes.NewReader(data)}, Filename: "image.png", Size: int64(len(data))})
+			var domain *v2.Error
+			if !errors.As(err, &domain) {
+				t.Fatalf("expected domain error: %v", err)
+			}
+			status := http.StatusUnprocessableEntity
+			if failure == "storage" {
+				status = http.StatusInternalServerError
+			}
+			wire := v2.ToHuma(t.Context(), err)
+			var response huma.StatusError
+			if !errors.As(wire, &response) || response.GetStatus() != status {
+				t.Fatalf("REST status: %v, want %d", wire, status)
+			}
+			if failure != "storage" && (domain.Kind != v2.ErrValidation || domain.Fields["file"] != "Image could not be processed: it is corrupt or exceeds the maximum dimensions") {
+				t.Fatalf("validation=%+v", domain)
 			}
 		})
 	}

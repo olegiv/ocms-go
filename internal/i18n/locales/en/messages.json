@@ -1333,6 +1333,46 @@
             "translation": "Clear All"
         },
         {
+            "id": "media.picker_upload_image",
+            "message": "Upload Image",
+            "translation": "Upload Image"
+        },
+        {
+            "id": "media.picker_upload_hint",
+            "message": "JPG, PNG, GIF, WebP, ICO · Max 20 MB",
+            "translation": "JPG, PNG, GIF, WebP, ICO · Max 20 MB"
+        },
+        {
+            "id": "media.picker_upload_hint_raster",
+            "message": "JPG, PNG, GIF, WebP · Max 20 MB",
+            "translation": "JPG, PNG, GIF, WebP · Max 20 MB"
+        },
+        {
+            "id": "media.picker_upload_forbidden",
+            "message": "Image uploads are not allowed.",
+            "translation": "Image uploads are not allowed."
+        },
+        {
+            "id": "media.picker_upload_error",
+            "message": "Upload failed. Choose the image to try again.",
+            "translation": "Upload failed. Choose the image to try again."
+        },
+        {
+            "id": "media.picker_upload_too_large",
+            "message": "Image exceeds the 20 MB upload limit.",
+            "translation": "Image exceeds the 20 MB upload limit."
+        },
+        {
+            "id": "media.picker_upload_invalid",
+            "message": "Image is invalid, corrupt or exceeds the maximum dimensions. Choose a JPG, PNG, GIF, WebP or ICO image.",
+            "translation": "Image is invalid, corrupt or exceeds the maximum dimensions. Choose a JPG, PNG, GIF, WebP or ICO image."
+        },
+        {
+            "id": "media.picker_upload_invalid_raster",
+            "message": "Image is invalid, corrupt or exceeds the maximum dimensions. Choose a JPG, PNG, GIF or WebP image.",
+            "translation": "Image is invalid, corrupt or exceeds the maximum dimensions. Choose a JPG, PNG, GIF or WebP image."
+        },
+        {
             "id": "media.uploading",
             "message": "Uploading...",
             "translation": "Uploading..."
@@ -4426,6 +4466,11 @@
             "id": "error.saving_value",
             "message": "Error saving value",
             "translation": "Error saving value"
+        },
+        {
+            "id": "pages.error.featured_image_ico",
+            "message": "ICO images cannot be used as featured images. Choose JPEG, PNG, GIF or WebP.",
+            "translation": "ICO images cannot be used as featured images. Choose JPEG, PNG, GIF or WebP."
         },
         {
             "id": "pages.error.featured_image_too_small",

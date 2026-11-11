@@ -12,11 +12,13 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/iotest"
 
 	"github.com/HugoSmits86/nativewebp"
 
@@ -874,4 +876,42 @@ func TestProcessImageRejectsSymlinkedStorageDirectory(t *testing.T) {
 	if _, statErr := os.Stat(outsideTarget); !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("image output escaped uploads into %s: %v", outsideTarget, statErr)
 	}
+}
+
+// The sentinel is the contract consumed by every MediaService upload transport.
+// Include pre-decode, full-decode, stored and trusted-decode dimension/pixel caps.
+func TestImageFailuresAreClassified(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		data    []byte
+		options ProcessOptions
+	}{
+		{"config", []byte("\x89PNG\r\n\x1a\ncorrupted"), ProcessOptions{}},
+		{"decode", createPNGWithDimensions(1, 1), ProcessOptions{}},
+		{"format", []byte("not an image"), ProcessOptions{}},
+		{"width", createPNGWithDimensions(MaxImageWidth+1, 1), ProcessOptions{}},
+		{"height", createPNGWithDimensions(1, MaxImageHeight+1), ProcessOptions{}},
+		{"pixels", createPNGWithDimensions(8000, 8000), ProcessOptions{}},
+		{"decode dimension", createPNGWithDimensions(maxDecodableDimension+1, 1), ProcessOptions{DownscaleOversized: true}},
+		{"decode pixels", createPNGWithDimensions(12000, 11000), ProcessOptions{DownscaleOversized: true}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := NewProcessor(t.TempDir())
+			_, err := p.ProcessImageWithOptions(bytes.NewReader(tc.data), "image-uuid", "image.png", tc.options)
+			if !errors.Is(err, ErrInvalidImage) {
+				t.Errorf("processing classification: %v", err)
+			}
+			_, _, _, err = ValidateImage(bytes.NewReader(tc.data))
+			if !errors.Is(err, ErrInvalidImage) {
+				t.Errorf("validation classification: %v", err)
+			}
+		})
+	}
+	t.Run("read fault", func(t *testing.T) {
+		p := NewProcessor(t.TempDir())
+		_, err := p.ProcessImage(iotest.ErrReader(io.ErrClosedPipe), "image-uuid", "image.png")
+		if !errors.Is(err, io.ErrClosedPipe) || errors.Is(err, ErrInvalidImage) {
+			t.Fatalf("read fault reclassified: %v", err)
+		}
+	})
 }

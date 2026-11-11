@@ -7,6 +7,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"mime/multipart"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,6 +20,49 @@ import (
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/testutil"
 )
+
+func TestUploadImageRestrictionAndLegacyUpload(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	t.Cleanup(cleanup)
+	q := store.New(db)
+	now := time.Now()
+	user, err := q.CreateUser(t.Context(), store.CreateUserParams{Email: "upload-image@example.test", PasswordHash: "unused", Name: "Editor", Role: model.RoleEditor, CreatedAt: now, UpdatedAt: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	uploadDir := t.TempDir()
+	svc := NewMediaService(db, uploadDir)
+	for _, imagesOnly := range []bool{true, false} {
+		file := tempMultipartFile(t, []byte("%PDF-1.4"))
+		t.Cleanup(func() {
+			if err := file.Close(); err != nil {
+				t.Error(err)
+			}
+		})
+		header := &multipart.FileHeader{Filename: "document.pdf", Size: 8}
+		var result *UploadResult
+		if imagesOnly {
+			result, err = svc.UploadImage(t.Context(), file, header, user.ID, nil, "en")
+		} else {
+			result, err = svc.Upload(t.Context(), file, header, user.ID, nil, "en")
+		}
+		if imagesOnly {
+			var clientError *ClientError
+			if !errors.As(err, &clientError) {
+				t.Fatalf("images-only accepted PDF: %+v %v", result, err)
+			}
+			files, readErr := os.ReadDir(uploadDir)
+			if readErr != nil || len(files) != 0 {
+				t.Fatalf("refused upload stored files: %v %v", files, readErr)
+			}
+			if count, countErr := q.CountMedia(t.Context()); countErr != nil || count != 0 {
+				t.Fatalf("refused upload stored row: %d %v", count, countErr)
+			}
+		} else if err != nil || result.Media.MimeType != "application/pdf" {
+			t.Fatalf("legacy upload no longer accepts PDF: %+v %v", result, err)
+		}
+	}
+}
 
 func TestClientError(t *testing.T) {
 	t.Run("implements error interface", func(t *testing.T) {
@@ -666,5 +711,65 @@ func TestMediaServiceDeleteCancellationBeforeCommitPreservesRowsAndFiles(t *test
 	}
 	if content, err := os.ReadFile(original); err != nil || string(content) != "report" {
 		t.Fatalf("original = %q, error = %v; want preserved", content, err)
+	}
+}
+
+// Both entry points must classify bad image content as a client refusal while
+// retaining storage/DB failures as server faults. No path/decoder details escape.
+func TestUploadImageProcessingFailureClassification(t *testing.T) {
+	for _, imagesOnly := range []bool{false, true} {
+		for _, failure := range []string{"corrupt", "dimensions", "storage", "database", "normal"} {
+			t.Run(fmt.Sprintf("imagesOnly=%v/%s", imagesOnly, failure), func(t *testing.T) {
+				db, cleanup := testutil.TestDB(t)
+				t.Cleanup(cleanup)
+				uploadDir := t.TempDir()
+				data := testutil.PNGImage(t, 1, 1)
+				switch failure {
+				case "corrupt":
+					data = []byte("\x89PNG\r\n\x1a\ncorrupted")
+				case "dimensions":
+					data = testutil.PNGImage(t, 10001, 1)
+				case "storage":
+					uploadDir = filepath.Join(uploadDir, "private-storage")
+					if err := os.WriteFile(uploadDir, []byte("blocked"), 0600); err != nil {
+						t.Fatal(err)
+					}
+				case "database":
+					if _, err := db.Exec(`CREATE TRIGGER reject_upload BEFORE INSERT ON media BEGIN SELECT RAISE(FAIL, 'private database fault'); END`); err != nil {
+						t.Fatal(err)
+					}
+				}
+				svc := NewMediaService(db, uploadDir)
+				upload := svc.Upload
+				if imagesOnly {
+					upload = svc.UploadImage
+				}
+				file := tempMultipartFile(t, data)
+				defer func() { _ = file.Close() }()
+				// Seed an uploader so normal uploads and the injected DB fault
+				// reach their intended paths rather than failing the foreign key.
+				now := time.Now()
+				user, err := store.New(db).CreateUser(t.Context(), store.CreateUserParams{Email: "image@example.test", PasswordHash: "unused", Name: "Editor", Role: model.RoleEditor, CreatedAt: now, UpdatedAt: now})
+				if err != nil {
+					t.Fatal(err)
+				}
+				result, err := upload(t.Context(), file, &multipart.FileHeader{Filename: "image.png", Size: int64(len(data))}, user.ID, nil, "en")
+				if failure == "normal" {
+					if err != nil || result == nil {
+						t.Fatalf("normal upload: %v", err)
+					}
+					return
+				}
+				var client *ClientError
+				isClient := errors.As(err, &client)
+				wantClient := failure == "corrupt" || failure == "dimensions"
+				if err == nil || isClient != wantClient {
+					t.Fatalf("client=%v want %v: %v", isClient, wantClient, err)
+				}
+				if isClient && client.Message != "Image could not be processed: it is corrupt or exceeds the maximum dimensions" {
+					t.Fatalf("client message=%q", client.Message)
+				}
+			})
+		}
 	}
 }

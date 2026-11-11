@@ -22,6 +22,94 @@ function safeRedirectTarget(raw) {
 
 document.addEventListener('alpine:init', () => Alpine.data('mediaDropzone', mediaDropzone));
 
+// Shared by Alpine, TinyMCE and theme pickers. All request state stays in this
+// closure so closing one picker cannot update another picker's form fields.
+function initMediaPickerUpload(root, onUploaded) {
+    if (!root) return null;
+    if (root.mediaPickerUploader) return root.mediaPickerUploader;
+    const input = root.querySelector('[data-upload-file]');
+    const allowedFormats = root.dataset.allowedFormats.split(',');
+    const choose = root.querySelector('[data-upload-choose]');
+    const progress = root.querySelector('[data-upload-progress]');
+    const status = root.querySelector('[data-upload-status]');
+    let active = null;
+    const busy = (value) => {
+        choose.disabled = value;
+        input.disabled = value;
+        progress.hidden = !value;
+        root.setAttribute('aria-busy', String(value));
+    };
+    const reset = () => {
+        const previous = active;
+        active = null;
+        if (previous) previous.abort();
+        busy(false);
+        input.value = '';
+        status.textContent = '';
+        status.classList.remove('form-error');
+    };
+    choose.addEventListener('click', () => { if (!active) input.click(); });
+    input.addEventListener('change', () => {
+        if (active) return;
+        const file = input.files[0];
+        input.value = ''; // Choosing the same image after a failure retries it.
+        if (!file) return;
+        status.classList.add('form-error');
+        if (file.size > Number(root.dataset.maxSize)) {
+            status.textContent = root.dataset.tooLarge;
+            return;
+        }
+        const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
+        if (!allowedFormats.includes(extension)) {
+            status.textContent = root.dataset.invalid;
+            return;
+        }
+        const xhr = new XMLHttpRequest();
+        active = xhr;
+        busy(true);
+        progress.value = 0;
+        status.classList.remove('form-error');
+        status.textContent = root.dataset.uploading;
+        const fail = (message) => {
+            if (active !== xhr) return;
+            active = null;
+            busy(false);
+            status.classList.add('form-error');
+            status.textContent = message || root.dataset.error;
+        };
+        xhr.upload.onprogress = (event) => {
+            if (active === xhr && event.lengthComputable) progress.value = Math.round(event.loaded / event.total * 100);
+        };
+        xhr.onerror = () => fail();
+        xhr.ontimeout = () => fail();
+        xhr.onload = () => {
+            if (active !== xhr || !root.isConnected) return;
+            const json = xhr.getResponseHeader('Content-Type')?.split(';')[0].trim() === 'application/json';
+            const item = json && xhr.response?.item;
+            if (xhr.status !== 201 || !item || !Number.isSafeInteger(item.id) || item.id <= 0 ||
+                typeof item.filepath !== 'string' || typeof item.filename !== 'string' || !item.mimetype?.startsWith('image/')) {
+                // API diagnostics are not UI translations. Keep every picker
+                // in the page's language, including server-side refusals.
+                const messages = {400: root.dataset.invalid, 413: root.dataset.tooLarge, 403: root.dataset.forbidden};
+                fail(messages[xhr.status]);
+                return;
+            }
+            active = null;
+            busy(false);
+            status.textContent = '';
+            onUploaded(item);
+        };
+        const body = new FormData();
+        body.append('file', file);
+        xhr.open('POST', '/admin/media/upload');
+        xhr.setRequestHeader('Accept', 'application/json');
+        xhr.responseType = 'json';
+        xhr.send(body);
+    });
+    root.mediaPickerUploader = { reset };
+    return root.mediaPickerUploader;
+}
+
 function mediaDropzone() {
     return {
         // Common state
@@ -39,6 +127,9 @@ function mediaDropzone() {
         currentPage: 1,
         totalPages: 1,
         perPage: 12,
+        mediaRequest: 0,
+        pinnedUpload: null,
+        pickerUploader: null,
 
         // Upload mode state
         files: [],
@@ -63,6 +154,14 @@ function mediaDropzone() {
         },
 
         initSelectMode(container) {
+            this.pickerUploader = initMediaPickerUpload(container.querySelector('[data-media-picker-upload]'), item => {
+                this.searchQuery = '';
+                this.filterType = '';
+                this.currentPage = 1;
+                this.pinnedUpload = item;
+                this.tempSelected = item;
+                this.loadMedia();
+            });
             const initialImage = container.dataset.initialImage;
             if (initialImage && initialImage !== 'null') {
                 try {
@@ -125,12 +224,16 @@ function mediaDropzone() {
 
         // Select mode methods
         openPicker() {
+            this.pickerUploader?.reset();
             this.showModal = true;
             this.tempSelected = this.selectedImage;
             this.loadMedia();
         },
 
         closeModal() {
+            this.pickerUploader?.reset();
+            this.mediaRequest++;
+            this.pinnedUpload = null;
             this.showModal = false;
             this.tempSelected = null;
         },
@@ -148,7 +251,13 @@ function mediaDropzone() {
             this.selectedImage = null;
         },
 
-        async loadMedia() {
+        refilter() {
+            this.currentPage = 1;
+            this.loadMedia(true);
+        },
+
+        async loadMedia(refilter = false) {
+            const request = ++this.mediaRequest;
             this.loading = true;
             try {
                 let url = `/admin/media/api?page=${this.currentPage}&limit=${this.perPage}`;
@@ -162,16 +271,29 @@ function mediaDropzone() {
                 const response = await fetch(url);
                 if (response.ok) {
                     const data = await response.json();
+                    if (request !== this.mediaRequest) return;
                     this.mediaItems = data.items || [];
                     this.totalPages = data.totalPages || 1;
                 } else {
+                    if (request !== this.mediaRequest) return;
                     this.mediaItems = [];
                 }
             } catch (e) {
+                if (request !== this.mediaRequest) return;
                 console.error('Failed to load media:', e);
                 this.mediaItems = [];
             } finally {
-                this.loading = false;
+                if (request === this.mediaRequest) {
+                    // The POST result remains selectable even if refreshing the
+                    // library fails or a concurrent upload changes page ordering.
+                    if (this.pinnedUpload && !this.searchQuery && !this.filterType && this.currentPage === 1) {
+                        this.mediaItems = [this.pinnedUpload, ...this.mediaItems.filter(item => item.id !== this.pinnedUpload.id)];
+                    }
+                    if (refilter && this.tempSelected && !this.mediaItems.some(item => item.id === this.tempSelected.id)) {
+                        this.tempSelected = null;
+                    }
+                    this.loading = false;
+                }
             }
         },
 

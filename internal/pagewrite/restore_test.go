@@ -300,3 +300,53 @@ func TestRestoreCompleteAndLegacyVersionsPreservesCurrentPolicy(t *testing.T) {
 	}
 	testutil.AssertPageRevision(t, f.q, page.ID, latest.Revision)
 }
+
+func TestRestoreFeaturedImageFormatAndCurrentAssignment(t *testing.T) {
+	for _, tc := range []struct {
+		name, mime string
+		unchanged  bool
+		refused    bool
+	}{
+		{"new ICO", "image/x-icon", false, true},
+		{"new ICO alias", "image/vnd.microsoft.icon", false, true},
+		{"unchanged ICO", "image/x-icon", true, false},
+		{"unchanged ICO alias", "image/vnd.microsoft.icon", true, false},
+		{"raster with historical dimensions", "image/png", false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := setup(t)
+			version := snapshotWithReferences(t, f)
+			if _, err := f.db.ExecContext(t.Context(), `UPDATE media SET mime_type = ? WHERE id = 10`, tc.mime); err != nil {
+				t.Fatal(err)
+			}
+			if !tc.unchanged {
+				if _, err := f.db.ExecContext(t.Context(), `UPDATE pages SET featured_image_id = NULL WHERE id = ?`, f.page.ID); err != nil {
+					t.Fatal(err)
+				}
+			}
+			before, err := f.q.GetPageSnapshot(t.Context(), f.page.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			work, err := pagewrite.InTx(t.Context(), f.db, provenance.Principal{UserID: f.user.ID, Source: "human"}, func(work *pagewrite.Tx) error {
+				current, trackErr := work.Track(t.Context(), f.page.ID, &f.page.Revision, true)
+				if trackErr != nil {
+					return trackErr
+				}
+				return work.Restore(t.Context(), current, version, "Restored body")
+			})
+			if tc.refused {
+				var refusal *pagewrite.Refusal
+				if !errors.As(err, &refusal) || refusal.MessageKey != "pages.error.featured_image_ico" {
+					t.Fatalf("restore error = %v, want translated ICO refusal", err)
+				}
+				after, loadErr := f.q.GetPageSnapshot(t.Context(), f.page.ID)
+				if loadErr != nil || after != before {
+					t.Fatalf("refused restore changed page: %v", loadErr)
+				}
+			} else if err != nil || work.Pages[f.page.ID].FeaturedImageID != (sql.NullInt64{Int64: 10, Valid: true}) || work.Pages[f.page.ID].Body != "Restored body" {
+				t.Fatalf("allowed restore: %+v %v", work, err)
+			}
+		})
+	}
+}
