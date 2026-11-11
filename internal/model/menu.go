@@ -5,6 +5,7 @@ package model
 
 import (
 	"database/sql"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -32,6 +33,15 @@ func IsAllowedMenuURLScheme(scheme string) bool {
 		}
 	}
 	return false
+}
+
+// IsRenderableMenuURL reports whether a stored menu item URL may be rendered
+// as a link: it parses and, if absolute, uses an allowed menu scheme. Unlike
+// the admin form's validator it accepts relative links without a leading
+// slash, so links saved before that validator existed keep working.
+func IsRenderableMenuURL(rawURL string) bool {
+	parsed, err := url.Parse(rawURL)
+	return err == nil && (!parsed.IsAbs() || IsAllowedMenuURLScheme(parsed.Scheme))
 }
 
 // Menu target values

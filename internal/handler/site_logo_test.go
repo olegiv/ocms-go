@@ -10,39 +10,27 @@ import (
 
 const testLogoDataURI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAwS2OUAAAAABJRU5ErkJggg=="
 
-// siteLogoCases lists configured logo values and the URL the frontend layout
-// should render for each, "" meaning the site name is shown instead.
-var siteLogoCases = []struct {
-	name, raw, want string
-}{
-	{"empty", "", ""},
-	{"media path", "/uploads/originals/logo.png", "/uploads/originals/logo.png"},
-	{"https", "https://cdn.example.com/logo.webp", "https://cdn.example.com/logo.webp"},
-	{"surrounding space", "  /uploads/logo.png ", "/uploads/logo.png"},
-	{"png data URI", testLogoDataURI, testLogoDataURI},
-	{"jpeg data URI", "data:image/jpeg;base64,/9j/4AAQ", "data:image/jpeg;base64,/9j/4AAQ"},
-	{"svg data URI", "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=", ""},
-	{"html data URI", "data:text/html;base64,PHNjcmlwdD4=", ""},
-	{"unencoded data URI", "data:image/png,raw", ""},
-	{"data URI with markup", "data:image/png;base64,AAAA\"><script>", ""},
-	{"javascript", "javascript:alert(1)", ""},
-}
-
-func TestSiteLogoURL(t *testing.T) {
-	for _, tc := range siteLogoCases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := string(siteLogoURL(tc.raw)); got != tc.want {
-				t.Errorf("siteLogoURL(%q) = %q, want %q", tc.raw, got, tc.want)
-			}
-		})
-	}
-}
-
 // TestFrontendNavRendersSiteLogo renders the header with each logo value: an
 // accepted one appears as the image source, and any other falls back to the
-// site name rather than an image templ has blocked.
+// site name rather than a broken image or one templ has blocked. The full
+// value policy is tested in model.TestNormalizeSiteLogoURL.
 func TestFrontendNavRendersSiteLogo(t *testing.T) {
-	for _, tc := range siteLogoCases {
+	for _, tc := range []struct {
+		name, raw, want string // want "" means the site name is shown
+	}{
+		{"empty", "", ""},
+		{"media path", "/uploads/originals/logo.png", "/uploads/originals/logo.png"},
+		{"https", "https://cdn.example.com/logo.webp", "https://cdn.example.com/logo.webp"},
+		{"surrounding space", "  /uploads/logo.png ", "/uploads/logo.png"},
+		{"png data URI", testLogoDataURI, testLogoDataURI},
+		{"svg data URI", "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=", "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4="},
+		{"uppercase data URI", "DATA:IMAGE/PNG;BASE64,iVBORw0KGgo=", "DATA:IMAGE/PNG;BASE64,iVBORw0KGgo="},
+		{"mailto", "mailto:a@example.com", ""},
+		{"path without slash", "uploads/logo.png", ""},
+		{"html data URI", "data:text/html;base64,PHNjcmlwdD4=", ""},
+		{"data URI with markup", "data:image/png;base64,AAAA\"><script>", ""},
+		{"javascript", "javascript:alert(1)", ""},
+	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var out strings.Builder
 			base := BaseTemplateData{SiteName: "Example Site", HomeURL: "/", SiteLogo: tc.raw}

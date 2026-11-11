@@ -430,7 +430,7 @@ func (s *Service) create(ctx context.Context, a v2.Actor, in CreatePageBody, wor
 		MetaTitle:         in.MetaTitle,
 		MetaDescription:   in.MetaDescription,
 		MetaKeywords:      in.MetaKeywords,
-		CanonicalUrl:      in.CanonicalURL,
+		CanonicalUrl:      strings.TrimSpace(in.CanonicalURL),
 		NoIndex:           boolToInt64(in.NoIndex),
 		NoFollow:          boolToInt64(in.NoFollow),
 		HideFeaturedImage: boolToInt64(in.HideFeaturedImage),
@@ -659,7 +659,7 @@ func (s *Service) applyUpdate(ctx context.Context, a v2.Actor, in *UpdatePageBod
 		if err := validateSafeURL("canonical_url", *in.CanonicalURL); err != nil {
 			return err
 		}
-		params.CanonicalUrl = *in.CanonicalURL
+		params.CanonicalUrl = strings.TrimSpace(*in.CanonicalURL)
 	}
 	if in.NoIndex != nil {
 		params.NoIndex = boolToInt64(*in.NoIndex)

@@ -4368,6 +4368,16 @@
             "translation": "Enter a full URL starting with http:// or https://"
         },
         {
+            "id": "config.site_url_invalid",
+            "message": "Enter the site's address without a path, such as https://example.com",
+            "translation": "Enter the site's address without a path, such as https://example.com"
+        },
+        {
+            "id": "config.site_logo_invalid",
+            "message": "Enter an image URL starting with https://, a site path starting with /, or a base64 image data URI",
+            "translation": "Enter an image URL starting with https://, a site path starting with /, or a base64 image data URI"
+        },
+        {
             "id": "config.copyright",
             "message": "Copyright",
             "translation": "Copyright"
@@ -4404,8 +4414,8 @@
         },
         {
             "id": "config.site_logo_hint",
-            "message": "URL or path to site logo image",
-            "translation": "URL or path to site logo image"
+            "message": "Image URL or site path, such as /uploads/logo.png",
+            "translation": "Image URL or site path, such as /uploads/logo.png"
         },
         {
             "id": "config.custom_css",

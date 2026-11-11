@@ -426,6 +426,7 @@ func (i *Importer) importWithPreCommit(
 	// Validate the import data first
 	validationErrors := i.validate(data, opts.ImportLanguages, opts.ImportMedia || opts.ImportMediaFiles, opts.ImportUsers)
 	validationErrors = append(validationErrors, i.validatePageHTMLPolicy(data, opts)...)
+	validationErrors = append(validationErrors, validateImportedMenuURLs(data, opts)...)
 	if len(validationErrors) > 0 {
 		for _, err := range validationErrors {
 			result.AddError(err.Entity, err.ID, err.Message)
@@ -3392,6 +3393,7 @@ func (i *Importer) ValidateData(ctx context.Context, data *ExportData) (*Validat
 	// only when a complete media-deselected preview (including destination media
 	// references) is actually importable.
 	validationErrors := i.validate(data, false, false, false)
+	validationErrors = append(validationErrors, validateImportedMenuURLs(data, DefaultImportOptions())...)
 	if len(validationErrors) > 0 {
 		result.Valid = false
 		result.Errors = validationErrors
@@ -4900,6 +4902,12 @@ func (i *Importer) importConfig(
 	}
 
 	for key, value := range config {
+		stored, normalizeErr := normalizeImportedConfigValue(key, value)
+		if normalizeErr != nil {
+			result.AddNotice("config", key, fmt.Sprintf("%v; the value was not imported", normalizeErr))
+			result.IncrementSkipped("config")
+			continue
+		}
 		_, lookupErr := queries.GetConfigByKey(ctx, key)
 		exists, lookupErr := lookupExists(lookupErr)
 		if lookupErr != nil {
@@ -4912,7 +4920,7 @@ func (i *Importer) importConfig(
 		}
 		_, err := queries.UpsertConfig(ctx, store.UpsertConfigParams{
 			Key:          key,
-			Value:        value,
+			Value:        stored,
 			Type:         "string",
 			Description:  "",
 			LanguageCode: defaultLangCode,

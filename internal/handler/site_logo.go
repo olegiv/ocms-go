@@ -4,30 +4,20 @@
 package handler
 
 import (
-	"regexp"
-	"strings"
-
 	"github.com/a-h/templ"
+
+	"github.com/olegiv/ocms-go/internal/model"
 )
 
-// siteLogoImageDataURI matches a base64 raster image data URI. Unlike SVG or
-// HTML data URIs, a browser never runs script from one of these.
-var siteLogoImageDataURI = regexp.MustCompile(`^data:image/(?:png|jpeg|gif|webp|avif);base64,[A-Za-z0-9+/]+={0,2}$`)
-
-// siteLogoURL returns the configured site logo as a URL the frontend layout
-// may render, or "" when the value would not display as an image. templ
-// blocks every scheme except http(s), mailto, tel and ftp, so a raster data
-// URI, which a logo may use, is marked trusted here after a strict match.
+// siteLogoURL returns the configured site logo for the header's <img src>, or
+// "" when no logo is set or model.NormalizeSiteLogoURL rejects the value, so
+// the header shows the site name instead. The value is marked trusted only
+// after that check, because templ's URL filter rejects the data: URIs a logo
+// may use.
 func siteLogoURL(raw string) templ.SafeURL {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
+	logo, err := model.NormalizeSiteLogoURL(raw)
+	if err != nil {
 		return ""
 	}
-	if siteLogoImageDataURI.MatchString(raw) {
-		return templ.SafeURL(raw)
-	}
-	if logo := templ.URL(raw); logo != templ.FailedSanitizationURL {
-		return logo
-	}
-	return ""
+	return templ.SafeURL(logo)
 }

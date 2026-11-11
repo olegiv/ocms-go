@@ -21,6 +21,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/render"
+	"github.com/olegiv/ocms-go/internal/seo"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
@@ -342,12 +343,10 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		if cfg.Key == model.ConfigKeyStatusPageURL {
-			value = strings.TrimSpace(value)
-			if errMsg := validateStatusPageURL(value, lang); errMsg != "" {
-				validationErrors[cfg.Key] = errMsg
-				continue
-			}
+		var errMsg string
+		if value, errMsg = normalizeConfigURL(cfg.Key, value, lang); errMsg != "" {
+			validationErrors[cfg.Key] = errMsg
+			continue
 		}
 
 		// Upsert the config value (creates if not exists, updates if exists)
@@ -375,7 +374,10 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	if len(validationErrors) > 0 {
 		// Get all config translations for re-rendering
-		allTranslations, _ := h.queries.ListAllConfigTranslations(r.Context())
+		allTranslations, translationsErr := h.queries.ListAllConfigTranslations(r.Context())
+		if translationsErr != nil {
+			slog.Error("failed to list config translations", "error", translationsErr)
+		}
 		translationsMap := make(map[string]map[int64]string)
 		for _, t := range allTranslations {
 			if translationsMap[t.ConfigKey] == nil {
@@ -467,6 +469,33 @@ func validateExcludedIPs(value string, lang string) string {
 
 // validateStatusPageURL validates that the status page URL is empty or an
 // absolute http(s) URL with a host, since themes render it as an outbound link.
+// normalizeConfigURL checks the config values that hold URLs and returns the
+// value to store, or an error message for the form. Other keys pass unchanged.
+func normalizeConfigURL(key, value, lang string) (string, string) {
+	switch key {
+	case model.ConfigKeyStatusPageURL:
+		value = strings.TrimSpace(value)
+		return value, validateStatusPageURL(value, lang)
+	case model.ConfigKeySiteURL:
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return "", ""
+		}
+		origin, err := seo.NormalizeFeedOrigin(value)
+		if err != nil {
+			return value, i18n.T(lang, "config.site_url_invalid")
+		}
+		return origin, ""
+	case model.SiteLogoConfigKey:
+		logo, err := model.NormalizeSiteLogoURL(value)
+		if err != nil {
+			return value, i18n.T(lang, "config.site_logo_invalid")
+		}
+		return logo, ""
+	}
+	return value, ""
+}
+
 func validateStatusPageURL(value string, lang string) string {
 	if value == "" {
 		return ""

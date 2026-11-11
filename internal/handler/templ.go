@@ -6,6 +6,7 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -23,6 +24,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/theme"
 	"github.com/olegiv/ocms-go/internal/transfer"
+	"github.com/olegiv/ocms-go/internal/util"
 	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
 
@@ -105,6 +107,7 @@ func renderTempl(w http.ResponseWriter, r *http.Request, component templ.Compone
 	w.Header().Set(HeaderContentType, "text/html; charset=utf-8")
 	ctx := templ.WithNonce(r.Context(), middleware.GetCSPNonce(r))
 	if err := component.Render(ctx, w); err != nil {
+		slog.Error("templ render failed", "path", util.BoundedLogField(r.URL.Path), "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
 }

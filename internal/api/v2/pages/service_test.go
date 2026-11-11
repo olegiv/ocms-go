@@ -352,6 +352,22 @@ func TestURLSchemeAllowlistIsEnforced(t *testing.T) {
 			}
 		})
 	}
+
+	// The value validated is the value stored: surrounding space is trimmed on
+	// create and update, so the rendered canonical link is not blocked.
+	t.Run("trimmed", func(t *testing.T) {
+		page, err := svc.Create(ctx, writer, pages.CreatePageBody{
+			Title: "T", Slug: "trimmed-canonical", Body: "b", CanonicalURL: "  https://example.com/a\t",
+		})
+		if err != nil || page.CanonicalURL != "https://example.com/a" {
+			t.Fatalf("Create canonical_url = %q, %v; want %q", page.CanonicalURL, err, "https://example.com/a")
+		}
+		updatedURL := " /b "
+		updated, err := svc.Update(ctx, writer, page.ID, pages.UpdatePageBody{CanonicalURL: &updatedURL})
+		if err != nil || updated.CanonicalURL != "/b" {
+			t.Fatalf("Update canonical_url = %v, %v; want %q", updated, err, "/b")
+		}
+	})
 }
 
 // TestCreateAndUpdateRejectApplicationRouteSlugs refuses page slugs that an

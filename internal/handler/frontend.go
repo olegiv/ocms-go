@@ -2275,7 +2275,7 @@ func (h *FrontendHandler) getSiteData(ctx context.Context) SiteData {
 			site.Description = desc
 		}
 		if siteURL, err := h.cacheManager.GetConfig(ctx, "site_url"); err == nil && siteURL != "" {
-			site.URL = strings.TrimSuffix(siteURL, "/")
+			site.URL = strings.TrimSuffix(strings.TrimSpace(siteURL), "/")
 		}
 		if ogImage, err := h.cacheManager.GetConfig(ctx, "default_og_image"); err == nil && ogImage != "" {
 			site.DefaultOGImage = ogImage
@@ -2292,7 +2292,7 @@ func (h *FrontendHandler) getSiteData(ctx context.Context) SiteData {
 			site.Description = cfg.Value
 		}
 		if cfg, err := h.queries.GetConfigByKey(ctx, "site_url"); err == nil {
-			site.URL = strings.TrimSuffix(cfg.Value, "/")
+			site.URL = strings.TrimSuffix(strings.TrimSpace(cfg.Value), "/")
 		}
 		if cfg, err := h.queries.GetConfigByKey(ctx, "default_og_image"); err == nil && cfg.Value != "" {
 			site.DefaultOGImage = cfg.Value
@@ -2364,23 +2364,9 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 		data.ModuleBodyEndHTML = h.callModuleHTMLFuncs(funcs, data.CSPNonce, pageOrigin, "embedBody", "analyticsIntReadTracker")
 	}
 
-	// Get site logo and custom CSS from cache
-	if h.cacheManager != nil {
-		if logo, err := h.cacheManager.GetConfig(ctx, "site_logo"); err == nil && logo != "" {
-			data.SiteLogo = logo
-		}
-		if css, err := h.cacheManager.GetConfig(ctx, "custom_css"); err == nil && css != "" {
-			data.CustomCSS = css
-		}
-	} else {
-		// Fallback to direct DB queries if cache not available
-		if cfg, err := h.queries.GetConfigByKey(ctx, "site_logo"); err == nil && cfg.Value != "" {
-			data.SiteLogo = cfg.Value
-		}
-		if cfg, err := h.queries.GetConfigByKey(ctx, "custom_css"); err == nil && cfg.Value != "" {
-			data.CustomCSS = cfg.Value
-		}
-	}
+	// Get site logo and custom CSS
+	data.SiteLogo = h.optionalConfigValue(ctx, model.SiteLogoConfigKey)
+	data.CustomCSS = h.optionalConfigValue(ctx, "custom_css")
 
 	// Load language info from middleware context FIRST (needed for menu loading)
 	var langCode string
@@ -2855,13 +2841,33 @@ const defaultPerPage = 10
 func (h *FrontendHandler) getConfiguredSiteURL(ctx context.Context) string {
 	if h.cacheManager != nil {
 		if siteURL, err := h.cacheManager.GetConfig(ctx, "site_url"); err == nil {
-			return siteURL
+			return strings.TrimSpace(siteURL)
 		}
 	}
 	if cfg, err := h.queries.GetConfigByKey(ctx, "site_url"); err == nil {
-		return cfg.Value
+		return strings.TrimSpace(cfg.Value)
 	}
 	return ""
+}
+
+// optionalConfigValue returns a config value that may be unset. A missing row
+// reads as "", and so does any other lookup failure, which is also logged.
+func (h *FrontendHandler) optionalConfigValue(ctx context.Context, key string) string {
+	if h.cacheManager != nil {
+		value, err := h.cacheManager.GetConfig(ctx, key)
+		if err != nil {
+			slog.Error("failed to load config value", "key", key, "error", err)
+		}
+		return value
+	}
+	cfg, err := h.queries.GetConfigByKey(ctx, key)
+	if err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			slog.Error("failed to load config value", "key", key, "error", err)
+		}
+		return ""
+	}
+	return cfg.Value
 }
 
 // getSiteURL retrieves the site URL from config with cache fallback.
