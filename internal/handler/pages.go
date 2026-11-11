@@ -1974,10 +1974,13 @@ func (h *PagesHandler) queryImageData(ctx context.Context, id sql.NullInt64) (*F
 	}, nil
 }
 
-// validateFeaturedImageSize checks if a featured image meets minimum size requirements.
-// Returns an error message if the image is too small, empty string if valid or no image set.
+// validateFeaturedImageSize returns translated format or dimension refusals.
 func (h *PagesHandler) validateFeaturedImageSize(ctx context.Context, id sql.NullInt64, lang string) string {
 	err := pagewrite.FeaturedImageSize(ctx, h.queries, id)
+	var refusal *pagewrite.Refusal
+	if errors.As(err, &refusal) && refusal.MessageKey != "" {
+		return i18n.T(lang, refusal.MessageKey, refusal.MessageArgs...)
+	}
 	var dimensions *pagewrite.FeaturedImageSizeError
 	if !errors.As(err, &dimensions) {
 		return ""

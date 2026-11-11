@@ -1688,6 +1688,10 @@ func ThemeSettingsPage(pc *PageContext, data ThemeSettingsViewData) templ.Compon
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
+			templ_7745c5c3_Err = themeMediaPicker(pc).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
 			templ_7745c5c3_Err = themeSettingsScript(pc).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
@@ -1735,7 +1739,7 @@ func themeSettingColor(pc *PageContext, data ThemeSettingsViewData, setting Them
 		var templ_7745c5c3_Var91 string
 		templ_7745c5c3_Var91, templ_7745c5c3_Err = templ.ResolveAttributeValue(setting.Key)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 324, Col: 19}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 325, Col: 19}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var91)
 		if templ_7745c5c3_Err != nil {
@@ -1748,7 +1752,7 @@ func themeSettingColor(pc *PageContext, data ThemeSettingsViewData, setting Them
 		var templ_7745c5c3_Var92 string
 		templ_7745c5c3_Var92, templ_7745c5c3_Err = templ.ResolveAttributeValue(setting.Key)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 325, Col: 21}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 326, Col: 21}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var92)
 		if templ_7745c5c3_Err != nil {
@@ -1761,7 +1765,7 @@ func themeSettingColor(pc *PageContext, data ThemeSettingsViewData, setting Them
 		var templ_7745c5c3_Var93 string
 		templ_7745c5c3_Var93, templ_7745c5c3_Err = templ.ResolveAttributeValue(setting.Value)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 327, Col: 24}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 328, Col: 24}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var93)
 		if templ_7745c5c3_Err != nil {
@@ -1784,7 +1788,7 @@ func themeSettingColor(pc *PageContext, data ThemeSettingsViewData, setting Them
 		var templ_7745c5c3_Var94 string
 		templ_7745c5c3_Var94, templ_7745c5c3_Err = templ.ResolveAttributeValue(setting.Value)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 333, Col: 24}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 334, Col: 24}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var94)
 		if templ_7745c5c3_Err != nil {
@@ -1886,7 +1890,7 @@ func themeSettingSelect(pc *PageContext, data ThemeSettingsViewData, setting The
 						var templ_7745c5c3_Var100 string
 						templ_7745c5c3_Var100, templ_7745c5c3_Err = templ.JoinStringErrs(pc.TDefault(fmt.Sprintf("option.%s", opt), opt))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 355, Col: 54}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 356, Col: 54}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var100))
 						if templ_7745c5c3_Err != nil {
@@ -1952,7 +1956,7 @@ func themeSettingImage(pc *PageContext, data ThemeSettingsViewData, setting Them
 			var templ_7745c5c3_Var102 string
 			templ_7745c5c3_Var102, templ_7745c5c3_Err = templ.ResolveAttributeValue("preview-" + setting.Key)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 366, Col: 59}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 367, Col: 59}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var102)
 			if templ_7745c5c3_Err != nil {
@@ -1965,7 +1969,7 @@ func themeSettingImage(pc *PageContext, data ThemeSettingsViewData, setting Them
 			var templ_7745c5c3_Var103 string
 			templ_7745c5c3_Var103, templ_7745c5c3_Err = templ.ResolveAttributeValue(safeThemeImageURL(setting.Value))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 367, Col: 47}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 368, Col: 47}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var103)
 			if templ_7745c5c3_Err != nil {
@@ -1978,7 +1982,7 @@ func themeSettingImage(pc *PageContext, data ThemeSettingsViewData, setting Them
 			var templ_7745c5c3_Var104 string
 			templ_7745c5c3_Var104, templ_7745c5c3_Err = templ.ResolveAttributeValue(setting.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 367, Col: 69}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 368, Col: 69}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var104)
 			if templ_7745c5c3_Err != nil {
@@ -1996,7 +2000,7 @@ func themeSettingImage(pc *PageContext, data ThemeSettingsViewData, setting Them
 			var templ_7745c5c3_Var105 string
 			templ_7745c5c3_Var105, templ_7745c5c3_Err = templ.ResolveAttributeValue("preview-" + setting.Key)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 370, Col: 59}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 371, Col: 59}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var105)
 			if templ_7745c5c3_Err != nil {
@@ -2009,7 +2013,7 @@ func themeSettingImage(pc *PageContext, data ThemeSettingsViewData, setting Them
 			var templ_7745c5c3_Var106 string
 			templ_7745c5c3_Var106, templ_7745c5c3_Err = templ.ResolveAttributeValue(setting.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 371, Col: 35}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 372, Col: 35}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var106)
 			if templ_7745c5c3_Err != nil {
@@ -2061,7 +2065,7 @@ func themeSettingImage(pc *PageContext, data ThemeSettingsViewData, setting Them
 				var templ_7745c5c3_Var108 string
 				templ_7745c5c3_Var108, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("themes.browse"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 391, Col: 27}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 392, Col: 27}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var108))
 				if templ_7745c5c3_Err != nil {
@@ -2110,7 +2114,7 @@ func themeSettingImage(pc *PageContext, data ThemeSettingsViewData, setting Them
 			var templ_7745c5c3_Var110 string
 			templ_7745c5c3_Var110, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("theme_settings.favicon_hint"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 401, Col: 63}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 402, Col: 63}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var110))
 			if templ_7745c5c3_Err != nil {
@@ -2199,65 +2203,186 @@ func themeSettingsScript(pc *PageContext) templ.Component {
 		var templ_7745c5c3_Var113 string
 		templ_7745c5c3_Var113, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.GetNonce(ctx))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 427, Col: 36}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 428, Col: 36}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var113)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 94, "\">\n\t// Sync color input with text display\n\tdocument.querySelectorAll('.color-input').forEach(function(colorInput) {\n\t\tvar textInput = colorInput.nextElementSibling;\n\t\tcolorInput.addEventListener('input', function() {\n\t\t\ttextInput.value = this.value;\n\t\t});\n\t});\n\n\t// Validate URL to prevent XSS - only allow safe schemes and paths\n\tfunction isValidImageUrl(url) {\n\t\tif (!url || typeof url !== 'string') return false;\n\n\t\t// Allow /uploads/ paths (media API returns these)\n\t\tif (url.startsWith('/uploads/')) return true;\n\n\t\t// Allow /static/ paths\n\t\tif (url.startsWith('/static/')) return true;\n\n\t\t// Allow bundled theme assets under /themes/{theme}/static/*\n\t\tif (url.startsWith('/themes/') && url.indexOf('/static/') !== -1) return true;\n\n\t\t// For other values, only allow absolute HTTP(S) URLs\n\t\ttry {\n\t\t\tvar parsed = new URL(url, window.location.origin);\n\t\t\tif (parsed.origin === window.location.origin) {\n\t\t\t\t// Relative URL resolved against current origin but not under allowed paths\n\t\t\t\treturn false;\n\t\t\t}\n\t\t\treturn parsed.protocol === 'http:' || parsed.protocol === 'https:';\n\t\t} catch (e) {\n\t\t\t// Invalid URL\n\t\t\treturn false;\n\t\t}\n\t}\n\n\t// Safely set image src with validation\n\tfunction safeSetImageSrc(img, url) {\n\t\tif (isValidImageUrl(url)) {\n\t\t\t// Use URL constructor to sanitize and escape meta-characters\n\t\t\ttry {\n\t\t\t\tvar sanitized = new URL(url, window.location.origin);\n\t\t\t\timg.src = sanitized.href;\n\t\t\t\treturn true;\n\t\t\t} catch (e) {\n\t\t\t\treturn false;\n\t\t\t}\n\t\t}\n\t\treturn false;\n\t}\n\n\t// Update image preview when URL changes\n\tfunction updateImagePreview(fieldId) {\n\t\tvar input = document.getElementById(fieldId);\n\t\tvar preview = document.getElementById('preview-' + fieldId);\n\t\tif (preview && input) {\n\t\t\tvar img = preview.querySelector('img');\n\t\t\tif (input.value && safeSetImageSrc(img, input.value)) {\n\t\t\t\tpreview.style.display = 'block';\n\t\t\t} else {\n\t\t\t\tpreview.style.display = 'none';\n\t\t\t}\n\t\t}\n\t}\n\n\t// Clear image field and hide preview\n\tfunction clearImageField(fieldId) {\n\t\tvar input = document.getElementById(fieldId);\n\t\tvar preview = document.getElementById('preview-' + fieldId);\n\t\tif (input) {\n\t\t\tinput.value = '';\n\t\t}\n\t\tif (preview) {\n\t\t\tpreview.style.display = 'none';\n\t\t}\n\t}\n\n\t// Escape HTML to prevent XSS in dynamic content\n\tfunction escapeHtml(text) {\n\t\tvar div = document.createElement('div');\n\t\tdiv.textContent = text;\n\t\treturn div.innerHTML;\n\t}\n\n\t// Attach change handlers to image URL inputs\n\tdocument.querySelectorAll('.image-url-input').forEach(function(input) {\n\t\tinput.addEventListener('change', function() {\n\t\t\tupdateImagePreview(this.dataset.fieldId);\n\t\t});\n\t});\n\n\t// Attach click handlers to media browse buttons\n\tdocument.querySelectorAll('.btn-media-browse').forEach(function(btn) {\n\t\tbtn.addEventListener('click', function() {\n\t\t\topenMediaPicker(this.dataset.fieldId);\n\t\t});\n\t});\n\n\t// Attach click handlers to image clear buttons\n\tdocument.querySelectorAll('.btn-image-clear').forEach(function(btn) {\n\t\tbtn.addEventListener('click', function() {\n\t\t\tclearImageField(this.dataset.fieldId);\n\t\t});\n\t});\n\n\t// Open media picker modal\n\tfunction openMediaPicker(fieldId) {\n\t\t// Create modal overlay\n\t\tvar overlay = document.createElement('div');\n\t\toverlay.className = 'modal-overlay';\n\t\toverlay.id = 'media-picker-overlay';\n\t\toverlay.onclick = function(e) {\n\t\t\tif (e.target === overlay) closeMediaPicker();\n\t\t};\n\n\t\t// Create modal content\n\t\tvar modal = document.createElement('div');\n\t\tmodal.className = 'modal media-picker-modal';\n\n\t\tvar header = document.createElement('div');\n\t\theader.className = 'modal-header';\n\t\tvar h3 = document.createElement('h3');\n\t\th3.textContent = document.getElementById('media-picker-title').value;\n\t\tvar closeBtn = document.createElement('button');\n\t\tcloseBtn.type = 'button';\n\t\tcloseBtn.className = 'modal-close';\n\t\tcloseBtn.textContent = '\\u00D7';\n\t\tcloseBtn.onclick = closeMediaPicker;\n\t\theader.appendChild(h3);\n\t\theader.appendChild(closeBtn);\n\n\t\tvar body = document.createElement('div');\n\t\tbody.className = 'modal-body';\n\t\tvar content = document.createElement('div');\n\t\tcontent.id = 'media-picker-content';\n\t\tcontent.className = 'media-picker-loading';\n\t\tcontent.textContent = document.getElementById('media-picker-loading-text').value + '...';\n\t\tbody.appendChild(content);\n\n\t\tmodal.appendChild(header);\n\t\tmodal.appendChild(body);\n\t\toverlay.appendChild(modal);\n\t\tdocument.body.appendChild(overlay);\n\t\tdocument.body.classList.add('modal-open');\n\n\t\t// Load media items\n\t\tfetch('/admin/media/api?type=image&limit=50')\n\t\t\t.then(function(response) { return response.json(); })\n\t\t\t.then(function(data) {\n\t\t\t\tvar content = document.getElementById('media-picker-content');\n\t\t\t\tif (data.items && data.items.length > 0) {\n\t\t\t\t\tcontent.className = 'media-picker-grid';\n\t\t\t\t\tcontent.innerHTML = '';\n\t\t\t\t\tdata.items.forEach(function(item) {\n\t\t\t\t\t\tvar filepath = item.filepath || '';\n\t\t\t\t\t\tvar thumbnail = item.thumbnail || filepath;\n\t\t\t\t\t\tvar filename = item.filename || '';\n\n\t\t\t\t\t\tif (!isValidImageUrl(filepath)) return;\n\n\t\t\t\t\t\tvar div = document.createElement('div');\n\t\t\t\t\t\tdiv.className = 'media-picker-item';\n\t\t\t\t\t\tdiv.onclick = function() { selectMedia(fieldId, filepath); };\n\n\t\t\t\t\t\tvar img = document.createElement('img');\n\t\t\t\t\t\tsafeSetImageSrc(img, thumbnail);\n\t\t\t\t\t\timg.alt = escapeHtml(filename);\n\n\t\t\t\t\t\tvar span = document.createElement('span');\n\t\t\t\t\t\tspan.className = 'media-picker-filename';\n\t\t\t\t\t\tspan.textContent = filename;\n\n\t\t\t\t\t\tdiv.appendChild(img);\n\t\t\t\t\t\tdiv.appendChild(span);\n\t\t\t\t\t\tcontent.appendChild(div);\n\t\t\t\t\t});\n\t\t\t\t\tif (content.children.length === 0) {\n\t\t\t\t\t\tcontent.innerHTML = '<p style=\"text-align: center; padding: 2rem;\">' + escapeHtml(document.getElementById('media-picker-no-media').value) + '</p>';\n\t\t\t\t\t}\n\t\t\t\t} else {\n\t\t\t\t\tcontent.innerHTML = '<p style=\"text-align: center; padding: 2rem;\">' + escapeHtml(document.getElementById('media-picker-no-media').value) + '</p>';\n\t\t\t\t}\n\t\t\t})\n\t\t\t.catch(function() {\n\t\t\t\tdocument.getElementById('media-picker-content').innerHTML = '<p style=\"text-align: center; padding: 2rem; color: var(--color-danger);\">' + escapeHtml(document.getElementById('media-picker-error').value) + '</p>';\n\t\t\t});\n\t}\n\n\tfunction closeMediaPicker() {\n\t\tvar overlay = document.getElementById('media-picker-overlay');\n\t\tif (overlay) {\n\t\t\toverlay.remove();\n\t\t\tdocument.body.classList.remove('modal-open');\n\t\t}\n\t}\n\n\tfunction selectMedia(fieldId, url) {\n\t\tif (!isValidImageUrl(url)) return;\n\t\tvar input = document.getElementById(fieldId);\n\t\tif (input) {\n\t\t\tinput.value = url;\n\t\t\tupdateImagePreview(fieldId);\n\t\t}\n\t\tcloseMediaPicker();\n\t}\n\t</script><!-- Hidden inputs for i18n strings used by JavaScript --><input type=\"hidden\" id=\"media-picker-title\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 94, "\">\n\t// Sync color input with text display\n\tdocument.querySelectorAll('.color-input').forEach(function(colorInput) {\n\t\tvar textInput = colorInput.nextElementSibling;\n\t\tcolorInput.addEventListener('input', function() {\n\t\t\ttextInput.value = this.value;\n\t\t});\n\t});\n\n\t// Validate URL to prevent XSS - only allow safe schemes and paths\n\tfunction isValidImageUrl(url) {\n\t\tif (!url || typeof url !== 'string') return false;\n\n\t\t// Allow /uploads/ paths (media API returns these)\n\t\tif (url.startsWith('/uploads/')) return true;\n\n\t\t// Allow /static/ paths\n\t\tif (url.startsWith('/static/')) return true;\n\n\t\t// Allow bundled theme assets under /themes/{theme}/static/*\n\t\tif (url.startsWith('/themes/') && url.indexOf('/static/') !== -1) return true;\n\n\t\t// For other values, only allow absolute HTTP(S) URLs\n\t\ttry {\n\t\t\tvar parsed = new URL(url, window.location.origin);\n\t\t\tif (parsed.origin === window.location.origin) {\n\t\t\t\t// Relative URL resolved against current origin but not under allowed paths\n\t\t\t\treturn false;\n\t\t\t}\n\t\t\treturn parsed.protocol === 'http:' || parsed.protocol === 'https:';\n\t\t} catch (e) {\n\t\t\t// Invalid URL\n\t\t\treturn false;\n\t\t}\n\t}\n\n\t// Safely set image src with validation\n\tfunction safeSetImageSrc(img, url) {\n\t\tif (isValidImageUrl(url)) {\n\t\t\t// Use URL constructor to sanitize and escape meta-characters\n\t\t\ttry {\n\t\t\t\tvar sanitized = new URL(url, window.location.origin);\n\t\t\t\timg.src = sanitized.href;\n\t\t\t\treturn true;\n\t\t\t} catch (e) {\n\t\t\t\treturn false;\n\t\t\t}\n\t\t}\n\t\treturn false;\n\t}\n\n\t// Update image preview when URL changes\n\tfunction updateImagePreview(fieldId) {\n\t\tvar input = document.getElementById(fieldId);\n\t\tvar preview = document.getElementById('preview-' + fieldId);\n\t\tif (preview && input) {\n\t\t\tvar img = preview.querySelector('img');\n\t\t\tif (input.value && safeSetImageSrc(img, input.value)) {\n\t\t\t\tpreview.style.display = 'block';\n\t\t\t} else {\n\t\t\t\tpreview.style.display = 'none';\n\t\t\t}\n\t\t}\n\t}\n\n\t// Clear image field and hide preview\n\tfunction clearImageField(fieldId) {\n\t\tvar input = document.getElementById(fieldId);\n\t\tvar preview = document.getElementById('preview-' + fieldId);\n\t\tif (input) {\n\t\t\tinput.value = '';\n\t\t}\n\t\tif (preview) {\n\t\t\tpreview.style.display = 'none';\n\t\t}\n\t}\n\n\t// Attach change handlers to image URL inputs\n\tdocument.querySelectorAll('.image-url-input').forEach(function(input) {\n\t\tinput.addEventListener('change', function() {\n\t\t\tupdateImagePreview(this.dataset.fieldId);\n\t\t});\n\t});\n\n\t// Attach click handlers to media browse buttons\n\tdocument.querySelectorAll('.btn-media-browse').forEach(function(btn) {\n\t\tbtn.addEventListener('click', function() {\n\t\t\topenMediaPicker(this.dataset.fieldId);\n\t\t});\n\t});\n\n\t// Attach click handlers to image clear buttons\n\tdocument.querySelectorAll('.btn-image-clear').forEach(function(btn) {\n\t\tbtn.addEventListener('click', function() {\n\t\t\tclearImageField(this.dataset.fieldId);\n\t\t});\n\t});\n\n\t// Keep temporary selection separate from the unsaved theme form.\n\tvar themePicker = {fieldId: null, selected: null, uploaded: null, uploader: null, request: 0};\n\tfunction openMediaPicker(fieldId) {\n\t\tvar overlay = document.getElementById('media-picker-overlay');\n\t\tthemePicker.fieldId = fieldId;\n\t\tthemePicker.selected = null;\n\t\tthemePicker.uploaded = null;\n\t\tthemePicker.uploader = initMediaPickerUpload(overlay.querySelector('[data-media-picker-upload]'), function(item) {\n\t\t\tthemePicker.uploaded = item;\n\t\t\tthemePicker.selected = item;\n\t\t\tdocument.getElementById('media-picker-confirm').disabled = false;\n\t\t\tloadThemeMedia();\n\t\t});\n\t\tthemePicker.uploader.reset();\n\t\tdocument.getElementById('media-picker-confirm').disabled = true;\n\t\toverlay.style.display = 'flex';\n\t\tdocument.body.classList.add('modal-open');\n\t\tloadThemeMedia();\n\t}\n\tasync function loadThemeMedia() {\n\t\tvar request = ++themePicker.request;\n\t\tvar content = document.getElementById('media-picker-content');\n\t\tcontent.className = 'media-picker-loading';\n\t\tcontent.textContent = document.getElementById('media-picker-loading-text').value;\n\t\ttry {\n\t\t\tvar response = await fetch('/admin/media/api?type=image&limit=50');\n\t\t\tif (!response.ok) throw new Error('Media unavailable');\n\t\t\tvar data = await response.json();\n\t\t\tif (request !== themePicker.request) return;\n\t\t\tvar items = data.items || [];\n\t\t\tif (themePicker.uploaded) items = [themePicker.uploaded].concat(items.filter(function(item) { return item.id !== themePicker.uploaded.id; }));\n\t\t\trenderThemeMedia(items);\n\t\t} catch (error) {\n\t\t\tif (request !== themePicker.request) return;\n\t\t\tif (themePicker.uploaded) renderThemeMedia([themePicker.uploaded]);\n\t\t\telse {\n\t\t\t\trenderThemeMedia([]);\n\t\t\t\tcontent.textContent = document.getElementById('media-picker-error').value;\n\t\t\t}\n\t\t}\n\t}\n\tfunction renderThemeMedia(items) {\n\t\titems = items.filter(function(item) { return isValidImageUrl(item.filepath); });\n\t\tif (themePicker.selected && !items.some(function(item) { return item.id === themePicker.selected.id; })) themePicker.selected = null;\n\t\tdocument.getElementById('media-picker-confirm').disabled = !themePicker.selected;\n\t\tvar content = document.getElementById('media-picker-content');\n\t\tcontent.className = 'media-picker-grid';\n\t\tcontent.replaceChildren();\n\t\titems.forEach(function(item) {\n\t\t\tvar button = document.createElement('button');\n\t\t\tbutton.type = 'button';\n\t\t\tbutton.className = 'media-picker-item';\n\t\t\tbutton.dataset.id = String(item.id);\n\t\t\tbutton.onclick = function() {\n\t\t\t\tthemePicker.selected = item;\n\t\t\t\tdocument.getElementById('media-picker-confirm').disabled = false;\n\t\t\t\tupdateThemeMediaSelection();\n\t\t\t};\n\t\t\tvar img = document.createElement('img');\n\t\t\tsafeSetImageSrc(img, item.thumbnail || item.filepath);\n\t\t\timg.alt = item.filename;\n\t\t\tvar span = document.createElement('span');\n\t\t\tspan.className = 'media-picker-filename';\n\t\t\tspan.textContent = item.filename;\n\t\t\tbutton.append(img, span);\n\t\t\tcontent.appendChild(button);\n\t\t});\n\t\tupdateThemeMediaSelection();\n\t\tif (!content.children.length) content.textContent = document.getElementById('media-picker-no-media').value;\n\t}\n\tfunction updateThemeMediaSelection() {\n\t\tdocument.querySelectorAll('#media-picker-content button[data-id]').forEach(function(button) {\n\t\t\tvar selected = !!themePicker.selected && button.dataset.id === String(themePicker.selected.id);\n\t\t\tbutton.classList.toggle('is-selected', selected);\n\t\t\tbutton.setAttribute('aria-pressed', String(selected));\n\t\t});\n\t}\n\tfunction closeMediaPicker() {\n\t\tthemePicker.uploader?.reset();\n\t\tthemePicker.request++;\n\t\tthemePicker.selected = null;\n\t\tthemePicker.uploaded = null;\n\t\tthemePicker.fieldId = null;\n\t\tdocument.getElementById('media-picker-overlay').style.display = 'none';\n\t\tdocument.body.classList.remove('modal-open');\n\t}\n\tfunction selectMedia(fieldId, url) {\n\t\tif (!isValidImageUrl(url)) return;\n\t\tvar input = document.getElementById(fieldId);\n\t\tif (input) {\n\t\t\tinput.value = url;\n\t\t\tupdateImagePreview(fieldId);\n\t\t}\n\t\tcloseMediaPicker();\n\t}\n\tdocument.getElementById('media-picker-overlay').addEventListener('click', function(event) {\n\t\tif (event.target.id === 'media-picker-overlay' || event.target.closest('[data-picker-close]')) closeMediaPicker();\n\t});\n\tdocument.getElementById('media-picker-confirm').addEventListener('click', function() {\n\t\tif (themePicker.selected) selectMedia(themePicker.fieldId, themePicker.selected.filepath);\n\t});\n\tdocument.addEventListener('keydown', function(event) {\n\t\tif (event.key === 'Escape' && themePicker.fieldId) closeMediaPicker();\n\t});\n\t</script><!-- Hidden inputs for i18n strings used by JavaScript --><input type=\"hidden\" id=\"media-picker-loading-text\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var114 string
-		templ_7745c5c3_Var114, templ_7745c5c3_Err = templ.ResolveAttributeValue(pc.T("media.select_image"))
+		templ_7745c5c3_Var114, templ_7745c5c3_Err = templ.ResolveAttributeValue(pc.T("media.loading"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 634, Col: 80}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 632, Col: 82}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var114)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 95, "\"> <input type=\"hidden\" id=\"media-picker-loading-text\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 95, "\"> <input type=\"hidden\" id=\"media-picker-no-media\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var115 string
-		templ_7745c5c3_Var115, templ_7745c5c3_Err = templ.ResolveAttributeValue(pc.T("media.loading"))
+		templ_7745c5c3_Var115, templ_7745c5c3_Err = templ.ResolveAttributeValue(pc.T("media.no_media"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 635, Col: 82}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 633, Col: 79}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var115)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 96, "\"> <input type=\"hidden\" id=\"media-picker-no-media\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 96, "\"> <input type=\"hidden\" id=\"media-picker-error\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var116 string
-		templ_7745c5c3_Var116, templ_7745c5c3_Err = templ.ResolveAttributeValue(pc.T("media.no_media"))
+		templ_7745c5c3_Var116, templ_7745c5c3_Err = templ.ResolveAttributeValue(pc.T("error.loading_failed"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 636, Col: 79}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 634, Col: 82}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var116)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 97, "\"> <input type=\"hidden\" id=\"media-picker-error\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 97, "\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var117 string
-		templ_7745c5c3_Var117, templ_7745c5c3_Err = templ.ResolveAttributeValue(pc.T("error.loading_failed"))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 637, Col: 82}
+		return nil
+	})
+}
+
+func themeMediaPicker(pc *PageContext) templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var117)
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var117 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var117 == nil {
+			templ_7745c5c3_Var117 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 98, "<div id=\"media-picker-overlay\" class=\"modal-overlay\" style=\"display: none;\"><div class=\"modal media-picker-modal\" role=\"dialog\" aria-modal=\"true\" aria-labelledby=\"theme-media-picker-title\"><div class=\"modal-header\"><h3 id=\"theme-media-picker-title\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 98, "\">")
+		var templ_7745c5c3_Var118 string
+		templ_7745c5c3_Var118, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("media.select_image"))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 641, Col: 66}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var118))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 99, "</h3>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Var119 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+			if !templ_7745c5c3_IsBuffer {
+				defer func() {
+					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err == nil {
+						templ_7745c5c3_Err = templ_7745c5c3_BufErr
+					}
+				}()
+			}
+			ctx = templ.InitializeContext(ctx)
+			templ_7745c5c3_Err = icon.X(icon.Props{Size: 20}).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			return nil
+		})
+		templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantGhost, Attributes: templ.Attributes{"data-picker-close": "", "aria-label": pc.T("btn.close")}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var119), templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 100, "</div>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = mediaPickerUpload(pc, true).Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 101, "<div class=\"modal-body\"><div id=\"media-picker-content\"></div></div><div class=\"media-dropzone-modal-footer\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Var120 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+			if !templ_7745c5c3_IsBuffer {
+				defer func() {
+					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err == nil {
+						templ_7745c5c3_Err = templ_7745c5c3_BufErr
+					}
+				}()
+			}
+			ctx = templ.InitializeContext(ctx)
+			var templ_7745c5c3_Var121 string
+			templ_7745c5c3_Var121, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("btn.cancel"))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 650, Col: 25}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var121))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			return nil
+		})
+		templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantOutline, Attributes: templ.Attributes{"data-picker-close": ""}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var120), templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Var122 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+			if !templ_7745c5c3_IsBuffer {
+				defer func() {
+					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err == nil {
+						templ_7745c5c3_Err = templ_7745c5c3_BufErr
+					}
+				}()
+			}
+			ctx = templ.InitializeContext(ctx)
+			var templ_7745c5c3_Var123 string
+			templ_7745c5c3_Var123, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("media.select_image"))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 653, Col: 33}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var123))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			return nil
+		})
+		templ_7745c5c3_Err = button.Button(button.Props{ID: "media-picker-confirm", Disabled: true}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var122), templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 102, "</div></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2282,12 +2407,12 @@ func themeSettingsStyle() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var118 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var118 == nil {
-			templ_7745c5c3_Var118 = templ.NopComponent
+		templ_7745c5c3_Var124 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var124 == nil {
+			templ_7745c5c3_Var124 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 99, "<style>\n\t.media-picker-modal {\n\t\twidth: 90%;\n\t\tmax-width: 800px;\n\t\tmax-height: 80vh;\n\t}\n\t.media-picker-modal .modal-body {\n\t\toverflow-y: auto;\n\t\tmax-height: 60vh;\n\t}\n\t.media-picker-loading {\n\t\ttext-align: center;\n\t\tpadding: 2rem;\n\t\tcolor: var(--color-text-muted);\n\t}\n\t.media-picker-grid {\n\t\tdisplay: grid;\n\t\tgrid-template-columns: repeat(auto-fill, minmax(120px, 1fr));\n\t\tgap: 1rem;\n\t\tpadding: 0.5rem;\n\t}\n\t.media-picker-item {\n\t\tcursor: pointer;\n\t\tborder: 2px solid transparent;\n\t\tborder-radius: 8px;\n\t\tpadding: 0.5rem;\n\t\ttext-align: center;\n\t\ttransition: border-color 0.2s, background-color 0.2s;\n\t}\n\t.media-picker-item:hover {\n\t\tborder-color: var(--color-primary);\n\t\tbackground-color: var(--color-bg-secondary);\n\t}\n\t.media-picker-item img {\n\t\twidth: 100%;\n\t\theight: 80px;\n\t\tobject-fit: contain;\n\t\tborder-radius: 4px;\n\t\tbackground: var(--color-bg-tertiary);\n\t}\n\t.media-picker-filename {\n\t\tdisplay: block;\n\t\tfont-size: 0.75rem;\n\t\tcolor: var(--color-text-muted);\n\t\tmargin-top: 0.25rem;\n\t\toverflow: hidden;\n\t\ttext-overflow: ellipsis;\n\t\twhite-space: nowrap;\n\t}\n\t.image-input-wrapper {\n\t\tdisplay: flex;\n\t\tgap: 0.5rem;\n\t\talign-items: center;\n\t\tflex-wrap: wrap;\n\t}\n\t.image-preview {\n\t\tflex-shrink: 0;\n\t}\n\t.image-input-wrapper .form-input {\n\t\tflex: 1;\n\t\tmin-width: 200px;\n\t}\n\t</style>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 103, "<style>\n\t.media-picker-modal {\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\twidth: 90%;\n\t\tmax-width: 800px;\n\t\tmax-height: 80vh;\n\t}\n\t.media-picker-modal .modal-body {\n\t\tmin-height: 0;\n\t\tflex: 1;\n\t\toverflow-y: auto;\n\t\tmax-height: 60vh;\n\t}\n\t.media-picker-loading {\n\t\ttext-align: center;\n\t\tpadding: 2rem;\n\t\tcolor: var(--color-text-muted);\n\t}\n\t.media-picker-grid {\n\t\tdisplay: grid;\n\t\tgrid-template-columns: repeat(auto-fill, minmax(120px, 1fr));\n\t\tgap: 1rem;\n\t\tpadding: 0.5rem;\n\t}\n\t.media-picker-item {\n\t\tcursor: pointer;\n\t\tborder: 2px solid transparent;\n\t\tborder-radius: 8px;\n\t\tpadding: 0.5rem;\n\t\ttext-align: center;\n\t\ttransition: border-color 0.2s, background-color 0.2s;\n\t}\n\t.media-picker-item.is-selected {\n\t\tborder-color: var(--color-primary);\n\t\toutline: 2px solid var(--color-primary);\n\t}\n\t.media-picker-item:hover {\n\t\tborder-color: var(--color-primary);\n\t\tbackground-color: var(--color-bg-secondary);\n\t}\n\t.media-picker-item img {\n\t\twidth: 100%;\n\t\theight: 80px;\n\t\tobject-fit: contain;\n\t\tborder-radius: 4px;\n\t\tbackground: var(--color-bg-tertiary);\n\t}\n\t.media-picker-filename {\n\t\tdisplay: block;\n\t\tfont-size: 0.75rem;\n\t\tcolor: var(--color-text-muted);\n\t\tmargin-top: 0.25rem;\n\t\toverflow: hidden;\n\t\ttext-overflow: ellipsis;\n\t\twhite-space: nowrap;\n\t}\n\t.image-input-wrapper {\n\t\tdisplay: flex;\n\t\tgap: 0.5rem;\n\t\talign-items: center;\n\t\tflex-wrap: wrap;\n\t}\n\t.image-preview {\n\t\tflex-shrink: 0;\n\t}\n\t.image-input-wrapper .form-input {\n\t\tflex: 1;\n\t\tmin-width: 200px;\n\t}\n\t</style>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2312,12 +2437,12 @@ func iconThemePreviewPlaceholder() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var119 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var119 == nil {
-			templ_7745c5c3_Var119 = templ.NopComponent
+		templ_7745c5c3_Var125 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var125 == nil {
+			templ_7745c5c3_Var125 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 100, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"48\" height=\"48\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\"></rect> <path d=\"M3 9h18\"></path> <path d=\"M9 21V9\"></path></svg>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 104, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"48\" height=\"48\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\"></rect> <path d=\"M3 9h18\"></path> <path d=\"M9 21V9\"></path></svg>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2341,12 +2466,12 @@ func iconActivate() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var120 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var120 == nil {
-			templ_7745c5c3_Var120 = templ.NopComponent
+		templ_7745c5c3_Var126 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var126 == nil {
+			templ_7745c5c3_Var126 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 101, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 6 9 17l-5-5\"></path></svg>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 105, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 6 9 17l-5-5\"></path></svg>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2370,12 +2495,12 @@ func iconSettingsSmall() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var121 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var121 == nil {
-			templ_7745c5c3_Var121 = templ.NopComponent
+		templ_7745c5c3_Var127 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var127 == nil {
+			templ_7745c5c3_Var127 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 102, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle></svg>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 106, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle></svg>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2399,12 +2524,12 @@ func iconSettingsLarge() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var122 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var122 == nil {
-			templ_7745c5c3_Var122 = templ.NopComponent
+		templ_7745c5c3_Var128 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var128 == nil {
+			templ_7745c5c3_Var128 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 103, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"48\" height=\"48\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle></svg>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 107, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"48\" height=\"48\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle></svg>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2428,12 +2553,12 @@ func iconMediaBrowse() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var123 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var123 == nil {
-			templ_7745c5c3_Var123 = templ.NopComponent
+		templ_7745c5c3_Var129 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var129 == nil {
+			templ_7745c5c3_Var129 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 104, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" ry=\"2\"></rect><circle cx=\"9\" cy=\"9\" r=\"2\"></circle><path d=\"m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21\"></path></svg>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 108, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" ry=\"2\"></rect><circle cx=\"9\" cy=\"9\" r=\"2\"></circle><path d=\"m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21\"></path></svg>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2457,12 +2582,12 @@ func iconClear() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var124 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var124 == nil {
-			templ_7745c5c3_Var124 = templ.NopComponent
+		templ_7745c5c3_Var130 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var130 == nil {
+			templ_7745c5c3_Var130 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 105, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M18 6 6 18\"></path><path d=\"m6 6 12 12\"></path></svg>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 109, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M18 6 6 18\"></path><path d=\"m6 6 12 12\"></path></svg>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

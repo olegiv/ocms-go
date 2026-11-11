@@ -4,6 +4,9 @@
 package testutil
 
 import (
+	"bytes"
+	"image"
+	"image/png"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -44,4 +47,14 @@ func LockMediaFiles(t *testing.T, uploadDir string, uuids ...string) []string {
 		}
 	})
 	return dirs
+}
+
+// PNGImage encodes a small or narrow image for upload validation fixtures.
+func PNGImage(t *testing.T, width, height int) []byte {
+	t.Helper()
+	var data bytes.Buffer
+	if err := png.Encode(&data, image.NewRGBA(image.Rect(0, 0, width, height))); err != nil {
+		t.Fatal(err)
+	}
+	return data.Bytes()
 }

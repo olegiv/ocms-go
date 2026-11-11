@@ -22,7 +22,15 @@ import (
 // filename or a mention of InTx alone does not exempt an autocommit receiver.
 func TestPageWritersUseTransactionQueries(t *testing.T) {
 	t.Run("sqlc catalog", checkPageMutationQueryCatalog)
+	for _, site := range []writerLocation{{"internal/pagewrite/validation.go", "FeaturedImageSize"}, {"internal/ai/draft/normalize.go", "resolveAssignments"}} {
+		if !functionCalls(t, token.NewFileSet(), filepath.Join("..", "..", site.path), site.function, "CheckFeaturedImage") {
+			t.Errorf("%s:%s must call CheckFeaturedImage", site.path, site.function)
+		}
+	}
 
+	if !functionCalls(t, token.NewFileSet(), filepath.Join("..", "api", "v2", "pages", "service.go"), "applyUpdate", "FeaturedImageSize") {
+		t.Error("REST applyUpdate must call FeaturedImageSize")
+	}
 	root := filepath.Join("..", "..")
 	set := token.NewFileSet()
 	for _, directory := range []string{"internal", "modules", "custom", "cmd", "scripts"} {
@@ -67,6 +75,22 @@ func TestPageWritersUseTransactionQueries(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+}
+
+// Import/seed paths preserve imported content and have their own contracts;
+// Translate copies the current assignment. Interactive assignments must reach
+// the shared format-and-dimensions helper, including Restore.
+var featuredWriterChecks = map[writerLocation]string{
+	{"internal/handler/pages.go", "createPageGuarded"}:      "FeaturedImageSize",
+	{"internal/handler/pages.go", "updatePageGuarded"}:      "FeaturedImageSize",
+	{"internal/api/v2/pages/service.go", "create"}:          "FeaturedImageSize",
+	{"internal/api/v2/pages/service.go", "update"}:          "applyUpdate",
+	{"internal/pagewrite/restore.go", "Restore"}:            "CheckFeaturedImage",
+	{"internal/handler/pages.go", "Translate"}:              "",
+	{"internal/pagewrite/queries.go", "Insert"}:             "",
+	{"internal/transfer/importer.go", "createNewPage"}:      "",
+	{"internal/transfer/importer.go", "updateExistingPage"}: "",
+	{"internal/store/seed_demo.go", "seedDemoPages"}:        "",
 }
 
 type writerScan struct {
@@ -147,6 +171,10 @@ func (s writerScan) binding(expr ast.Expr, bindings map[string]string) string {
 func (s writerScan) body(body ast.Node, bindings map[string]string) {
 	ast.PreorderStack(body, nil, func(node ast.Node, stack []ast.Node) bool {
 		switch value := node.(type) {
+		case *ast.Ident:
+			if value.Name == "CheckFeaturedImageDimensions" {
+				s.t.Errorf("%s: size-only featured validation bypasses format checks", s.set.Position(value.Pos()))
+			}
 		case *ast.FuncLit:
 			nested := maps.Clone(bindings)
 			if nested == nil {
@@ -182,6 +210,14 @@ func (s writerScan) body(body ast.Node, bindings map[string]string) {
 			selected, ok := value.Fun.(*ast.SelectorExpr)
 			if !ok || !pageMutations[selected.Sel.Name] || len(value.Args) != 2 || nonPageTranslation(value) {
 				return true
+			}
+			if selected.Sel.Name == "CreatePage" || selected.Sel.Name == "UpdatePage" || selected.Sel.Name == "UpdatePageFeaturedImage" {
+				check, inventoried := featuredWriterChecks[writerLocation{s.path, s.function}]
+				if !inventoried {
+					s.t.Errorf("%s: featured-image writer needs shared validation or a documented preservation exemption", s.set.Position(node.Pos()))
+				} else if check != "" && !functionCalls(s.t, s.set, filepath.Join("..", "..", s.path), s.function, check) {
+					s.t.Errorf("%s: featured-image writer bypasses %s", s.set.Position(node.Pos()), check)
+				}
 			}
 			// Demo seeding is a fixed startup fixture in store (which cannot import
 			// pagewrite). Its enclosing transaction and complete records are tested.

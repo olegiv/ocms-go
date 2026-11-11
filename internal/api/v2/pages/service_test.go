@@ -5,7 +5,9 @@ package pages_test
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -15,6 +17,56 @@ import (
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/testutil"
 )
+
+func TestFeaturedICOServiceAssignmentsWithTransportMetadata(t *testing.T) {
+	for _, transport := range []string{"rest", "mcp"} {
+		for _, mimeType := range []string{model.MimeTypeICO, "image/vnd.microsoft.icon"} {
+			t.Run("actor_transport="+transport+"/"+mimeType, func(t *testing.T) {
+				db, cleanup := testutil.TestDB(t)
+				t.Cleanup(cleanup)
+				q, ctx, now := store.New(db), t.Context(), time.Now()
+				author, err := q.CreateUser(ctx, store.CreateUserParams{Email: "ico@example.test", PasswordHash: "unused", Role: model.RoleEditor, Name: "Editor", CreatedAt: now, UpdatedAt: now})
+				if err != nil {
+					t.Fatal(err)
+				}
+				icon, err := q.CreateMedia(ctx, store.CreateMediaParams{Uuid: "icon", Filename: "favicon.ico", MimeType: mimeType, Size: 1, UploadedBy: author.ID, LanguageCode: "en", CreatedAt: now, UpdatedAt: now})
+				if err != nil {
+					t.Fatal(err)
+				}
+				svc := pages.NewService(db, q, nil, nil, pages.Policy{})
+				actor := v2.Actor{APIKey: &store.ApiKey{ID: 1, CreatedBy: author.ID}, Permissions: []string{model.PermissionPagesWrite}, Transport: transport}
+				assertRefused := func(err error) {
+					t.Helper()
+					var refusal *v2.Error
+					if !errors.As(err, &refusal) || refusal.Kind != v2.ErrValidation {
+						t.Fatalf("ICO must produce validation refusal: %v", err)
+					}
+				}
+				_, err = svc.Create(ctx, actor, pages.CreatePageBody{Title: "ICO", Slug: "ico", FeaturedImageID: &icon.ID})
+				assertRefused(err)
+				page, err := svc.Create(ctx, actor, pages.CreatePageBody{Title: "Rasterless", Slug: "rasterless", OGImageID: &icon.ID})
+				if err != nil {
+					t.Fatalf("OG remains supported: %v", err)
+				}
+				_, err = svc.Update(ctx, actor, page.ID, pages.UpdatePageBody{FeaturedImageID: &icon.ID})
+				assertRefused(err)
+				// Model a historical assignment; normal updates must retain it.
+				if _, err := db.ExecContext(ctx, `UPDATE pages SET featured_image_id = ? WHERE id = ?`, icon.ID, page.ID); err != nil {
+					t.Fatal(err)
+				}
+				title := fmt.Sprintf("Legacy %s", transport)
+				updated, err := svc.Update(ctx, actor, page.ID, pages.UpdatePageBody{Title: &title, FeaturedImageID: &icon.ID})
+				if err != nil || updated.FeaturedImageID == nil || *updated.FeaturedImageID != icon.ID {
+					t.Fatalf("historical ICO must survive: %+v %v", updated, err)
+				}
+				stored, err := q.GetMediaByID(ctx, icon.ID)
+				if err != nil || stored.Width != (sql.NullInt64{}) {
+					t.Fatalf("ICO record changed: %+v %v", stored, err)
+				}
+			})
+		}
+	}
+}
 
 func newTestService(t *testing.T) (*pages.Service, func()) {
 	t.Helper()

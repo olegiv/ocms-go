@@ -133,7 +133,7 @@ func TestFeaturedImageMinimumParityAndLegacyAssignments(t *testing.T) {
 		media.Width, media.Height, media.DimensionsKnown = dimensions.width, dimensions.height, dimensions.known
 		resolver.media[1] = media
 		result, err := draft.NormalizeCreate(context.Background(), draft.PageDraft{Title: "Image", FeaturedImageID: draft.SetNullable(int64(1))}, opt)
-		shared := pagewrite.CheckFeaturedImageDimensions(dimensions.width, dimensions.height, dimensions.known)
+		shared := pagewrite.CheckFeaturedImage(media.MimeType, dimensions.width, dimensions.height, dimensions.known)
 		if err != nil || has(result.Issues, "image_too_small") != dimensions.wantError || (shared != nil) != dimensions.wantError {
 			t.Fatalf("dimensions %+v: %+v %v shared=%v", dimensions, result, err, shared)
 		}
@@ -141,6 +141,35 @@ func TestFeaturedImageMinimumParityAndLegacyAssignments(t *testing.T) {
 		updated, err := draft.NormalizeUpdate(context.Background(), draft.Changes{FeaturedImageID: draft.SetNullable(int64(1))}, current, opt)
 		if err != nil || updated.Content == nil || has(updated.Issues, "image_too_small") {
 			t.Fatalf("same historical assignment was not grandfathered: %+v %v", updated, err)
+		}
+	}
+}
+
+func TestFeaturedICORejectedByDraftEngine(t *testing.T) {
+	for _, mimeType := range []string{model.MimeTypeICO, "image/vnd.microsoft.icon"} {
+		opt, resolver := options()
+		media := resolver.media[1]
+		media.MimeType, media.DimensionsKnown = mimeType, false
+		resolver.media[1] = media
+		input := draft.PageDraft{Title: "ICO", FeaturedImageID: draft.SetNullable(int64(1))}
+		result, err := draft.NormalizeCreate(t.Context(), input, opt)
+		if err != nil || !has(result.Issues, "image_not_found") {
+			t.Fatalf("draft accepted featured ICO %s: %+v %v", mimeType, result, err)
+		}
+		current := draft.Content{ID: 2, Title: "Existing", Slug: "existing", LanguageCode: "en"}
+		result, err = draft.NormalizeUpdate(t.Context(), draft.Changes{FeaturedImageID: input.FeaturedImageID}, current, opt)
+		if err != nil || !has(result.Issues, "image_not_found") {
+			t.Fatalf("draft change accepted ICO: %+v %v", result, err)
+		}
+		current.FeaturedImageID = &media.ID
+		// Publication re-sends the stored ID, so validImage still refuses ICO.
+		result, err = draft.NormalizeUpdate(t.Context(), draft.Changes{FeaturedImageID: input.FeaturedImageID}, current, opt)
+		if err != nil || !has(result.Issues, "image_not_found") {
+			t.Fatalf("publication-style revalidation accepted the same ICO: %+v %v", result, err)
+		}
+		result, err = draft.NormalizeUpdate(t.Context(), draft.Changes{Summary: draft.Set("Metadata")}, current, opt)
+		if err != nil || result.HasErrors() || result.Content == nil || result.Content.FeaturedImageID == nil || *result.Content.FeaturedImageID != media.ID {
+			t.Fatalf("metadata-only update omitting featured_image_id lost ICO: %+v %v", result, err)
 		}
 	}
 }

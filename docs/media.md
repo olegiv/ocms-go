@@ -2,6 +2,42 @@
 
 OCMS includes a media library for managing uploaded files with automatic image processing.
 
+## Uploading from an image picker
+
+Featured Image, Open Graph Image, the content editor and theme image settings
+each offer **Upload Image**, including when the library is empty. Choose one JPG,
+PNG, GIF or WebP image (up to 20 MB). The content editor and theme pickers also
+accept ICO. The upload runs inside the picker and shows progress; errors can be
+retried by choosing the image again.
+
+Theme settings, including favicons, accept ICO, and the content editor inserts
+the original file when an image has no size variants. A Featured Image cannot be
+set to an ICO; choose JPEG, PNG, GIF or WebP instead.
+
+After upload, the picker highlights the new image. Confirm with **Select Image**
+or **Insert Image**, then save the page or theme settings normally. Uploading
+does not submit the surrounding form or discard unsaved changes. Featured images
+still have the minimum dimensions described below.
+
+Closing the picker cancels a pending client request and discards temporary
+selection. An upload that has already completed remains in the library even if
+selection is cancelled. Picker uploads are stored as uncategorized media.
+
+The picker uses the existing authenticated, CSRF-protected
+`POST /admin/media/upload` endpoint with `Accept: application/json` and exactly
+one multipart `file`. It returns `201` with `{ "item": ... }`, the same item shape
+as the media picker API, or a failure status with `{ "error": ... }`. Requests
+refused before they reach the upload handler differ: a CSRF rejection returns
+plain-text `403`, and an expired session redirects to login.
+
+On the normal upload page and its HTMX requests, a failure while storing or
+processing an upload, or while regenerating variants, shows a generic message for
+server faults (HTMX `500`) and a specific message for problems the editor can fix,
+such as a corrupt image (HTMX `400`); form submissions redirect with a flash.
+Checks made before processing, such as demo mode, a missing media item or a
+non-image file, keep their existing responses. Batch uploads still report a count
+summary.
+
 ## Image Variants
 
 When an image is uploaded, OCMS automatically generates multiple size variants:
@@ -85,6 +121,12 @@ When assigning a featured image to a page, the image must meet minimum size requ
 - **Supported formats**: JPEG, PNG, GIF, WebP
 
 Size validation is shared by the admin editor, REST v2 and the AI draft engine when assigning a new featured image or changing an existing assignment. Unchanged historical assignments below the minimum and absent historical dimensions retain the existing compatibility behavior. The draft engine also requires a supported existing library image; see [Draft contract](draft-contract.md).
+
+ICO cannot be assigned as a new or changed featured image, even though its
+dimensions are unknown. An existing ICO featured image is kept when a page is
+edited, or a version restored, without changing it. Publishing an AI-editable page
+re-checks the image, so it is refused until a JPEG, PNG, GIF or WebP image is
+chosen. ICO remains supported for theme settings and favicons.
 
 ## Supported Formats
 

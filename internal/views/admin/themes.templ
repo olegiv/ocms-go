@@ -311,6 +311,7 @@ templ ThemeSettingsPage(pc *PageContext, data ThemeSettingsViewData) {
 				}
 			</form>
 		}
+		@themeMediaPicker(pc)
 		@themeSettingsScript(pc)
 		@themeSettingsStyle()
 	}
@@ -501,13 +502,6 @@ templ themeSettingsScript(pc *PageContext) {
 		}
 	}
 
-	// Escape HTML to prevent XSS in dynamic content
-	function escapeHtml(text) {
-		var div = document.createElement('div');
-		div.textContent = text;
-		return div.innerHTML;
-	}
-
 	// Attach change handlers to image URL inputs
 	document.querySelectorAll('.image-url-input').forEach(function(input) {
 		input.addEventListener('change', function() {
@@ -529,97 +523,92 @@ templ themeSettingsScript(pc *PageContext) {
 		});
 	});
 
-	// Open media picker modal
+	// Keep temporary selection separate from the unsaved theme form.
+	var themePicker = {fieldId: null, selected: null, uploaded: null, uploader: null, request: 0};
 	function openMediaPicker(fieldId) {
-		// Create modal overlay
-		var overlay = document.createElement('div');
-		overlay.className = 'modal-overlay';
-		overlay.id = 'media-picker-overlay';
-		overlay.onclick = function(e) {
-			if (e.target === overlay) closeMediaPicker();
-		};
-
-		// Create modal content
-		var modal = document.createElement('div');
-		modal.className = 'modal media-picker-modal';
-
-		var header = document.createElement('div');
-		header.className = 'modal-header';
-		var h3 = document.createElement('h3');
-		h3.textContent = document.getElementById('media-picker-title').value;
-		var closeBtn = document.createElement('button');
-		closeBtn.type = 'button';
-		closeBtn.className = 'modal-close';
-		closeBtn.textContent = '\u00D7';
-		closeBtn.onclick = closeMediaPicker;
-		header.appendChild(h3);
-		header.appendChild(closeBtn);
-
-		var body = document.createElement('div');
-		body.className = 'modal-body';
-		var content = document.createElement('div');
-		content.id = 'media-picker-content';
-		content.className = 'media-picker-loading';
-		content.textContent = document.getElementById('media-picker-loading-text').value + '...';
-		body.appendChild(content);
-
-		modal.appendChild(header);
-		modal.appendChild(body);
-		overlay.appendChild(modal);
-		document.body.appendChild(overlay);
-		document.body.classList.add('modal-open');
-
-		// Load media items
-		fetch('/admin/media/api?type=image&limit=50')
-			.then(function(response) { return response.json(); })
-			.then(function(data) {
-				var content = document.getElementById('media-picker-content');
-				if (data.items && data.items.length > 0) {
-					content.className = 'media-picker-grid';
-					content.innerHTML = '';
-					data.items.forEach(function(item) {
-						var filepath = item.filepath || '';
-						var thumbnail = item.thumbnail || filepath;
-						var filename = item.filename || '';
-
-						if (!isValidImageUrl(filepath)) return;
-
-						var div = document.createElement('div');
-						div.className = 'media-picker-item';
-						div.onclick = function() { selectMedia(fieldId, filepath); };
-
-						var img = document.createElement('img');
-						safeSetImageSrc(img, thumbnail);
-						img.alt = escapeHtml(filename);
-
-						var span = document.createElement('span');
-						span.className = 'media-picker-filename';
-						span.textContent = filename;
-
-						div.appendChild(img);
-						div.appendChild(span);
-						content.appendChild(div);
-					});
-					if (content.children.length === 0) {
-						content.innerHTML = '<p style="text-align: center; padding: 2rem;">' + escapeHtml(document.getElementById('media-picker-no-media').value) + '</p>';
-					}
-				} else {
-					content.innerHTML = '<p style="text-align: center; padding: 2rem;">' + escapeHtml(document.getElementById('media-picker-no-media').value) + '</p>';
-				}
-			})
-			.catch(function() {
-				document.getElementById('media-picker-content').innerHTML = '<p style="text-align: center; padding: 2rem; color: var(--color-danger);">' + escapeHtml(document.getElementById('media-picker-error').value) + '</p>';
-			});
-	}
-
-	function closeMediaPicker() {
 		var overlay = document.getElementById('media-picker-overlay');
-		if (overlay) {
-			overlay.remove();
-			document.body.classList.remove('modal-open');
+		themePicker.fieldId = fieldId;
+		themePicker.selected = null;
+		themePicker.uploaded = null;
+		themePicker.uploader = initMediaPickerUpload(overlay.querySelector('[data-media-picker-upload]'), function(item) {
+			themePicker.uploaded = item;
+			themePicker.selected = item;
+			document.getElementById('media-picker-confirm').disabled = false;
+			loadThemeMedia();
+		});
+		themePicker.uploader.reset();
+		document.getElementById('media-picker-confirm').disabled = true;
+		overlay.style.display = 'flex';
+		document.body.classList.add('modal-open');
+		loadThemeMedia();
+	}
+	async function loadThemeMedia() {
+		var request = ++themePicker.request;
+		var content = document.getElementById('media-picker-content');
+		content.className = 'media-picker-loading';
+		content.textContent = document.getElementById('media-picker-loading-text').value;
+		try {
+			var response = await fetch('/admin/media/api?type=image&limit=50');
+			if (!response.ok) throw new Error('Media unavailable');
+			var data = await response.json();
+			if (request !== themePicker.request) return;
+			var items = data.items || [];
+			if (themePicker.uploaded) items = [themePicker.uploaded].concat(items.filter(function(item) { return item.id !== themePicker.uploaded.id; }));
+			renderThemeMedia(items);
+		} catch (error) {
+			if (request !== themePicker.request) return;
+			if (themePicker.uploaded) renderThemeMedia([themePicker.uploaded]);
+			else {
+				renderThemeMedia([]);
+				content.textContent = document.getElementById('media-picker-error').value;
+			}
 		}
 	}
-
+	function renderThemeMedia(items) {
+		items = items.filter(function(item) { return isValidImageUrl(item.filepath); });
+		if (themePicker.selected && !items.some(function(item) { return item.id === themePicker.selected.id; })) themePicker.selected = null;
+		document.getElementById('media-picker-confirm').disabled = !themePicker.selected;
+		var content = document.getElementById('media-picker-content');
+		content.className = 'media-picker-grid';
+		content.replaceChildren();
+		items.forEach(function(item) {
+			var button = document.createElement('button');
+			button.type = 'button';
+			button.className = 'media-picker-item';
+			button.dataset.id = String(item.id);
+			button.onclick = function() {
+				themePicker.selected = item;
+				document.getElementById('media-picker-confirm').disabled = false;
+				updateThemeMediaSelection();
+			};
+			var img = document.createElement('img');
+			safeSetImageSrc(img, item.thumbnail || item.filepath);
+			img.alt = item.filename;
+			var span = document.createElement('span');
+			span.className = 'media-picker-filename';
+			span.textContent = item.filename;
+			button.append(img, span);
+			content.appendChild(button);
+		});
+		updateThemeMediaSelection();
+		if (!content.children.length) content.textContent = document.getElementById('media-picker-no-media').value;
+	}
+	function updateThemeMediaSelection() {
+		document.querySelectorAll('#media-picker-content button[data-id]').forEach(function(button) {
+			var selected = !!themePicker.selected && button.dataset.id === String(themePicker.selected.id);
+			button.classList.toggle('is-selected', selected);
+			button.setAttribute('aria-pressed', String(selected));
+		});
+	}
+	function closeMediaPicker() {
+		themePicker.uploader?.reset();
+		themePicker.request++;
+		themePicker.selected = null;
+		themePicker.uploaded = null;
+		themePicker.fieldId = null;
+		document.getElementById('media-picker-overlay').style.display = 'none';
+		document.body.classList.remove('modal-open');
+	}
 	function selectMedia(fieldId, url) {
 		if (!isValidImageUrl(url)) return;
 		var input = document.getElementById(fieldId);
@@ -629,23 +618,58 @@ templ themeSettingsScript(pc *PageContext) {
 		}
 		closeMediaPicker();
 	}
+	document.getElementById('media-picker-overlay').addEventListener('click', function(event) {
+		if (event.target.id === 'media-picker-overlay' || event.target.closest('[data-picker-close]')) closeMediaPicker();
+	});
+	document.getElementById('media-picker-confirm').addEventListener('click', function() {
+		if (themePicker.selected) selectMedia(themePicker.fieldId, themePicker.selected.filepath);
+	});
+	document.addEventListener('keydown', function(event) {
+		if (event.key === 'Escape' && themePicker.fieldId) closeMediaPicker();
+	});
 	</script>
 	<!-- Hidden inputs for i18n strings used by JavaScript -->
-	<input type="hidden" id="media-picker-title" value={ pc.T("media.select_image") }/>
 	<input type="hidden" id="media-picker-loading-text" value={ pc.T("media.loading") }/>
 	<input type="hidden" id="media-picker-no-media" value={ pc.T("media.no_media") }/>
 	<input type="hidden" id="media-picker-error" value={ pc.T("error.loading_failed") }/>
+}
+
+templ themeMediaPicker(pc *PageContext) {
+	<div id="media-picker-overlay" class="modal-overlay" style="display: none;">
+		<div class="modal media-picker-modal" role="dialog" aria-modal="true" aria-labelledby="theme-media-picker-title">
+			<div class="modal-header">
+				<h3 id="theme-media-picker-title">{ pc.T("media.select_image") }</h3>
+				@button.Button(button.Props{Variant: button.VariantGhost, Attributes: templ.Attributes{"data-picker-close": "", "aria-label": pc.T("btn.close")}}) {
+					@icon.X(icon.Props{Size: 20})
+				}
+			</div>
+			@mediaPickerUpload(pc, true)
+			<div class="modal-body"><div id="media-picker-content"></div></div>
+			<div class="media-dropzone-modal-footer">
+				@button.Button(button.Props{Variant: button.VariantOutline, Attributes: templ.Attributes{"data-picker-close": ""}}) {
+					{ pc.T("btn.cancel") }
+				}
+				@button.Button(button.Props{ID: "media-picker-confirm", Disabled: true}) {
+					{ pc.T("media.select_image") }
+				}
+			</div>
+		</div>
+	</div>
 }
 
 // themeSettingsStyle renders the CSS for theme settings media picker.
 templ themeSettingsStyle() {
 	<style>
 	.media-picker-modal {
+		display: flex;
+		flex-direction: column;
 		width: 90%;
 		max-width: 800px;
 		max-height: 80vh;
 	}
 	.media-picker-modal .modal-body {
+		min-height: 0;
+		flex: 1;
 		overflow-y: auto;
 		max-height: 60vh;
 	}
@@ -667,6 +691,10 @@ templ themeSettingsStyle() {
 		padding: 0.5rem;
 		text-align: center;
 		transition: border-color 0.2s, background-color 0.2s;
+	}
+	.media-picker-item.is-selected {
+		border-color: var(--color-primary);
+		outline: 2px solid var(--color-primary);
 	}
 	.media-picker-item:hover {
 		border-color: var(--color-primary);

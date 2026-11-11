@@ -228,7 +228,7 @@ func resolveAssignments(ctx context.Context, content *Content, category, image N
 			case err != nil:
 				return fmt.Errorf("resolve featured draft image: %w", err)
 			case previous == nil || *previous != image.Value:
-				if err := pagewrite.CheckFeaturedImageDimensions(media.Width, media.Height, media.DimensionsKnown); err != nil {
+				if err := pagewrite.CheckFeaturedImage(media.MimeType, media.Width, media.Height, media.DimensionsKnown); err != nil {
 					result.Issues = append(result.Issues, NewIssue("image_too_small", "featured_image_id", options.UILanguage))
 				}
 			}

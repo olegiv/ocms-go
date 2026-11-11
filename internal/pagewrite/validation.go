@@ -162,7 +162,7 @@ func ValidateSlugFormat(slug string) string {
 	return ""
 }
 
-// FeaturedImageSize checks the same minimum dimensions for all write surfaces.
+// FeaturedImageSize checks featured formats and dimensions for all write surfaces.
 func FeaturedImageSize(ctx context.Context, q *store.Queries, id sql.NullInt64) error {
 	if !id.Valid {
 		return nil
@@ -174,12 +174,15 @@ func FeaturedImageSize(ctx context.Context, q *store.Queries, id sql.NullInt64) 
 	if err != nil {
 		return fmt.Errorf("featured image: %w", err)
 	}
-	return CheckFeaturedImageDimensions(media.Width.Int64, media.Height.Int64, media.Width.Valid && media.Height.Valid)
+	return CheckFeaturedImage(media.MimeType, media.Width.Int64, media.Height.Int64, media.Width.Valid && media.Height.Valid)
 }
 
-// CheckFeaturedImageDimensions shares the editor's minimum with draft validation.
-// Missing historical dimensions retain the existing grandfathering behavior.
-func CheckFeaturedImageDimensions(width, height int64, known bool) error {
+// CheckFeaturedImage validates format and dimensions together. Missing historical
+// dimensions retain the existing compatibility behavior for supported formats.
+func CheckFeaturedImage(mime string, width, height int64, known bool) error {
+	if mime == model.MimeTypeICO || mime == "image/vnd.microsoft.icon" {
+		return &Refusal{Reason: "ICO images cannot be used as featured images", MessageKey: "pages.error.featured_image_ico"}
+	}
 	if known && (width < model.MinFeaturedImageWidth || height < model.MinFeaturedImageHeight) {
 		return &FeaturedImageSizeError{Width: width, Height: height}
 	}

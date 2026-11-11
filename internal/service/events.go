@@ -89,9 +89,12 @@ func (s *EventService) LogEvent(ctx context.Context, level, category, message st
 		// Callers usually drop this error, so the failure is logged here with
 		// the event it lost, and kept out of the Event Log it failed to write.
 		// A caller that logs it again must also use WithoutEventLog
-		// (TestEventWriteFailuresStayOutOfTheEventLog).
-		slog.ErrorContext(WithoutEventLog(ctx), "failed to record an event in the Event Log",
-			"event", message, "category", category, "error", err)
+		// (TestEventWriteFailuresStayOutOfTheEventLog). A request that ended
+		// mid-write is not a storage fault and is not logged (T-15/N-4).
+		if util.RequestCancellation(ctx, err) == nil {
+			slog.ErrorContext(WithoutEventLog(ctx), "failed to record an event in the Event Log",
+				"event", message, "category", category, "error", err)
+		}
 		return err
 	}
 

@@ -257,6 +257,10 @@ func (h *MediaHandler) UploadForm(w http.ResponseWriter, r *http.Request) {
 
 // Upload handles POST /admin/media/upload - processes file upload.
 func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
+	if acceptsMediaUploadJSON(r) {
+		h.uploadJSON(w, r)
+		return
+	}
 	if middleware.IsDemoMode() {
 		msg := middleware.DemoModeMessageDetailed(middleware.RestrictionContentReadOnly)
 		if r.Header.Get("HX-Request") == "true" {
@@ -275,7 +279,9 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 
 	// Parse multipart form with max memory
 	if err := r.ParseMultipartForm(service.MaxUploadSize); err != nil {
-		slog.Error("failed to parse multipart form", "error", err)
+		if !errors.Is(err, context.Canceled) {
+			slog.InfoContext(r.Context(), "invalid multipart upload", "error", err)
+		}
 		if r.Header.Get("HX-Request") == "true" {
 			w.WriteHeader(http.StatusBadRequest)
 			_, _ = w.Write([]byte("File too large or invalid form"))
@@ -286,9 +292,8 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get default language for media creation
-	defaultLang, err := h.queries.GetDefaultLanguage(r.Context())
-	if err != nil || !isRoutableContentLanguage(defaultLang) {
-		slog.Error("failed to get default language", "error", err)
+	defaultLang, ok := h.mediaUploadLanguage(r.Context())
+	if !ok {
 		if r.Header.Get("HX-Request") == "true" {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, _ = w.Write([]byte("Error uploading file"))
@@ -326,13 +331,14 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		// Process single file
 		result, err := h.mediaService.Upload(r.Context(), file, header, userID, folderID, defaultLang.Code)
 		if err != nil {
-			slog.Error("failed to upload file", "error", err, "filename", header.Filename)
+			failure := classifyMediaError(err, "Error uploading file")
+			failure.log(r.Context(), "failed to upload media", err, "filename", header.Filename)
 			if r.Header.Get("HX-Request") == "true" {
-				w.WriteHeader(http.StatusBadRequest)
-				_, _ = w.Write([]byte(err.Error()))
+				w.WriteHeader(failure.status)
+				_, _ = w.Write([]byte(failure.message))
 				return
 			}
-			flashError(w, r, h.renderer, redirectAdminMediaUpload, "Upload failed: "+err.Error())
+			flashError(w, r, h.renderer, redirectAdminMediaUpload, "Upload failed: "+failure.message)
 			return
 		}
 
@@ -345,7 +351,7 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("HX-Request") == "true" {
 			// Return success HTML for HTMX
 			w.WriteHeader(http.StatusOK)
-			_, _ = fmt.Fprintf(w, `<div class="upload-success">Uploaded: %s</div>`, result.Media.Filename)
+			_, _ = fmt.Fprintf(w, `<div class="upload-success">Uploaded: %s</div>`, html.EscapeString(result.Media.Filename))
 			return
 		}
 
@@ -359,7 +365,7 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	for _, header := range files {
 		file, err := header.Open()
 		if err != nil {
-			slog.Error("failed to open file", "error", err, "filename", header.Filename)
+			classifyMediaError(err, "").log(r.Context(), "failed to open media upload", err, "filename", header.Filename)
 			errorCount++
 			continue
 		}
@@ -368,7 +374,7 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		_ = file.Close()
 
 		if err != nil {
-			slog.Error("failed to upload file", "error", err, "filename", header.Filename)
+			classifyMediaError(err, "").log(r.Context(), "failed to upload media", err, "filename", header.Filename)
 			errorCount++
 			continue
 		}
@@ -979,13 +985,14 @@ func (h *MediaHandler) RegenerateVariants(w http.ResponseWriter, r *http.Request
 	// Regenerate variants
 	variants, err := h.mediaService.RegenerateVariants(r.Context(), id)
 	if err != nil {
-		slog.Error("failed to regenerate variants", "error", err, "media_id", id)
+		failure := classifyMediaError(err, "Error regenerating variants")
+		failure.log(r.Context(), "failed to regenerate variants", err, "media_id", id)
 		if r.Header.Get("HX-Request") == "true" {
-			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = w.Write([]byte(err.Error()))
+			w.WriteHeader(failure.status)
+			_, _ = w.Write([]byte(failure.message))
 			return
 		}
-		flashError(w, r, h.renderer, fmt.Sprintf(redirectAdminMediaID, id), "Error regenerating variants: "+err.Error())
+		flashError(w, r, h.renderer, fmt.Sprintf(redirectAdminMediaID, id), failure.message)
 		return
 	}
 
@@ -1116,7 +1123,9 @@ func (h *MediaHandler) API(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		slog.Error("failed to fetch media for API", "error", err)
+		if !errors.Is(err, context.Canceled) {
+			slog.ErrorContext(r.Context(), "failed to fetch media for API", "error", err)
+		}
 		writeJSONError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -1124,37 +1133,16 @@ func (h *MediaHandler) API(w http.ResponseWriter, r *http.Request) {
 	// Calculate total pages
 	totalPages := CalculateTotalPages(int(totalCount), limit)
 
-	// Build response
-	type MediaAPIItem struct {
-		ID        int64  `json:"id"`
-		Filename  string `json:"filename"`
-		Filepath  string `json:"filepath"`
-		Thumbnail string `json:"thumbnail,omitempty"`
-		Mimetype  string `json:"mimetype"`
-		Size      int64  `json:"size"`
-	}
-
 	type APIResponse struct {
-		Items      []MediaAPIItem `json:"items"`
+		Items      []mediaAPIItem `json:"items"`
 		TotalCount int64          `json:"totalCount"`
 		TotalPages int            `json:"totalPages"`
 		Page       int            `json:"page"`
 	}
 
-	items := make([]MediaAPIItem, len(mediaList))
+	items := make([]mediaAPIItem, len(mediaList))
 	for i, m := range mediaList {
-		item := MediaAPIItem{
-			ID:       m.ID,
-			Filename: m.Filename,
-			Filepath: model.MediaURL(model.VariantOriginal, m.Uuid, m.Filename),
-			Mimetype: m.MimeType,
-			Size:     m.Size,
-		}
-		// Add thumbnail path for images
-		if strings.HasPrefix(m.MimeType, "image/") {
-			item.Thumbnail = model.MediaURL("thumbnail", m.Uuid, m.Filename)
-		}
-		items[i] = item
+		items[i] = h.pickerItem(r.Context(), m)
 	}
 
 	response := APIResponse{

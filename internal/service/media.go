@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -76,6 +77,28 @@ var canonicalExtensionByMimeType = map[string]string{
 	model.MimeTypeWebM: ".webm",
 }
 
+// ImageUploadExtensions returns the server-allowed image extensions, sorted for
+// picker accept attributes. ICO can be excluded for raster-only pickers.
+func ImageUploadExtensions(allowICO bool) []string {
+	extensions := make(map[string]bool)
+	for mimeType, allowed := range AllowedMimeTypes {
+		if !allowed || !strings.HasPrefix(mimeType, "image/") || (!allowICO && (mimeType == model.MimeTypeICO || mimeType == "image/vnd.microsoft.icon")) {
+			continue
+		}
+		for extension, enabled := range allowedExtensionsByMimeType[mimeType] {
+			if enabled {
+				extensions[extension] = true
+			}
+		}
+	}
+	result := make([]string, 0, len(extensions))
+	for extension := range extensions {
+		result = append(result, extension)
+	}
+	slices.Sort(result)
+	return result
+}
+
 // UploadResult contains the result of a media upload.
 type UploadResult struct {
 	Media    store.Medium
@@ -112,6 +135,16 @@ func NewMediaService(db *sql.DB, uploadDir string) *MediaService {
 
 // Upload handles file upload, processing, and database storage.
 func (s *MediaService) Upload(ctx context.Context, file multipart.File, header *multipart.FileHeader, userID int64, folderID *int64, languageCode string) (*UploadResult, error) {
+	return s.upload(ctx, file, header, userID, folderID, languageCode, false)
+}
+
+// UploadImage applies the same upload validation while refusing non-images
+// before storing files or records. ICO originals remain supported for favicons.
+func (s *MediaService) UploadImage(ctx context.Context, file multipart.File, header *multipart.FileHeader, userID int64, folderID *int64, languageCode string) (*UploadResult, error) {
+	return s.upload(ctx, file, header, userID, folderID, languageCode, true)
+}
+
+func (s *MediaService) upload(ctx context.Context, file multipart.File, header *multipart.FileHeader, userID int64, folderID *int64, languageCode string, imagesOnly bool) (*UploadResult, error) {
 	// Validate file size
 	if header.Size > MaxUploadSize {
 		return nil, &ClientError{Message: fmt.Sprintf("file size exceeds maximum allowed (%d bytes)", MaxUploadSize)}
@@ -131,6 +164,9 @@ func (s *MediaService) Upload(ctx context.Context, file multipart.File, header *
 	if err != nil {
 		return nil, err
 	}
+	if imagesOnly && !strings.HasPrefix(mimeType, "image/") {
+		return nil, &ClientError{Message: "Unsupported or invalid image"}
+	}
 	filename, err = canonicalizeUploadFilename(filename, mimeType)
 	if err != nil {
 		return nil, err
@@ -146,6 +182,9 @@ func (s *MediaService) Upload(ctx context.Context, file multipart.File, header *
 		// Process image
 		processResult, err := s.processor.ProcessImage(file, fileUUID, filename)
 		if err != nil {
+			if errors.Is(err, imaging.ErrInvalidImage) {
+				return nil, &ClientError{Message: "Image could not be processed: it is corrupt or exceeds the maximum dimensions"}
+			}
 			return nil, fmt.Errorf("failed to process image: %w", err)
 		}
 
@@ -401,7 +440,7 @@ func (s *MediaService) RegenerateVariants(ctx context.Context, mediaID int64) ([
 
 	// Check if it's an image
 	if !s.processor.IsImage(media.MimeType) {
-		return nil, fmt.Errorf("media is not an image")
+		return nil, &ClientError{Message: "This image type has no variants to regenerate"}
 	}
 
 	safeFilename, err := validateMediaStoredFilename(media.Filename)

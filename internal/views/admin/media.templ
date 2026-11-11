@@ -7,6 +7,7 @@ import "fmt"
 import "net/url"
 import "path/filepath"
 import "strings"
+import "github.com/olegiv/ocms-go/internal/service"
 import "github.com/olegiv/ocms-go/internal/views/components/button"
 import "github.com/olegiv/ocms-go/internal/views/components/card"
 import "github.com/olegiv/ocms-go/internal/views/components/icon"
@@ -184,6 +185,34 @@ func truncateFilename(name string, maxLen int) string {
 // =============================================================================
 // LIBRARY PAGE
 // =============================================================================
+
+// mediaPickerUpload deliberately has no form or named inputs: it can live
+// inside an unsaved page or theme form without joining that form's submission.
+templ mediaPickerUpload(pc *PageContext, allowICO bool) {
+	{{ accept := strings.Join(service.ImageUploadExtensions(allowICO), ",") }}
+	{{ hintKey, invalidKey := "media.picker_upload_hint_raster", "media.picker_upload_invalid_raster" }}
+	if allowICO {
+		{{ hintKey, invalidKey = "media.picker_upload_hint", "media.picker_upload_invalid" }}
+	}
+	<div class="media-picker-upload" data-media-picker-upload
+		data-allowed-formats={ accept }
+		data-max-size={ fmt.Sprint(service.MaxUploadSize) }
+		data-error={ pc.T("media.picker_upload_error") }
+		data-too-large={ pc.T("media.picker_upload_too_large") }
+		data-invalid={ pc.T(invalidKey) }
+		data-forbidden={ pc.T("media.picker_upload_forbidden") }
+		data-uploading={ pc.T("media.uploading") }
+	>
+		@button.Button(button.Props{Size: button.SizeSm, Type: button.TypeButton, Attributes: templ.Attributes{"data-upload-choose": ""}}) {
+			@icon.Upload(icon.Props{Size: 16})
+			{ pc.T("media.picker_upload_image") }
+		}
+		<input type="file" accept={ accept } data-upload-file hidden/>
+		<span class="form-hint">{ pc.T(hintKey) }</span>
+		<progress data-upload-progress max="100" value="0" hidden aria-label={ pc.T("media.uploading") }></progress>
+		<span data-upload-status role="status" aria-live="polite"></span>
+	</div>
+}
 
 templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 	@AdminLayout(pc) {
