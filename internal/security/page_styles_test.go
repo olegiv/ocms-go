@@ -336,6 +336,22 @@ var editorReplayCases = []struct{ name, editor, want string }{
 	{"text colour rgb", `<p><span style="color: rgb(224, 62, 45);">Colored</span></p>`, `<p><span style="color: rgb(224, 62, 45)">Colored</span></p>`},
 	{"highlight", `<p><span style="background-color: #fbeeb8;">Highlighted</span></p>`, `<p><span style="background-color: #fbeeb8">Highlighted</span></p>`},
 	{"underline", `<p><span style="text-decoration: underline;">Underlined</span></p>`, `<p><span style="text-decoration: underline">Underlined</span></p>`},
+	// TinyMCE 8.10.2 splits underline wrappers around subscript and superscript.
+	{
+		"underline with coloured superscript",
+		`<p><span style="text-decoration: underline;">Outer </span><sup><span style="text-decoration: underline;"><span style="color: #e03e2d;">Colour</span></span></sup><span style="text-decoration: underline;"> end</span></p>`,
+		`<p><span style="text-decoration: underline">Outer </span><sup><span style="text-decoration: underline"><span style="color: #e03e2d">Colour</span></span></sup><span style="text-decoration: underline"> end</span></p>`,
+	},
+	{
+		"underline with coloured subscript",
+		`<p><span style="text-decoration: underline;">Outer </span><sub><span style="text-decoration: underline;"><span style="color: #e03e2d;">Colour</span></span></sub><span style="text-decoration: underline;"> end</span></p>`,
+		`<p><span style="text-decoration: underline">Outer </span><sub><span style="text-decoration: underline"><span style="color: #e03e2d">Colour</span></span></sub><span style="text-decoration: underline"> end</span></p>`,
+	},
+	{
+		"underline applied around superscript",
+		`<p><span style="text-decoration: underline;">Outer </span><sup><span style="text-decoration: underline;"><span style="color: #e03e2d; text-decoration: underline;">Colour</span></span></sup><span style="text-decoration: underline;"> end</span></p>`,
+		`<p><span style="text-decoration: underline">Outer </span><sup><span style="text-decoration: underline"><span style="color: #e03e2d; text-decoration: underline">Colour</span></span></sup><span style="text-decoration: underline"> end</span></p>`,
+	},
 	{"strikethrough", `<p><s>Struck</s></p>`, `<p><s>Struck</s></p>`},
 	{"font size", `<p><span style="font-size: 18pt;">Sized</span></p>`, `<p><span style="font-size: 18pt">Sized</span></p>`},
 	{"font family", `<p><span style="font-family: 'times new roman', times;">Family</span></p>`, `<p><span style="font-family: &#39;times new roman&#39;, times">Family</span></p>`},

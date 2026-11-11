@@ -1,6 +1,6 @@
 module github.com/olegiv/ocms-go
 
-go 1.27.3
+go 1.27.4
 
 // Keep generated artifacts out of recursive package discovery.
 ignore ./output
