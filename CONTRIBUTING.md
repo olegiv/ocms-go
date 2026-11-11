@@ -16,6 +16,14 @@ Please be respectful and constructive in all interactions. We welcome contributo
 4. Provide system information (Go version, OS, browser if relevant)
 5. Include relevant logs or error messages
 
+### Planning Work
+
+Check [oCMS Development](https://github.com/users/olegiv/projects/5) and existing issues before proposing work. Reuse an issue when it already covers your change; otherwise open an issue describing the problem and expected result.
+
+Open issues are added to the Project automatically in **Backlog**. Maintainers set their priority and release milestone, then move scoped work to **Ready**, **In progress** when implementation starts, and **In review** when its pull request is ready. Closed issues move to **Done**; reopened issues return to **Backlog**.
+
+Link implementation PRs to their issues. Use `Closes #123` when a PR completes the issue, or `Refs #123` for partial work. See the [release milestones](https://github.com/olegiv/ocms-go/milestones) for planned release scope. Start dates, target dates and milestone due dates stay empty until a schedule is agreed.
+
 ### Submitting Pull Requests
 
 1. Fork the repository

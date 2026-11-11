@@ -71,11 +71,13 @@ Running `ocms-go` in production? [Tell us about it.](https://github.com/olegiv/o
 
 ## Roadmap
 
-The path to v1.0 is tracked in the [Roadmap to v1.0 issue](https://github.com/olegiv/ocms-go/issues). Headlines:
+Development priorities and progress are tracked in [oCMS Development](https://github.com/users/olegiv/projects/5), with Board and Roadmap views.
+The [v0.33.0 milestone](https://github.com/olegiv/ocms-go/milestone/1) covers inline media uploads, deployment reliability and the coordinated templ/parser upgrade.
+The [v1.0 milestone](https://github.com/olegiv/ocms-go/milestone/2) collects longer-term work; its final scope remains open. Neither milestone has a due date. Headlines:
 
 - ✅ RSS / Atom feeds for published posts, categories and tags, with language-prefixed URLs
 - ✅ JSON-LD structured data: Article, homepage WebSite and visible/structured breadcrumbs
-- PostgreSQL adapter alongside SQLite
+- [PostgreSQL adapter alongside SQLite](https://github.com/olegiv/ocms-go/issues/212)
 - ✅ Public demo — live at [ocms-demo.fly.dev](https://ocms-demo.fly.dev/), 24h auto-reset
 
 Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the [Good first issues](https://github.com/olegiv/ocms-go/issues) list.

@@ -42,6 +42,13 @@ action. Approving a larger task (for example "cut the release") is not that
   options such as `-C` and `--no-pager`) are in scope; shell-string evasions (wrappers, here-strings,
   command substitutions, dashed `git-*` executables) are documented limitations.
 
+## Development Planning
+
+- Use [oCMS Development](https://github.com/users/olegiv/projects/5) (owner `olegiv`, Project 5) for planned development. Before starting substantive work, check the Project and existing issues, then reuse the matching issue and Project item. Create an issue for new planned work; open issues are added automatically, but verify the item appears before updating it.
+- Keep the issue's Project status current: **Backlog** for work awaiting triage or scoping, **Ready** once scoped, **In progress** when implementation starts, and **In review** when its PR is ready. Closing an issue sets **Done** automatically; reopening it returns it to **Backlog**. Local implementation without a review-ready PR stays **In progress**.
+- Link implementation PRs to issues. Use `Closes #123` only when the PR completes that issue; use `Refs #123` for partial work. Keep planning in issues rather than duplicate draft Project cards.
+- Preserve agreed priorities and release scope. Use the [release milestones](https://github.com/olegiv/ocms-go/milestones), and leave start dates, target dates and milestone due dates empty until explicitly agreed.
+
 ## Project Structure & Module Organization
 - `cmd/ocms/`: application entrypoint (`main.go`).
 - `internal/`: core runtime code (handlers, middleware, services, store, views, cache, scheduler).
