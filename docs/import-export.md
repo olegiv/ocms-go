@@ -240,6 +240,16 @@ The validator checks for:
 - Reference integrity (authors, categories exist)
 - File format compatibility
 - Canonical media UUID and manifest/path consistency
+- Menu link schemes: when menus are selected, a menu item URL must be
+  relative or use `http`, `https`, `mailto` or `tel`. A `javascript:` or
+  `data:` link refuses the whole import. The upload preview always checks
+  menus.
+
+URL settings are checked one by one instead: an imported `site_url` must be
+an http(s) origin such as `https://example.com`, and a `site_logo` must be an
+http(s) URL, a site path starting with `/`, or a base64 image data URI. A
+value that fails is skipped and listed under **Notes**; the rest of the
+import continues.
 
 ### Media Restore Modes
 

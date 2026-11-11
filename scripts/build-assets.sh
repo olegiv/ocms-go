@@ -89,7 +89,7 @@ if command -v templ &> /dev/null; then
     echo "  -> templ files generated"
 else
     echo "Warning: templ is not installed. Skipping templ generation."
-    echo "Install it with: go install github.com/a-h/templ/cmd/templ@latest"
+    echo "Install it with: go install github.com/a-h/templ/cmd/templ@v0.3.1100"
 fi
 
 # Compile Tailwind CSS

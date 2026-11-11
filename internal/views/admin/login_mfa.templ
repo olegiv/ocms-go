@@ -130,7 +130,7 @@ templ TOTPSetupForm(t func(string, ...any) string, setup TOTPSetup) {
 		<li>{ t("mfa.setup_step_scan") }</li>
 	</ol>
 	<div class="mb-4 flex justify-center">
-		<img src={ setup.QRCode } width="200" height="200" alt={ t("mfa.qr_alt") } class="rounded-md bg-white p-2"/>
+		<img src={ templ.SafeURL(setup.QRCode) } width="200" height="200" alt={ t("mfa.qr_alt") } class="rounded-md bg-white p-2"/>
 	</div>
 	<p class="mb-1 text-sm text-muted-foreground">{ t("mfa.setup_manual") }</p>
 	<p class="mb-6 select-all break-all text-center font-mono text-sm"><code>{ setup.Secret }</code></p>

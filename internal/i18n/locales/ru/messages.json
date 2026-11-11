@@ -3853,6 +3853,16 @@
             "translation": "Укажите полный адрес, начинающийся с http:// или https://"
         },
         {
+            "id": "config.site_url_invalid",
+            "message": "Enter the site's address without a path, such as https://example.com",
+            "translation": "Укажите адрес сайта без пути, например https://example.com"
+        },
+        {
+            "id": "config.site_logo_invalid",
+            "message": "Enter an image URL starting with https://, a site path starting with /, or a base64 image data URI",
+            "translation": "Укажите URL изображения, начинающийся с https://, путь на сайте, начинающийся с /, или изображение в виде base64 data URI"
+        },
+        {
             "id": "config.copyright",
             "message": "Copyright",
             "translation": "Авторские права"
@@ -3889,8 +3899,8 @@
         },
         {
             "id": "config.site_logo_hint",
-            "message": "URL or path to site logo image",
-            "translation": "URL или путь к изображению логотипа"
+            "message": "Image URL or site path, such as /uploads/logo.png",
+            "translation": "URL изображения или путь на сайте, например /uploads/logo.png"
         },
         {
             "id": "config.custom_css",

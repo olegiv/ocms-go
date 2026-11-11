@@ -5,6 +5,7 @@ package service
 
 import (
 	"database/sql"
+	"strings"
 	"testing"
 	"time"
 
@@ -168,6 +169,41 @@ func TestBuildMenuTreeWithInactiveItems(t *testing.T) {
 	}
 	if tree[1].Title != "Contact" {
 		t.Errorf("tree[1].Title = %q, want %q", tree[1].Title, "Contact")
+	}
+}
+
+// TestBuildMenuTreeDropsUnsafeURLs covers rows no form would write, such as
+// one from an older import: templates mark menu links trusted, so an item
+// whose URL has a scheme menus do not allow is dropped with its children.
+func TestBuildMenuTreeDropsUnsafeURLs(t *testing.T) {
+	svc := &MenuService{}
+	item := func(id, parent int64, title, url string) store.ListMenuItemsWithPageRow {
+		return store.ListMenuItemsWithPageRow{
+			ID: id, MenuID: 1, Title: title, IsActive: true, Position: id,
+			ParentID: sql.NullInt64{Int64: parent, Valid: parent != 0},
+			Url:      sql.NullString{String: url, Valid: true},
+		}
+	}
+	tree := svc.buildMenuTree([]store.ListMenuItemsWithPageRow{
+		item(1, 0, "Relative", "about"),
+		item(2, 0, "Script", "javascript:alert(1)"),
+		item(3, 2, "Child of script", "/child"),
+		item(4, 0, "Mixed case", "JaVaScRiPt:alert(1)"),
+		item(5, 0, "Leading space", " javascript:alert(1)"),
+		item(6, 0, "Data", "data:text/html,x"),
+		item(7, 0, "Mail", "mailto:team@example.com"),
+		item(8, 0, "Query", "?t=10:30"),
+	})
+
+	var titles []string
+	for _, mi := range tree {
+		titles = append(titles, mi.Title)
+		if len(mi.Children) > 0 {
+			t.Errorf("%q kept children %+v", mi.Title, mi.Children)
+		}
+	}
+	if got, want := strings.Join(titles, ", "), "Relative, Mail, Query"; got != want {
+		t.Errorf("menu = %s, want %s", got, want)
 	}
 }
 

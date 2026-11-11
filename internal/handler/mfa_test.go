@@ -293,6 +293,19 @@ func TestPendingSignInEnds(t *testing.T) {
 
 var setupSecret = regexp.MustCompile(`<code>([A-Z2-7 ]{16,})</code>`)
 
+// assertQRCodeImage checks that an authenticator setup page shows the QR code
+// as an image templ did not block. templ rejects data: URLs it is not told to
+// trust, which once left both setup pages without a QR code.
+func assertQRCodeImage(t *testing.T, body string) {
+	t.Helper()
+	if !strings.Contains(body, `<img src="data:image/png;base64,`) {
+		t.Error("setup page shows no QR code image")
+	}
+	if strings.Contains(body, "TemplFailedSanitizationURL") {
+		t.Error("setup page renders a URL templ blocked")
+	}
+}
+
 // TestRequiredMFAEnrollsAtSignIn covers an account that must use a second
 // factor and has none: the password leads to setup, never to a session, and
 // confirming a code signs in and shows the recovery codes.
@@ -308,9 +321,10 @@ func TestRequiredMFAEnrollsAtSignIn(t *testing.T) {
 		t.Errorf("the challenge served an enrollment sign-in: %d", rr.Code)
 	}
 	page := authRequest(env.router, http.MethodGet, RouteLoginMFASetup, nil, cookie)
-	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), "data:image/png;base64,") {
+	if page.Code != http.StatusOK {
 		t.Fatalf("setup page = %d", page.Code)
 	}
+	assertQRCodeImage(t, page.Body.String())
 	if page.Header().Get("Cache-Control") != "private, no-store" {
 		t.Errorf("setup page Cache-Control = %q", page.Header().Get("Cache-Control"))
 	}
@@ -505,6 +519,7 @@ func TestAccountEnrollsAuthenticator(t *testing.T) {
 	if page.Code != http.StatusOK || m == nil {
 		t.Fatalf("setup page = %d", page.Code)
 	}
+	assertQRCodeImage(t, page.Body.String())
 	if strings.Contains(page.Body.String(), `name="current_code"`) || !strings.Contains(page.Body.String(), `name="password"`) {
 		t.Error("a first enrollment did not ask for the password, or asked for a current code")
 	}

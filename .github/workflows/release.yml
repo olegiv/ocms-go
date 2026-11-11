@@ -84,7 +84,7 @@ jobs:
           cache: npm
 
       - name: Install templ
-        run: go install github.com/a-h/templ/cmd/templ@v0.3.1070
+        run: go install github.com/a-h/templ/cmd/templ@v0.3.1100
 
       - name: Build assets
         run: make assets

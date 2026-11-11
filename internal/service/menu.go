@@ -11,6 +11,7 @@ import (
 	"sort"
 
 	"github.com/olegiv/ocms-go/internal/cache"
+	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
 )
@@ -205,7 +206,12 @@ func (s *MenuService) buildMenuTree(items []store.ListMenuItemsWithPageRow) []Me
 			mi.PageSlug = item.PageSlug.String
 			mi.URL = pageURL
 		} else if item.Url.Valid && item.Url.String != "" {
-			// External URL
+			// External URL. Templates mark menu links trusted, so never render
+			// one the menu policy rejects, such as a javascript: URL written by
+			// an older import.
+			if !model.IsRenderableMenuURL(item.Url.String) {
+				continue
+			}
 			mi.URL = item.Url.String
 		}
 

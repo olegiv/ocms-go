@@ -10,7 +10,7 @@ require (
 	github.com/HugoSmits86/nativewebp v1.3.0
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.2
 	github.com/Oudwins/tailwind-merge-go v0.2.3
-	github.com/a-h/templ v0.3.1070
+	github.com/a-h/templ v0.3.1100
 	github.com/alexedwards/scs/sqlite3store v0.0.0-20251002162104-209de6e426de
 	github.com/alexedwards/scs/v2 v2.9.0
 	github.com/caarlos0/env/v11 v11.4.2
@@ -35,7 +35,7 @@ require (
 	github.com/rwcarlsen/goexif v0.0.0-20190401172101-9e8deecbddbd
 	github.com/stretchr/testify v1.12.1
 	github.com/yuin/goldmark v1.8.7
-	golang.org/x/crypto v0.58.1-0.20261009181718-2f1f834330b2
+	golang.org/x/crypto v0.59.0
 	golang.org/x/image v0.48.0
 	golang.org/x/net v0.62.0
 	golang.org/x/sync v0.25.0

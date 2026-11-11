@@ -212,7 +212,9 @@ func (s *alpineSource) templElements(nodes []templparser.Node) []alpineElement {
 				switch {
 				case part.Value != nil:
 					body.WriteString(*part.Value)
-				case !part.InsideStringLiteral:
+				case part.Context != templparser.ScriptContentsContextString &&
+					part.Context != templparser.ScriptContentsContextTemplateLiteral:
+					// Keep expression and regexp positions parseable.
 					body.WriteString("null")
 				}
 			}
