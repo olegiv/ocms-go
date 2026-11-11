@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Update TinyMCE to 8.10.2 and Sass to 1.108.2.
+
+### Security
+
+- Require **Go 1.27.4** for source builds and pin the Docker builder to
+  `golang:1.27.4-alpine`. This release fixes security issues in `net/http`
+  and the Go build toolchain. Rebuild and redeploy existing binaries to
+  include the standard-library fixes.
+
 ## [0.32.0] - 2026-11-10 - MCP authoring and editorial review
 
 Connect an MCP client to create, edit and translate drafts in oCMS. Editors

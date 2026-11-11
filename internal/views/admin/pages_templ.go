@@ -7977,7 +7977,7 @@ func pageFormScripts(pc *PageContext, data PageFormViewData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 404, "\" integrity=\"sha384-OtVUpuLkN+DdaiAXh0dfTgh3ek9rIQXtBgptjnWKhFNEkW9sCgRxizS2kJXjHA/x\" crossorigin=\"anonymous\"></script><script nonce=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 404, "\" integrity=\"sha384-npxFMfUtfS3TVnDLvAye3VBWkVZPIsrKUIExMpbqwzB/VZ6QU5b2dCXtwN3gh4H6\" crossorigin=\"anonymous\"></script><script nonce=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
