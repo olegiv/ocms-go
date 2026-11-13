@@ -147,7 +147,8 @@ migrate-create:
 # Generate SQLC code and fix unhandled errors
 sqlc:
 	sqlc generate
-	@sed -i '' 's/defer rows\.Close()/defer func() { _ = rows.Close() }()/g' internal/store/*.sql.go
+	@sed -i.bak 's/defer rows\.Close()/defer func() { _ = rows.Close() }()/g' internal/store/*.sql.go
+	@rm -f internal/store/*.sql.go.bak
 	@echo "SQLC generated and warnings fixed"
 
 # Generate templ Go code from .templ files
