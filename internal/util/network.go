@@ -21,6 +21,30 @@ const MaxWebhookURLLength = 2048
 var privateIPBlocks []*net.IPNet
 var requireHTTPSOutbound atomic.Bool
 
+// LookupFunc resolves a host name to its IP addresses.
+type LookupFunc func(ctx context.Context, host string) ([]net.IPAddr, error)
+
+var lookupIPAddr atomic.Pointer[LookupFunc]
+
+// LookupIPAddr resolves host with the process resolver. Every SSRF check in
+// the repository resolves names through it (TestSSRFChecksUseSharedResolver),
+// so tests can replace the resolver in one place instead of reaching the
+// network.
+func LookupIPAddr(ctx context.Context, host string) ([]net.IPAddr, error) {
+	if fn := lookupIPAddr.Load(); fn != nil {
+		return (*fn)(ctx, host)
+	}
+	return net.DefaultResolver.LookupIPAddr(ctx, host)
+}
+
+// ReplaceLookupIPAddrForTest installs fn as the resolver used by
+// LookupIPAddr and returns a function that restores the previous one. It is
+// for test code only (TestSSRFChecksUseSharedResolver rejects other callers).
+func ReplaceLookupIPAddrForTest(fn LookupFunc) (restore func()) {
+	prev := lookupIPAddr.Swap(&fn)
+	return func() { lookupIPAddr.Store(prev) }
+}
+
 func init() {
 	cidrs := []string{
 		"10.0.0.0/8",      // RFC 1918 - private
@@ -168,7 +192,7 @@ func ValidateWebhookURL(rawURL string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	ips, err := net.DefaultResolver.LookupIPAddr(ctx, hostname)
+	ips, err := LookupIPAddr(ctx, hostname)
 	if err != nil {
 		return fmt.Errorf("failed to resolve hostname %q: %w", hostname, err)
 	}
@@ -234,7 +258,7 @@ func SSRFSafeDialContext(dialer *net.Dialer) func(ctx context.Context, network, 
 		}
 
 		// Resolve hostname to IPs
-		ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+		ips, err := LookupIPAddr(ctx, host)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve %q: %w", host, err)
 		}

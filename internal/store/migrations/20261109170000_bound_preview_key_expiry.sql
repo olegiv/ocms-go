@@ -1,13 +1,22 @@
 -- +goose Up
 -- Preserve the shortest observed deadline even if the key is extended later.
 -- A malformed non-null expiry already denies redemption, so cap it at zero.
-UPDATE preview_links AS link
-SET expires_at = COALESCE(unixepoch(key.expires_at), 0)
-FROM api_keys AS key
-WHERE link.issuing_key_id = key.id
-  AND link.revoked_at = 0
-  AND key.expires_at IS NOT NULL
-  AND link.expires_at > COALESCE(unixepoch(key.expires_at), 0);
+-- Correlated subqueries instead of UPDATE ... FROM: sqlc's SQLite parser
+-- rejects the latter while reading the schema, which breaks `sqlc generate`.
+UPDATE preview_links
+SET expires_at = (
+    SELECT COALESCE(unixepoch(k.expires_at), 0)
+    FROM api_keys AS k
+    WHERE k.id = preview_links.issuing_key_id
+)
+WHERE revoked_at = 0
+  AND EXISTS (
+    SELECT 1
+    FROM api_keys AS k
+    WHERE k.id = preview_links.issuing_key_id
+      AND k.expires_at IS NOT NULL
+      AND preview_links.expires_at > COALESCE(unixepoch(k.expires_at), 0)
+  );
 
 -- +goose StatementBegin
 CREATE TRIGGER preview_key_expiry AFTER UPDATE OF expires_at ON api_keys

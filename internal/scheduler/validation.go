@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // privateIPRanges defines CIDR blocks for private/reserved networks.
@@ -102,7 +104,7 @@ func ValidateTaskURL(rawURL string) error {
 	// Resolve hostname to IP addresses.
 	resolveCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	ips, err := net.DefaultResolver.LookupIPAddr(resolveCtx, hostname)
+	ips, err := util.LookupIPAddr(resolveCtx, hostname)
 	if err != nil {
 		return fmt.Errorf("cannot resolve hostname %q: %w", hostname, err)
 	}
