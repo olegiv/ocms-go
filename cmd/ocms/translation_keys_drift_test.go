@@ -64,7 +64,9 @@ var notTranslationKeys = map[string]string{
 func TestTranslationKeysExist(t *testing.T) {
 	scan := newTranslationScan()
 	err := walkRepoFiles(filepath.Join("..", ".."), func(rel string) bool {
-		if strings.Contains(rel, "/testdata/") || strings.HasSuffix(rel, "_test.go") {
+		// internal/testutil is test support that ships in no binary; its fixture
+		// host names (example.com) look like keys of the "example" namespace.
+		if strings.Contains(rel, "/testdata/") || strings.HasPrefix(rel, "internal/testutil/") || strings.HasSuffix(rel, "_test.go") {
 			return false
 		}
 		return strings.HasSuffix(rel, ".go") || strings.HasSuffix(rel, ".html") || isCatalogFile(rel)
