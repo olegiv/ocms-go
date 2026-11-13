@@ -142,7 +142,8 @@ service is involved.
 | `OCMS_MFA_KEY` | - | Seals the TOTP secrets at rest (AES-256-GCM under a key HKDF derives from it, bound to the user ID). Minimum 32 bytes, distinct from `OCMS_SESSION_SECRET`, with the same placeholder and entropy checks. Generate with `openssl rand -base64 32` |
 | `OCMS_REQUIRE_MFA` | `false` (`true` in production when unset) | Every account, admin, editor and public alike, must pass a second factor. Startup fails while it is on and `OCMS_MFA_KEY` is unset |
 
-`ocms init` and `scripts/deploy/setup-site.sh` write a random `OCMS_MFA_KEY`.
+`ocms init` and `ocmsctl site add` (like the legacy `scripts/deploy/setup-site.sh`)
+write a random `OCMS_MFA_KEY`.
 Back the key up with the database: it is the only way to read the enrolled
 secrets. If it is lost or changed, authenticator codes stop working (the
 sign-in page says so) and enrolled users sign in with a recovery code, then

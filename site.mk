@@ -18,13 +18,13 @@
 #     BINARY_NAME ?= mysite
 #     include core/site.mk
 #
-# Overriding BINARY_NAME also requires exporting it for deploy-binary.sh, which
-# otherwise looks for bin/ocms-linux-amd64.
+# `make deploy` follows BINARY_NAME. The legacy deploy-binary.sh needs it
+# exported too, or it looks for bin/ocms-linux-amd64.
 #
 # Provides: help, dev, run, stop, restart, build, build-prod, build-linux-amd64,
 # build-linux-arm64, build-darwin-arm64, build-all-platforms, assets, test, clean,
 # sync-modules,
-# clean-modules, migrate-up, migrate-down, migrate-status.
+# clean-modules, migrate-up, migrate-down, migrate-status, build-ctl, deploy, pull.
 #
 # Reads OCMS_SERVER_PORT, OCMS_DB_PATH, OCMS_CUSTOM_DIR and OCMS_UPLOADS_DIR out
 # of the site .env, which the targets that run, stop or migrate the server
@@ -36,13 +36,15 @@
 # tell oCMS's own modules from a site's copies. They abort rather than guess if
 # it is not one.
 #
-# Deploy wrappers stay in the site repo: they carry the host, instance id and
-# vhost path, which are the only genuinely site-specific values.
+# `make deploy` needs only the server and the site ids, which the site Makefile
+# sets before the include (DEPLOY_HOST, DEPLOY_SITES); the server knows each
+# site's directory and owner.
 
 .PHONY: help sync-modules clean-modules dev run stop restart build build-prod \
         build-linux-amd64 build-linux-arm64 build-darwin-arm64 build-all-platforms \
         assets clean \
-        test require-env-file require-db-path migrate-up migrate-down migrate-status
+        test require-env-file require-db-path migrate-up migrate-down migrate-status \
+        build-ctl deploy pull
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 SITE_DIR         ?= $(shell pwd)
@@ -414,6 +416,31 @@ build-linux-arm64: ## Cross-build for Linux ARM64
 build-all-platforms: build-linux-amd64 build-linux-arm64 build-darwin-arm64 ## Cross-build every platform
 	@echo "All platform builds complete!"
 	@ls -lh "$(build_dir)/$(BINARY_NAME)"-*
+
+# ── Deploy ───────────────────────────────────────────────────────────────────
+# ocmsctl (cmd/ocmsctl in core; scripts/deploy/README.md) runs this Makefile's
+# build-linux-$(SERVER_ARCH), so the binary carries the site's modules, uploads
+# it, and has the server install it and restart the sites behind a health check.
+#
+#     DEPLOY_HOST  ?= root@server.example.com
+#     DEPLOY_SITES ?= example_com
+#     include core/site.mk
+#
+# DEPLOY_OPTS=--themes also replaces the sites' themes with custom/themes.
+SERVER_ARCH ?= amd64
+
+build-ctl: ## Build ocmsctl, the deployment tool
+	@mkdir -p "$(build_dir)"
+	@cd "$(CORE_DIR)" && $(GO) build -trimpath -o "$(build_dir)/ocmsctl" ./cmd/ocmsctl
+
+deploy: build-ctl ## Build, upload and install; restart DEPLOY_SITES on DEPLOY_HOST
+	@[ -n "$(DEPLOY_HOST)" ] && [ -n "$(DEPLOY_SITES)" ] || { echo "deploy: set DEPLOY_HOST and DEPLOY_SITES" >&2; exit 1; }
+	@"$(build_dir)/ocmsctl" deploy $(DEPLOY_HOST) $(DEPLOY_SITES) --arch $(SERVER_ARCH) \
+		--binary "$(build_dir)/$(BINARY_NAME)-linux-$(SERVER_ARCH)" $(DEPLOY_OPTS)
+
+pull: build-ctl ## Copy a scrubbed production snapshot of SITE into this site
+	@[ -n "$(DEPLOY_HOST)" ] && [ -n "$(SITE)" ] || { echo "pull: set DEPLOY_HOST and SITE=<site id>" >&2; exit 1; }
+	@"$(build_dir)/ocmsctl" pull $(DEPLOY_HOST) $(SITE) --port $(server_port) $(PULL_OPTS)
 
 assets: ## Compile SCSS and copy JS dependencies
 	@$(with_core_lock) \

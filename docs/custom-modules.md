@@ -131,16 +131,17 @@ BINARY_NAME ?= mysite
 include core/site.mk
 ```
 
-Overriding `BINARY_NAME` also means exporting it for `deploy-binary.sh`, which
-otherwise looks for `bin/ocms-linux-amd64`.
+`make deploy` (see [scripts/deploy/README.md](../scripts/deploy/README.md))
+uploads the binary under whatever `BINARY_NAME` is. The legacy `deploy-binary.sh`
+looks for `bin/ocms-linux-amd64` unless `BINARY_NAME` is exported for it too.
 
 Sharing one definition is the point: `git pull` in this repository updates the
 build logic for every site at once, so a site cannot end up unable to compile a
 module because its hand-copied Makefile predates the feature.
 
 `sync-modules` **adds**; it does not mirror. One binary serves every instance —
-`scripts/deploy/ocmsctl` and `ocms@.service` both exec `/opt/ocms/bin/ocms`, and
-a site's `deploy-binary.sh` pushes it to all of them — so that binary must carry
+`ocms@.service` execs `/opt/ocms/bin/ocms` for every site, and a site's
+`make deploy` replaces it for all of them — so that binary must carry
 the *union* of every site's modules. Evicting another site's modules here would
 build a binary without them and then ship it to the instance that needs them.
 
@@ -154,7 +155,7 @@ name get an error instead of silently overwriting one another.
 > `custom/modules/` and about whatever previous syncs left here — nothing else.
 > So after anything that empties the tree (a fresh clone, `git clean -fdx`, a
 > manual `rm -rf custom/modules/*`), a binary built from one site will **omit
-> every other site's modules**, and `deploy-binary.sh` ships that binary to every
+> every other site's modules**, and `make deploy` ships that binary to every
 > instance. Run `make sync-modules` from each site that owns modules before
 > building a binary you intend to deploy. If that rule is too easy to forget for
 > your deployment, the structural fix is to give each instance its own binary

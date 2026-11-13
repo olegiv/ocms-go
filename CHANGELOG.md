@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `ocmsctl`, a deployment tool written in Go (`cmd/ocmsctl`,
+  `internal/sitectl`), replaces the shell scripts in `scripts/deploy`. One
+  program builds, uploads and calls itself on the server over ssh; the
+  server side installs releases, restarts sites behind a health check,
+  provisions sites, backs them up and monitors them. `make server-setup`,
+  `make deploy` and `make pull` wrap it, in the core Makefile and in
+  `site.mk`. See `scripts/deploy/README.md`.
+  - Deploys keep the last three binaries as releases under
+    `/opt/ocms/releases`; `ocmsctl rollback` returns to an earlier one.
+  - A failed deploy prints the last log lines of each failed site.
+  - `ocmsctl pull` copies production to development from an online
+    snapshot; production is no longer stopped.
+  - `ocmsctl check` alerts through cron `MAILTO` or an executable
+    `/etc/ocms/alert` hook.
+  - Sites run under systemd only; the PID-file mode of the shell `ocmsctl`
+    is not carried over.
+  The shell scripts and `make deploy-binary` remain until `ocmsctl` has
+  done a production deploy; `scripts/deploy/LEGACY.md` documents them.
 - Upload images inside Featured Image, Open Graph, content-editor and theme
   pickers without leaving the form or losing unsaved changes (#211).
 

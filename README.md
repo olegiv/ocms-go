@@ -497,7 +497,11 @@ make run
 | `make assets` | Install npm deps and compile SCSS |
 | `make sqlc` | Regenerate sqlc code from SQL queries |
 | `make templ` | Regenerate templ Go code from `.templ` files |
-| `make deploy-binary` | Deploy binary to remote server (no custom content) |
+| `make build-ctl` | Build `ocmsctl`, the deployment tool, for this machine and the server |
+| `make server-setup HOST=...` | Install or update `ocmsctl` on a server and prepare it |
+| `make deploy HOST=... SITES="..."` | Build, upload, install and restart sites behind a health check ([guide](scripts/deploy/README.md)) |
+| `make pull HOST=... SITE=...` | Copy a scrubbed production snapshot into this checkout |
+| `make deploy-binary` | Legacy shell deploy, kept until `ocmsctl` has done a production deploy |
 | `make commit-prepare` | Test the staged tree and draft a message from its diff |
 | `make commit-do` | Recheck the prepared tree and approve the commit in a terminal |
 | `make code-quality` | Proxy to Claude slash command `/code-quality` |

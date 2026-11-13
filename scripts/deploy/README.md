@@ -1,925 +1,389 @@
-# oCMS Multi-Instance Deployment for Plesk
+# Deploying oCMS with ocmsctl
 
-Deploy multiple oCMS instances on a single Plesk server, one per vhost/domain.
+`ocmsctl` deploys and operates oCMS sites on a Linux server: one shared binary,
+one systemd unit per site (`ocms@<site>`), Nginx (Plesk) in front.
 
-## Architecture
+It is one Go program (`cmd/ocmsctl`) used in two places:
 
-**Core themes are embedded in the binary.** The `default` and `developer` themes are compiled into the binary and don't need to be deployed separately. Custom themes can optionally be placed in the `custom/themes/` directory to override or extend core themes.
+- **on your machine** it builds, uploads and calls the server over `ssh`;
+- **on the server** it installs releases, restarts sites behind a health check,
+  provisions sites, backs them up and monitors them.
+
+Nothing is sent to the server as shell text: the server side is the same
+program. Your `~/.ssh/config`, agent and jump hosts apply, because the system
+`ssh` and `rsync` are used.
+
+> The shell scripts in this directory (`deploy.sh`, `deploy-binary.sh`,
+> `deploy-multi.sh`, `setup-site.sh`, `backup-multi.sh`, `healthcheck-multi.sh`,
+> `generate-logrotate.sh`, `sync-prod-to-dev.sh`, the shell `ocmsctl`) are the
+> previous implementation, documented in [LEGACY.md](LEGACY.md). They stay until
+> `ocmsctl` has done a production deploy and are then removed. A server set up by
+> them works with `ocmsctl` as it is; see [Moving from the shell scripts](#moving-from-the-shell-scripts).
+
+## What a deploy does
+
+`ocmsctl deploy <host> <site>...`
+
+1. Builds the Linux binary (`make build-linux-amd64`). From a site repository
+   that is the site Makefile, so the binary carries the site's custom modules.
+2. Computes its SHA-256 and streams it to the server over ssh.
+3. The server verifies the digest and that the file is a Linux executable.
+   A bad upload stops here: nothing was installed, nothing was stopped.
+4. Installs it as a new release, `/opt/ocms/releases/<time>-<digest>/ocms`, and
+   switches the `/opt/ocms/bin/ocms` symlink to it by rename. Running sites keep
+   the binary they started from.
+5. Stops the named sites, starts them (systemd gives each up to 60 seconds to
+   drain requests), and waits for each to answer `/health` (30 seconds; change
+   with `--health-timeout 1m`).
+6. Asks every healthy site once more after 3 seconds. systemd restarts a binary
+   that exits, so a site that dies right after its first answer would otherwise
+   pass.
+7. Reports each site `OK` or `FAILED` with the last lines of its log, and exits 1
+   if any failed. A site that did not stop is not started (its old process may
+   still hold the port); the other sites carry on.
+
+There is no automatic rollback: the new binary may already have migrated a
+database. The failed release stays installed and the output names the command
+that goes back (`ocmsctl rollback`).
+
+Sites you do not name keep running the old binary until they restart.
+The last 3 releases are kept.
+
+## Layout on the server
 
 ```
-/opt/ocms/bin/ocms              ← shared binary (includes embedded themes)
-/opt/ocms/bin/ocmsctl           ← CLI management tool
-/etc/ocms/sites.conf            ← site registry (auto-managed)
-/etc/systemd/system/ocms@.service  ← systemd template
+/opt/ocms/bin/ocms -> ../releases/<release>/ocms    current release (symlink)
+/opt/ocms/bin/ocmsctl                               this tool
+/opt/ocms/releases/<release>/ocms                   last 3 releases
+/etc/ocms/sites.conf                                site registry: ID DIR USER PORT
+/etc/ocms/alert                                     optional alert hook
+/etc/systemd/system/ocms@.service                   unit template
+/etc/systemd/system/ocms@<site>.service.d/instance.conf   per-site user, directory, env file
+/etc/cron.d/ocms                                    nightly backup, health check every 5 min
+/etc/logrotate.d/ocms                               generated from the registry
 
-Per site:
-/var/www/vhosts/example.com/ocms/
-├── data/ocms.db                ← SQLite database
-├── uploads/                    ← media files
-├── custom/                     ← user content (optional)
-│   └── themes/                 ← custom themes (override embedded)
-├── backups/                    ← automated backups
-├── logs/ocms.log               ← app log (stdout + stderr)
-│   └── error.log               ← error-only log (optional)
-├── .env                        ← environment config
-└── ocms.pid                    ← PID file (ocmsctl mode)
-
-/etc/systemd/system/ocms@example_com.service.d/
-└── instance.conf               ← per-site systemd override
+/var/www/vhosts/<domain>/ocms/                      one site
+├── .env                 configuration and secrets (0600)
+├── data/ocms.db         SQLite database
+├── uploads/             media
+├── custom/themes/       custom themes (core themes are in the binary)
+├── logs/ocms.log        application log; logs/error.log errors only
+└── backups/             backups (0700)
 ```
 
-Each site runs on its own port (8081, 8082, ...) behind Nginx reverse proxy.
+Each site listens on its own loopback port (8081, 8082, ...).
 
-## Quick Start
+## First-time server setup
 
-### 1. Install shared binary and tools
+From a checkout of oCMS, with root ssh access to the server:
 
 ```bash
-# Local machine:
-mkdir -p bin
-curl -L https://github.com/olegiv/ocms-go/releases/latest/download/ocms-linux-amd64.tar.gz | tar -xz ocms
-mv ocms bin/ocms-linux-amd64
-ssh user@server 'umask 077; mkdir "$HOME/ocms-setup"'
-scp bin/ocms-linux-amd64 user@server:ocms-setup/ocms
-scp scripts/deploy/* user@server:ocms-setup/
-
-# On the server:
-sudo mkdir -p /opt/ocms/bin /etc/ocms
-sudo install -m 755 "$HOME/ocms-setup/ocms" /opt/ocms/bin/ocms
-sudo cp "$HOME/ocms-setup/ocmsctl" /opt/ocms/bin/
-sudo chmod 755 /opt/ocms/bin/ocmsctl
-sudo cp "$HOME/ocms-setup/ocms@.service" /etc/systemd/system/
-for script in setup-site.sh deploy-multi.sh backup-multi.sh healthcheck-multi.sh generate-logrotate.sh helper.sh; do
-    sudo cp "$HOME/ocms-setup/$script" /opt/ocms/
-    sudo chmod 755 /opt/ocms/$script
-done
-sudo systemctl daemon-reload
+make server-setup HOST=root@server.example.com
 ```
 
-For development builds, replace the release download with `make build-linux-amd64`.
+This builds `ocmsctl`, installs it as `/opt/ocms/bin/ocmsctl` and runs
+`ocmsctl init` there: directories, the systemd unit template, the cron file
+(only when there is none) and the logrotate configuration. Run it again to
+update `ocmsctl` on the server after updating oCMS.
 
-**Note:** Core themes (`default`, `developer`) are embedded in the binary. No separate theme deployment is required unless you have custom themes.
+For an ARM server add `SERVER_ARCH=arm64` to this and the other `make` commands.
 
-### 2. Provision a site
+## Adding a site
+
+On the server, as root. The domain must exist as a Plesk vhost.
 
 ```bash
-sudo /opt/ocms/setup-site.sh example.com example_com
+ocmsctl site add example.com example_com
 ```
 
-The script creates all directories, generates a unique session secret, creates the systemd drop-in, and prints the Nginx snippet to paste into Plesk.
+Arguments are the domain and the vhost's system user. Options: `--port N`
+(default: first free port from 8081), `--group G` (default `psaserv`),
+`--dir PATH` (default `/var/www/vhosts/<domain>/ocms`; must stay under the
+vhost).
 
-Arguments:
-- `domain` — the domain name (must exist as a Plesk vhost)
-- `system-user` — the Plesk vhost system user
-- `port` (optional) — auto-assigned from 8081 if omitted
-- `group` (optional) — defaults to `psaserv`
+It creates the directories, a `.env` with four generated secrets, the systemd
+drop-in and the registry entry, regenerates logrotate, and prints the Nginx
+snippet. The site ID is the domain with `.` and `-` replaced by `_`.
 
-Options:
-- `--path PATH` — full path to instance root directory (default: `/var/www/vhosts/<domain>/ocms`). It must be absolute and stay under `/var/www/vhosts/<domain>/`, and its parent directory must already exist.
+Then:
 
-Use `--path` when the default path doesn't match your setup:
+1. **Finish `.env`.** In production oCMS refuses to start until these are set
+   (or the matching `OCMS_REQUIRE_*` is explicitly `false`):
 
-```bash
-sudo /opt/ocms/setup-site.sh app.example.com hosting --path /var/www/vhosts/app.example.com/apps/ocms
-```
-
-### 2.1 Review generated `.env` (embed hardening)
-
-After provisioning, review the generated env file and confirm embed variables
-for your real domains/hosts:
-
-```bash
-sudo nano /var/www/vhosts/example.com/ocms/.env
-```
-
-Recommended production baseline when embed module/provider is enabled:
-
-```bash
-# Embed proxy hardening (origin match is exact: scheme + host)
-OCMS_EMBED_ALLOWED_ORIGINS=https://example.com,https://www.example.com
-OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS=api.dify.ai
-OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS=true
-OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS=true
-OCMS_EMBED_PROXY_TOKEN=replace-with-embed-proxy-token
-```
-
-`setup-site.sh` already writes these variables, with a random `OCMS_EMBED_PROXY_TOKEN`
-and `OCMS_EMBED_ALLOWED_ORIGINS=https://<domain>`; adjust the origins and upstream host.
-
-It also writes a random `OCMS_MFA_KEY`. Production requires two-factor authentication
-for every account (`OCMS_REQUIRE_MFA`), and the key seals the authenticator-app secrets:
-back it up with the database, because enrolled users can sign in only with recovery
-codes without it.
-
-If you use self-hosted Dify, replace `api.dify.ai` with your API hostname.
-
-The generated file sets `OCMS_ENV=production`, and in production the application refuses to
-start unless `OCMS_TRUSTED_PROXIES` (the nginx on this host: `127.0.0.1`) and
-`OCMS_API_ALLOWED_CIDRS` are set, or the matching `OCMS_REQUIRE_TRUSTED_PROXIES` /
-`OCMS_REQUIRE_API_ALLOWED_CIDRS` is explicitly `false`. `setup-site.sh` does not write them,
-so add them before enabling the service:
-
-```bash
-OCMS_TRUSTED_PROXIES=127.0.0.1
-OCMS_API_ALLOWED_CIDRS=203.0.113.0/24
-```
-
-### 3. Configure SSL in Plesk
-
-1. Go to **Websites & Domains** → your domain
-2. Click **SSL/TLS Certificates**
-3. Click **Install** under "Let's Encrypt"
-4. Check your domain name(s)
-5. Click **Get it free**
-6. After installation, go back to **Hosting Settings**
-7. Enable **Permanent SEO-safe 301 redirect from HTTP to HTTPS**
-
-### 4. Configure Nginx in Plesk
-
-Go to **Websites & Domains → example.com → Apache & nginx Settings → Additional nginx directives** and paste the snippet printed by `setup-site.sh`.
-
-### 5. Bootstrap the admin account
-
-Fresh binary/server installs need a one-time seeded bootstrap before the
-production service is enabled. Keep the generated `.env` production default
-`OCMS_DO_SEED=false`; override it only for this foreground bootstrap run:
-
-```bash
-cd /var/www/vhosts/example.com/ocms
-sudo -u example_com env OCMS_ENV=development OCMS_DO_SEED=true /opt/ocms/bin/ocms
-```
-
-While the process runs, open `https://example.com/admin/` and sign in as
-`admin@example.com` with the unique `OCMS_SEED_ADMIN_PASSWORD` from the site's
-owner-only `.env`. Read it privately. Change the admin email and password,
-stop the foreground process with `Ctrl+C`, and remove the seed password from
-`.env`. Leave `OCMS_REQUIRE_SEED_ADMIN_PASSWORD=true` in place so an accidental
-seeding run cannot use a default password.
-
-### 6. Start the site
-
-**For testing** (manual start/stop via terminal):
-```bash
-sudo ocmsctl start example_com
-curl http://127.0.0.1:8081/health
-sudo ocmsctl logs example_com --follow
-sudo ocmsctl stop example_com
-```
-
-**For production** (systemd with auto-restart):
-```bash
-sudo systemctl enable --now ocms@example_com
-sudo journalctl -u ocms@example_com -f
-```
-
-The unit gives the app 60 seconds to stop (`TimeoutStopSec=60`), enough for it to drain
-in-flight requests and shut its modules down before systemd sends SIGKILL.
-
-**Running without systemd** (not recommended for production):
-```bash
-# nohup (persists after logout)
-cd /var/lib/ocms && nohup /opt/ocms/bin/ocms > /var/log/ocms.log 2>&1 &
-
-# screen (can reattach with: screen -r ocms)
-screen -dmS ocms /opt/ocms/bin/ocms
-
-# tmux (can reattach with: tmux attach -t ocms)
-tmux new-session -d -s ocms '/opt/ocms/bin/ocms'
-```
-
-## ocmsctl Reference
-
-```
-ocmsctl <command> <site-id> [options]
-
-Commands:
-  start   <site-id> [--foreground]  Start instance (nohup or foreground)
-  stop    <site-id>                 Stop instance (SIGTERM, SIGKILL after 60 s)
-  restart <site-id>                 Restart instance
-  status  <site-id>                 Show status and health
-  logs    <site-id> [--follow|-f]   View logs (journal or file)
-  logs    <site-id> --errors [--follow]  View the error-only log
-  list                              List all sites with status
-  health  <site-id>                 Check health endpoint
-```
-
-`ocmsctl` delegates to `systemctl` itself when a site is managed by systemd: `start` when the unit is enabled or active, `stop` and `restart` when it is active (`start --foreground` is refused for systemd-managed sites); `status` and `list` report an active unit as running under systemd. Without systemd it uses a PID file (`ocms.pid`), and `stop` waits up to 60 seconds for the process to exit before sending SIGKILL.
-
-## Deploying Updates
-
-### Binary Only (from local machine)
-
-Use `deploy-binary.sh` for sites that use only embedded themes (no custom content). Supports multiple instances sharing the same binary:
-
-```bash
-./scripts/deploy/deploy-binary.sh <server> <instance...> [options]
-
-# Download the latest release binary, then deploy it
-mkdir -p bin
-curl -L https://github.com/olegiv/ocms-go/releases/latest/download/ocms-linux-amd64.tar.gz | tar -xz ocms
-mv ocms bin/ocms-linux-amd64
-./scripts/deploy/deploy-binary.sh server.example.com my_site --skip-build
-
-# Single instance
-./scripts/deploy/deploy-binary.sh server.example.com my_site
-
-# Multiple instances sharing the same binary
-./scripts/deploy/deploy-binary.sh server.example.com site_a site_b site_c
-
-# Skip build, dry run
-./scripts/deploy/deploy-binary.sh server.example.com site_a site_b --skip-build --dry-run
-```
-
-Options:
-- `-u, --user USER` — SSH user (default: `root`)
-- `--skip-build` — skip `make build-linux-amd64`, use existing `bin/ocms-linux-amd64`
-- `--dry-run` — print commands without executing
-
-The script:
-1. Builds `bin/ocms-linux-amd64` unless `--skip-build` is set
-2. Backs up the running binary, `/opt/ocms/bin/ocms`, to `/opt/ocms/bin/ocms.backup`; a
-   backup that fails stops the deploy
-3. Transfers the binary via `scp` into a fresh directory under `/opt/ocms/bin`.
-   `REMOTE_BINARY` can override the upload filename within that directory
-4. Installs it as `/opt/ocms/bin/ocms`, the binary `ocmsctl` and `ocms@.service` run, by
-   renaming the staged upload over that path and removing the temporary directory. This
-   leaves running executables in place, even if the old path was a symlink to a versioned
-   binary. A failed upload or install stops no instance
-5. Restarts all listed instances via `ocmsctl` (stop, then start). An instance that does not
-   stop is left as it is and one that does not start is reported; the deploy goes on with
-   the others
-6. Waits for each started instance to report healthy with `ocmsctl health` (15 tries,
-   2 seconds apart; set `HEALTH_RETRIES` and `HEALTH_INTERVAL` to change), prints each
-   instance's status, asks each healthy one once more, and exits 1, naming the instances
-   that failed, when any did. A systemd unit "starts" before its binary has read its config,
-   so one that exits at startup is caught only here
-
-All instances share `/opt/ocms/bin/ocms`, so instances the command does not list keep
-running the old binary until they restart.
-
-### Starter layouts in a shared release bundle
-
-Before uploading a bundle that includes Starter layouts, run this check from
-the core checkout. Pass the `dist/js` directory used to build the candidate
-binary and the staged layout files. Chain the upload after this check with
-`&&` or run both in a script with `set -e` so a mismatch stops the rollout.
-
-```bash
-go run ./scripts/deploy/check-starter-alpine \
-  "$asset_dir" "$layout_a" "$layout_b"
-```
-
-The check recomputes the SHA-384 integrity values for Alpine and Alpine Collapse.
-It reports the layout and script on a mismatch and fails if a file, script tag,
-or integrity attribute is missing.
-
-### Single Instance — With Custom Content (from local machine)
-
-Use `deploy.sh` when you also need to sync custom themes:
-
-```bash
-./scripts/deploy/deploy.sh <server> <instance> [options]
-
-# Deploy binary and sync custom themes
-./scripts/deploy/deploy.sh server.example.com my_site \
-  -v /var/www/vhosts/example.com/ocms -o hosting
-
-# Deploy custom content only (skip binary)
-./scripts/deploy/deploy.sh server.example.com my_site \
-  --skip-binary -v /var/www/vhosts/example.com/ocms -o hosting
-
-# Skip build, dry run
-./scripts/deploy/deploy.sh server.example.com my_site --skip-build --dry-run
-```
-
-Options:
-- `-v, --vhost PATH` — vhost path for custom content sync (only needed if you have custom themes)
-- `-o, --owner USER` — vhost owner for chown (required if -v is provided)
-- `-g, --group GROUP` — vhost group for chown (default: `psaserv`)
-- `-u, --user USER` — SSH user (default: `root`)
-- `--sync-custom` — force sync custom/ directory even if empty
-- `--skip-build` — skip `make build-linux-amd64`, use existing `bin/ocms-linux-amd64`
-- `--skip-binary` — skip binary build, backup, transfer and install (deploy custom content only)
-- `--dry-run` — print commands without executing
-
-Symlinked directories inside `custom/` are followed during deployment. Before syncing, symlinks outside `custom/modules/` are validated: broken symlinks or links that resolve outside `custom/` abort the deploy before the instance is stopped. Symlinks under `custom/modules/` are exempt, since that directory is never synced.
-
-The script:
-1. Builds `bin/ocms-linux-amd64` unless `--skip-build` is set
-2. Backs up the running binary, `/opt/ocms/bin/ocms`, to `/opt/ocms/bin/ocms.backup`; a
-   backup that fails stops the deploy
-3. Transfers the binary via `scp` and installs it as `/opt/ocms/bin/ocms` while the instance
-   still runs, as `deploy-binary.sh` does (other instances keep the old binary until they restart)
-4. Stops the instance via `ocmsctl`
-5. (If custom themes exist) Syncs `custom/` to `{vhost}/custom/` via
-   `rsync -aLz --delete --exclude='/modules/'` — see [Custom Modules](#custom-modules)
-   (`-v` is the instance directory created by `setup-site.sh`, not the domain root)
-6. (If custom themes exist) Sets ownership to `{owner}:{group}`
-7. Starts the instance
-8. Waits for it to report healthy and asks it once more, as `deploy-binary.sh` does. A failed
-   stop, start or health check ends the deploy with exit 1 and says why
-
-### Multi-Instance (on server)
-
-For updating all instances on a server:
-
-```bash
-# Local machine:
-mkdir -p bin
-curl -L https://github.com/olegiv/ocms-go/releases/latest/download/ocms-linux-amd64.tar.gz | tar -xz ocms
-mv ocms bin/ocms-linux-amd64
-sha256sum bin/ocms-linux-amd64
-scp bin/ocms-linux-amd64 user@server:/tmp/ocms
-
-# On the server, use the digest calculated on the trusted local machine:
-read -r trusted_sha256
-sudo /opt/ocms/deploy-multi.sh /tmp/ocms "$trusted_sha256"
-```
-
-For development builds, replace the release download with `make build-linux-amd64`.
-Use a separate upload file and obtain its expected SHA-256 on a trusted
-machine, independently of the upload path. Provide a regular, non-symlink
-upload of at most 256 MiB. The script copies it
-into a private directory next to the installed binary and verifies the
-copy before making a backup or stopping any sites.
-
-This backs up the current binary to `/opt/ocms/bin/ocms.backup`, installs the new binary as `/opt/ocms/bin/ocms` while the sites still run (renaming it into place, so a failed install stops nothing), stops every site in `sites.conf` with `ocmsctl stop` (through systemd or its PID file, whichever runs it), starts every site in `sites.conf` with `systemctl`, and health-checks each one (`/health` on its port, up to 10 tries 2 seconds apart). A site that fails to stop or start is reported as failed and the others carry on; a site that did not stop is not started, because its old process may still be running. On failure it prints rollback instructions; the caller can remove the upload after deployment.
-
-
-
-## Custom Themes
-
-Core themes (`default`, `developer`) are embedded in the binary. To use a custom theme:
-
-1. Create your theme in `custom/themes/mytheme/`
-2. Deploy with the `-v` and `-o` options:
    ```bash
-   ./scripts/deploy/deploy.sh server.example.com my_site \
-     -v /var/www/vhosts/example.com/ocms -o hosting
+   OCMS_TRUSTED_PROXIES=127.0.0.1          # the nginx on this host
+   OCMS_API_ALLOWED_CIDRS=203.0.113.0/24   # who may use API keys
+   OCMS_HCAPTCHA_SITE_KEY=...              # or OCMS_REQUIRE_FORM_CAPTCHA=false
+   OCMS_HCAPTCHA_SECRET_KEY=...
    ```
-3. Set `OCMS_ACTIVE_THEME=mytheme` in the site's `.env` file
 
-To override an embedded theme, create a custom theme with the same name:
-```
-custom/themes/default/    # Overrides the embedded 'default' theme
-```
+   Check `OCMS_EMBED_ALLOWED_ORIGINS` (every public hostname) and
+   `OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS`. Back up `OCMS_MFA_KEY` with the database:
+   without it, enrolled users can sign in only with recovery codes.
 
-Custom themes with the same name as core themes take priority.
+2. **Nginx.** Paste the printed snippet into Plesk → Websites & Domains →
+   the domain → Apache & nginx Settings → Additional nginx directives, and leave
+   "Proxy mode" unchecked. Install a Let's Encrypt certificate and enable the
+   HTTP → HTTPS redirect in Plesk.
 
-For local development, `custom/` may contain symlinked theme directories. `deploy.sh` follows those symlinks and copies the resolved files to the server, but it aborts if any symlink target is missing or resolves outside `custom/`. Symlinks under `custom/modules/` are exempt from both checks, since that directory is never synced.
+3. **First admin account.** Keep `OCMS_DO_SEED=false` in `.env`; seed once in the
+   foreground:
 
-## Custom Modules
+   ```bash
+   cd /var/www/vhosts/example.com/ocms
+   sudo -u example_com env OCMS_ENV=development OCMS_DO_SEED=true /opt/ocms/bin/ocms
+   ```
 
-Custom modules are **not** deployed as files. They are Go packages compiled into
-the binary, so they travel only with a binary deploy.
+   Sign in at `https://example.com/admin/` as `admin@example.com` with
+   `OCMS_SEED_ADMIN_PASSWORD` from `.env`, change the email and password, stop
+   the process with Ctrl+C and delete `OCMS_SEED_ADMIN_PASSWORD` from `.env`.
 
-`deploy.sh` therefore excludes `custom/modules/` from the content sync. Nothing
-on the server would read them — `OCMS_CUSTOM_DIR` feeds only the theme manager —
-and sources sitting on a vhost that no longer necessarily match the running
-binary are worse than absent: they invite edits that can never take effect.
+4. **Start it for good.**
 
-The exclude is anchored (`--exclude='/modules/'`), so it applies only to the
-top-level `custom/modules/`. A theme with its own `static/js/modules/` is
-unaffected — an unanchored pattern would match that too and drop it silently.
+   ```bash
+   systemctl enable --now ocms@example_com
+   ocmsctl status
+   ```
 
-Consequences worth knowing:
+   `enable` is what brings the site back after a reboot.
 
-- **A module change needs a binary deploy.** `deploy.sh` builds and ships the
-  binary too unless you pass `--skip-binary`, so either script will do — but a
-  `--skip-binary` run will not update the module. If the module also ships theme assets (CSS/JS in
-  `custom/themes/<theme>/static/`), you need both.
-- **The build must run from the site repository.** `deploy-binary.sh` invokes
-  `make build-linux-amd64` in the current directory, and it is the *site*
-  Makefile — via `include core/site.mk` — that mirrors `custom/modules/` into the
-  core tree first. Running the build from the core checkout instead produces a
-  binary silently missing the site's modules.
-- **A site that overrides `BINARY_NAME` must export it here too.**
-  The deploy scripts default to `bin/ocms-linux-amd64`; with a different
-  `BINARY_NAME` in the site Makefile, export the same value (or set
-  `LOCAL_BINARY`, which is the path actually checked) or the upload aborts with
-  "Binary not found".
-  This renames only the file that is built and uploaded — `ocmsctl` and
-  `ocms@.service` both hardcode `/opt/ocms/bin/ocms`, and that unit is one
-  template shared by every instance, so a per-site binary name does not give a
-  site its own binary.
-- **`--skip-build` reuses whatever binary is already in `bin/`.** After changing
-  a module, do not skip the build.
-- **Sources left by earlier deploys are not removed automatically.** `--delete`
-  does not touch excluded paths. To clear them once:
-  `rm -rf <instance_dir>/custom/modules` on the server. (`deploy.sh` has no
-  `--delete-excluded` flag; to do it with rsync, re-run the sync by hand adding
-  `--delete-excluded`.)
+`ocmsctl site remove <site>` disables the unit and removes the drop-in and the
+registry entry. The site's directory is left alone. To disable a site without
+removing it, comment out its line in `/etc/ocms/sites.conf` and stop it.
 
-See [docs/custom-modules.md](../../docs/custom-modules.md) for writing modules.
+## Deploying
 
-## Copying Local Data
-
-To deploy a pre-populated database and uploads to a site:
+From the oCMS checkout:
 
 ```bash
-# Flush WAL on local machine first:
-sqlite3 data/ocms.db "PRAGMA wal_checkpoint(TRUNCATE);"
-
-# Local machine:
-scp data/ocms.db user@server:/tmp/ocms.db
-scp -r uploads user@server:/tmp/ocms-uploads
-
-# On the server:
-sudo ocmsctl stop example_com
-sudo cp /tmp/ocms.db /var/www/vhosts/example.com/ocms/data/ocms.db
-sudo cp -r /tmp/ocms-uploads/* /var/www/vhosts/example.com/ocms/uploads/
-sudo chown -R example_com:psaserv /var/www/vhosts/example.com/ocms/data /var/www/vhosts/example.com/ocms/uploads
-sudo ocmsctl start example_com
+make deploy HOST=root@server.example.com SITES="example_com blog_example_com"
 ```
 
-The service must be stopped before replacing the database. If using systemd, use `systemctl stop/start` instead of `ocmsctl`.
+From a site repository (`include core/site.mk`), set the target once in the
+site Makefile, before the include:
 
-## Syncing Production to Development
-
-Use `sync-prod-to-dev.sh` to pull production data (database, uploads, logs) to your local development environment:
+```make
+DEPLOY_HOST  ?= root@server.example.com
+DEPLOY_SITES ?= example_com
+include core/site.mk
+```
 
 ```bash
-./scripts/deploy/sync-prod-to-dev.sh <server> <instance> -v <vhost> [options]
-
-# Examples:
-./scripts/deploy/sync-prod-to-dev.sh server.example.com my_site \
-  -v /var/www/vhosts/example.com/ocms
-
-./scripts/deploy/sync-prod-to-dev.sh server.example.com my_site \
-  -v /var/www/vhosts/example.com/ocms --no-logs
-
-./scripts/deploy/sync-prod-to-dev.sh server.example.com my_site \
-  -v /var/www/vhosts/example.com/ocms --sync-custom
-
-./scripts/deploy/sync-prod-to-dev.sh server.example.com my_site \
-  -v /var/www/vhosts/example.com/ocms --dry-run
+make deploy                        # binary
+make deploy DEPLOY_OPTS=--themes   # binary and custom/themes
 ```
 
-Required:
-- `-v, --vhost PATH` — instance directory on server (e.g., `/var/www/vhosts/example.com/ocms`)
+Or call the tool directly (`make build-ctl` builds `bin/ocmsctl`):
 
-Options:
-- `-u, --user USER` — SSH user (default: `root`)
-- `-p, --port PORT` — Local server port to stop (default: `OCMS_SERVER_PORT` from the local `.env`, else `8080`)
-- `--no-db` — Skip database sync
-- `--no-uploads` — Skip uploads sync
-- `--no-logs` — Skip logs sync
-- `--sync-custom` — Also sync custom/ directory (themes only; `custom/modules/` is never synced)
-- `--dry-run` — Print commands without executing
+```bash
+ocmsctl deploy root@server example_com blog_example_com
+ocmsctl deploy root@server --all                       # every registered site
+ocmsctl deploy root@server example_com --themes        # also replace its themes
+ocmsctl deploy root@server example_com --themes-only   # themes and restart, no binary
+ocmsctl deploy root@server example_com --no-build --binary ocms   # a release download
+ocmsctl deploy root@server example_com --dry-run       # print the commands only
+```
 
-Install `rsync` locally and `sqlite3` on both ends when copying a database.
-After confirmation, the script stops the local development server. For a
-database or uploads sync, it stops production and captures the requested
-directories into private local staging during the same stop. The remote
-uploads copy uses existing local uploads as a private transfer basis. The
-script prepares it before stopping production and checks file contents
-during capture.
+To deploy a published release instead of a local build, download and verify it
+(`gh attestation verify <archive> --repo olegiv/ocms-go`), then use
+`--no-build --binary <file>`.
 
-The remote checkpoint checks the default `data/ocms.db` when it exists. The copy
-includes the data directory's journal files and any SQLite database with a
-different filename. Production restarts and must pass its health check before
-the script scrubs and publishes the local copy. Logs and optional custom files
-are copied while production is running. Logs retain files that exist only
-locally. `--dry-run` shows the order without running it.
+### Themes
 
-If capture fails or is interrupted while production is stopped, the script
-attempts to restart it and preserves the original failure status. Local data
-and uploads are published only after capture, health check and database scrub
-succeed. Publishing uses separate `rsync --delete` operations for data and
-uploads, so an interrupted publish can leave the local copy incomplete.
+`--themes` replaces the site's `custom/themes` with your local `custom/themes`.
+Symlinked theme directories are followed and arrive as real files. The upload is
+unpacked beside the old themes and swapped in, so a broken upload leaves the old
+set in place; themes you deleted locally disappear from the server. It refuses
+to run when `custom/themes` holds no theme (a directory with `theme.json`).
 
-The scrub removes sessions, OAuth tokens and codes, and preview links. It
-clears webhook signing secrets, custom headers and destinations, clears
-scheduled HTTP task destinations, and disables both kinds of integration.
-It also clears the hCaptcha secret and disables stored hCaptcha verification.
-Embed providers are disabled and their stored configuration is reset.
-Configure development destinations and credentials before re-enabling them.
+Custom **modules** are Go code compiled into the binary; they travel with the
+binary, never as files. All sites share one binary, so it must contain every
+site's modules: see [docs/custom-modules.md](../../docs/custom-modules.md).
 
-**Treat the result as production data.** It retains password and API-key
-verifiers, sealed MFA secrets and recovery-code hashes, as well as content,
-form submissions, and integration history. Logs and historical records can
-contain previously recorded URLs or credentials. The scrub covers the listed
-fields in regular SQLite files under `data/`. Archives, uploads, logs, custom
-module data and arbitrary file contents can still contain sensitive data.
+### Rolling back
+
+On the server:
+
+```bash
+ocmsctl releases                           # * marks the current one
+ocmsctl rollback --all                     # the release before the current one
+ocmsctl rollback example_com --to 20261113T101500Z-3728df6f
+```
+
+Rollback switches the symlink and restarts the named sites behind the same
+health check. An older binary is not guaranteed to run on a database a newer one
+migrated; restore the database from a backup if it does not.
+
+## Operating sites
+
+On the server, as root:
+
+| Command | Does |
+|---|---|
+| `ocmsctl status [site...]` | unit state and health of the sites (all by default) |
+| `ocmsctl start\|stop <site>...\|--all` | `systemctl start\|stop ocms@<site>` |
+| `ocmsctl restart <site>...\|--all` | stop, start, require healthy (as a deploy does) |
+| `ocmsctl health <site>` | exit 0 when `/health` answers 200 |
+| `ocmsctl logs <site> [-f] [--errors]` | the site's log file, or the journal when it has none |
+
+Sites run only under systemd. To debug one in the foreground, stop its unit and
+run `/opt/ocms/bin/ocms` as the site user from the site directory.
 
 ## Backups
 
 ```bash
-# Backup all sites
-sudo /opt/ocms/backup-multi.sh
-
-# Backup one site
-sudo /opt/ocms/backup-multi.sh example_com
+ocmsctl backup                # all sites
+ocmsctl backup example_com
 ```
 
-Backups include:
-- Database (`ocms_TIMESTAMP.db.gz`)
-- Uploads (`uploads_TIMESTAMP.tar.gz`)
-- Custom content (`custom_TIMESTAMP.tar.gz`) — only if `custom/` contains files (themes or modules)
+Per site, into its `backups/` (mode 0700, files 0600): a consistent snapshot of
+the database taken while the site runs (`ocms_<time>.db.gz`, integrity-checked),
+`uploads_<time>.tar.gz` and `custom_<time>.tar.gz`. Backups older than 30 days
+are removed. Everything is done as the site's own user, never as root, so a
+directory a site user swapped for a symlink cannot redirect a root write.
 
-Backups are stored for 30 days in each site's owner-only `backups/` directory
-(mode `0700`). New archives are owner-only (mode `0600`).
-Database, compression, archive and retention commands run as the registered
-site account, including when root starts the cron job. Existing backup outputs
-must be writable by that account; the job fails rather than repairing ownership
-through a site-controlled path. PID-mode stops likewise signal as the site
-account. Active systemd instances continue to use unit-bound service control.
+The cron file runs this nightly at 03:00 and logs to `/var/log/ocms-backup.log`.
 
-## Health Checks
+Restore a database:
 
 ```bash
-# Check all sites (manual)
-sudo /opt/ocms/healthcheck-multi.sh
-
-# Check one site
-sudo /opt/ocms/healthcheck-multi.sh example_com
+ocmsctl stop example_com
+cd /var/www/vhosts/example.com/ocms
+gunzip -k backups/ocms_<time>.db.gz
+mv data/ocms.db data/ocms.db.old && rm -f data/ocms.db-wal data/ocms.db-shm
+mv backups/ocms_<time>.db data/ocms.db && chown example_com:psaserv data/ocms.db
+ocmsctl start example_com
 ```
 
-The script exits with the number of sites that are down, and alerts once per outage: when a site goes down, when its restarts run out, and when it is healthy again. Optional Slack and email alerting — edit the script to configure.
+## Monitoring
 
-| systemd state | Meaning | What the check does |
-|---------------|---------|---------------------|
-| `active`, failing `/health/ready` | Running but unhealthy | Reports it and restarts it, at most 3 times per outage; the count resets once the site is healthy |
-| `activating` | Crash-looping: `ocms@.service` restarts a binary that exits, and systemd reports `activating` between attempts | Reports it; no restart, since systemd keeps restarting it and the cause needs fixing (see `ocmsctl logs <site>`) |
-| `failed` | A stop that did not end cleanly (the binary exits 1 when requests outlast its shutdown timeout) or a start systemd gave up on | Reports it; no restart, since it may have been stopped on purpose. `systemctl reset-failed ocms@<site>` clears it |
-| `inactive` | Stopped cleanly, never started, or not managed by systemd | Skips it |
+`ocmsctl check` runs from cron every 5 minutes:
 
-Run it as root: it keeps the restart count and the "already reported" marker of each site in `/run/ocms-health/` (mode `0700`, cleared on reboot) and refuses to run when that is not a directory it owns, because state any local user can write, as the older `/tmp/ocms-health-*` files were, can silence a site's alerts. Those old files can be deleted.
+| Unit state | Meaning | What the check does |
+|---|---|---|
+| `active`, `/health/ready` fails | running but unhealthy | reports it, restarts it at most 3 times per outage |
+| `activating` | exits at startup; systemd keeps restarting it | reports it; a restart adds nothing |
+| `failed` | systemd gave up, or a stop did not end cleanly | reports it; not restarted, it may have been stopped on purpose |
+| `inactive` | stopped or never started | skipped |
 
-**Limitation:** a site that never started (e.g., after a reboot with `disabled` units) is `inactive` and skipped. For reboot recovery, `systemctl enable` is the only safety net; see the Troubleshooting section.
+It prints only when something changes: a site goes down, a restart is tried,
+the restarts run out, the site recovers. Set `MAILTO=you@example.com` in
+`/etc/cron.d/ocms` to get those by mail; a long outage does not mail every five
+minutes. It exits 1 while any site is down.
 
-## Cron Jobs
+For other channels create an executable `/etc/ocms/alert`; it is called with
+the site ID, the status (`DOWN`, `NEEDS ATTENTION`, `recovered`) and a message:
 
 ```bash
-# /etc/cron.d/ocms-multi
-SHELL=/bin/bash
-0 3 * * * root /opt/ocms/backup-multi.sh >> /var/log/ocms-backup.log 2>&1
-*/5 * * * * root /opt/ocms/healthcheck-multi.sh 2>&1 | grep -v "^$"
+#!/bin/sh
+# /etc/ocms/alert <site> <status> <message>
+curl -fsS "https://api.telegram.org/bot<your-token>/sendMessage" \
+  --data-urlencode "chat_id=<chat-id>" --data-urlencode "text=$2 $3" >/dev/null
 ```
 
-## Log Rotation
+State is kept in `/run/ocms` (root only, cleared on reboot). A site whose unit
+is not enabled does not come back after a reboot, and the check skips it:
+`systemctl enable ocms@<site>` is the safety net.
 
-Generate logrotate configuration from `sites.conf` (re-run after adding/removing sites):
+## Copying production to development
 
 ```bash
-sudo /opt/ocms/generate-logrotate.sh
-
-# Test configuration (dry-run)
-sudo logrotate -d /etc/logrotate.d/ocms
-
-# Force rotation (for testing)
-sudo logrotate -f /etc/logrotate.d/ocms
+make pull HOST=root@server.example.com SITE=example_com
+# or: ocmsctl pull root@server example_com [--no-db] [--no-uploads] [--no-logs] [--themes] [--yes]
 ```
 
-The generated configuration:
-- Per-instance entries with correct paths and ownership (`logs/*.log` glob covers both `ocms.log` and `error.log`)
-- Rotates logs daily, keeps 30 days, compresses with gzip
-- Uses `copytruncate` to avoid restarting the service
+Production keeps running. The database arrives as an online snapshot and is
+scrubbed before it replaces `data/ocms.db`; `uploads/` is mirrored (local files
+the server lacks are deleted), `logs/` is copied, and `--themes` copies
+`custom/themes` without deleting local themes. Uploads are copied live, so a file
+uploaded during the pull may be missing from the database copy or the reverse.
 
-Under systemd, file logging is wired via `StandardOutput=append:.../logs/ocms.log`
-in the per-site drop-in (written by `setup-site.sh`). `copytruncate` is required
-because systemd keeps the file descriptor open across rotation. Sites provisioned
-before this directive was added will have an empty `ocms.log` and need a one-time
-manual repair: append the two `StandardOutput`/`StandardError` lines to
-`/etc/systemd/system/ocms@<site_id>.service.d/instance.conf`, then
-`systemctl daemon-reload && systemctl restart ocms@<site_id>`.
+Stop the local server first: the command refuses to replace the database while
+something listens on port 8080 (`--port N` names another port, `--port 0` skips
+the check).
 
-### Separate Error Log
-
-`OCMS_ERROR_LOG_PATH=./logs/error.log` is set in the `.env` that `setup-site.sh` generates, so
-ERROR-level messages are written to a dedicated file. Errors are **also** written to stdout (the main log),
-so this is purely additive — it gives operators a focused file for quick triage.
-
-```bash
-# View error-only log
-ocmsctl logs example_com --errors
-
-# Follow error log in real time
-ocmsctl logs example_com --errors --follow
-```
-
-## File Permissions
-
-| Path | Owner | Mode |
-|------|-------|------|
-| `/opt/ocms/bin/ocms` | `root:root` | `755` |
-| `/opt/ocms/bin/ocmsctl` | `root:root` | `755` |
-| `{vhost}/ocms/` | `{user}:psaserv` | `750` |
-| `{vhost}/ocms/.env` | `{user}:psaserv` | `600` |
-| `{vhost}/ocms/data/` | `{user}:psaserv` | `755` |
-| `{vhost}/ocms/uploads/` | `{user}:psaserv` | `755` |
-| `{vhost}/ocms/custom/` | `{user}:psaserv` | `755` |
-
-## Site Registry
-
-All sites are tracked in `/etc/ocms/sites.conf`:
-
-```
-# oCMS Multi-Instance Site Registry
-# Format: SITE_ID INSTANCE_DIR SYSTEM_USER PORT
-# Managed by setup-site.sh — do not edit while services are running
-
-# Standard setup (default path)
-example_com /var/www/vhosts/example.com/ocms example_com 8081
-
-# Custom path (--path override)
-app_example_com /var/www/vhosts/app.example.com/apps/ocms hosting 8082
-
-# Another server vhost
-blog_example_com /var/www/vhosts/blog.example.com/ocms bloguser 8083
-
-# Disabled site (commented out, skipped by all scripts)
-#old_site_com /var/www/vhosts/old-site.com/ocms olduser 8084
-```
-
-## Disabling a Site
-
-To temporarily disable a site without removing its data, comment out its line in `sites.conf`:
-
-```bash
-sudo sed -i 's/^example_com/#example_com/' /etc/ocms/sites.conf
-sudo ocmsctl stop example_com
-```
-
-All multi-instance scripts (`backup-multi.sh`, `healthcheck-multi.sh`, `deploy-multi.sh`) skip commented lines. To re-enable, uncomment the line and start the instance.
-
-## Removing a Site
-
-```bash
-# Stop the service
-sudo systemctl disable --now ocms@example_com
-
-# Remove systemd drop-in
-sudo rm -rf /etc/systemd/system/ocms@example_com.service.d
-sudo systemctl daemon-reload
-
-# Remove site data (WARNING: deletes database and uploads)
-sudo rm -rf /var/www/vhosts/example.com/ocms
-
-# Remove from sites.conf (manually edit the file)
-sudo nano /etc/ocms/sites.conf
-```
+The scrub ([sync-db-policy.sql](sync-db-policy.sql)) deletes sessions, OAuth
+tokens and codes and preview links; clears webhook URLs, secrets and headers and
+scheduled-task URLs and disables both; clears the hCaptcha secret; resets embed
+providers. **The result is still production data**: it keeps password and API
+key hashes, sealed MFA secrets, recovery-code hashes, content, form submissions
+and logs.
 
 ## Troubleshooting
 
-### Service Won't Start
+**A deploy reports a site `FAILED`.** The last lines of its log are in the
+output; `ocmsctl logs <site>` shows more. Usual causes: a setting the new
+version requires is missing from `.env`, the port is taken, or `data/` is not
+writable by the site user. Fix it and `ocmsctl restart <site>`, or
+`ocmsctl rollback`.
 
-```bash
-sudo systemctl status ocms@example_com
-sudo journalctl -u ocms@example_com -n 50
+**`OCMS_SESSION_SECRET is not set` in a restart loop, but `.env` has it.** The
+drop-in `/etc/systemd/system/ocms@<site>.service.d/instance.conf` is gone, so
+the unit has no `EnvironmentFile`, `User` or `WorkingDirectory`. Copy one from
+another site, adjust user and paths, then `systemctl daemon-reload` and
+`ocmsctl restart <site>`.
 
-# Common issues:
-# - Missing OCMS_SESSION_SECRET in .env
-# - Permission denied on data/ or uploads/
-# - Port already in use
-# - Missing systemd drop-in (see next section)
-```
+**502 Bad Gateway.** `ocmsctl status` shows whether the site answers on its
+port; if it does, check `nginx -t` and the Plesk snippet.
 
-### Systemd Drop-In Missing
+**Nginx: duplicate location "/".** Plesk generates its own `location /`. Use
+the printed snippet (`location ~ ^/(.*)$`) and leave "Proxy mode" unchecked.
 
-Symptom: the journal shows `OCMS_SESSION_SECRET is not set` on a tight restart loop, but the `.env` file exists and contains the secret. Cause: the per-instance drop-in at `/etc/systemd/system/ocms@<site_id>.service.d/instance.conf` is gone (snapshot restore, manual cleanup, etc.), so systemd runs only the template — no `EnvironmentFile=`, no `WorkingDirectory=`, no `User=`.
+**URLs with spaces or other encoded characters return 400.** The `proxy_pass`
+line has a URI after the port (`.../$1$is_args$args`). Remove it:
+`proxy_pass http://127.0.0.1:8081;`.
 
-Diagnose:
+**Sites are down after a reboot.** Their units were never enabled:
+`systemctl enable --now ocms@<site>` for each.
 
-```bash
-sudo systemctl cat ocms@example_com                              # no [Service] User=/EnvironmentFile= lines?
-sudo ls /etc/systemd/system/ocms@example_com.service.d/ 2>&1     # "No such file or directory"?
-```
+**Database corruption.** `sqlite3 data/ocms.db "PRAGMA integrity_check;"`, then
+restore a backup as shown under [Backups](#backups).
 
-Fix — recreate the drop-in (values come from `/etc/ocms/sites.conf`; copy the format from a working site's `instance.conf`):
+## Security checklist
 
-```bash
-sudo systemctl stop ocms@example_com
+- [ ] Default admin password changed, `OCMS_SEED_ADMIN_PASSWORD` removed from `.env`
+- [ ] `.env` is mode 600 and `OCMS_MFA_KEY` is backed up with the database
+- [ ] `OCMS_TRUSTED_PROXIES` and `OCMS_API_ALLOWED_CIDRS` set
+- [ ] `OCMS_EMBED_ALLOWED_ORIGINS` lists every public hostname
+- [ ] TLS certificate installed, HTTP redirects to HTTPS
+- [ ] Firewall leaves only 80 and 443 open; site ports listen on 127.0.0.1
+- [ ] Units enabled (`systemctl is-enabled 'ocms@*'`)
+- [ ] `/etc/cron.d/ocms` present, with `MAILTO` or an alert hook
 
-sudo mkdir -p /etc/systemd/system/ocms@example_com.service.d
-sudo tee /etc/systemd/system/ocms@example_com.service.d/instance.conf > /dev/null <<'EOF'
-[Service]
-User=<system_user>
-Group=psaserv
-WorkingDirectory=/var/www/vhosts/example.com/ocms
-EnvironmentFile=/var/www/vhosts/example.com/ocms/.env
-ReadWritePaths=/var/www/vhosts/example.com/ocms
-SyslogIdentifier=ocms-example_com
-StandardOutput=append:/var/www/vhosts/example.com/ocms/logs/ocms.log
-StandardError=append:/var/www/vhosts/example.com/ocms/logs/ocms.log
-EOF
+## Moving from the shell scripts
 
-sudo systemctl daemon-reload
-sudo systemctl start ocms@example_com
-```
+A server set up by the shell scripts needs no migration: the registry format,
+the unit template and the site directories are the same.
 
-### 502 Bad Gateway
+1. `make server-setup HOST=root@server` replaces `/opt/ocms/bin/ocmsctl` with the
+   Go tool and installs `/etc/cron.d/ocms`. Remove the old cron file
+   (`/etc/cron.d/ocms-multi`) so backups and checks do not run twice, and the
+   scripts in `/opt/ocms/*.sh` when you no longer want them.
+2. The first `ocmsctl deploy` moves the plain file `/opt/ocms/bin/ocms` into
+   `/opt/ocms/releases/<time>-legacy/` and makes `bin/ocms` a symlink, so
+   `ocmsctl rollback` can return to it. `ocms.backup` is no longer written.
+3. Sites started with the old `ocmsctl start` outside systemd (PID file) are not
+   managed any more: stop them with the old tool first, then
+   `systemctl enable --now ocms@<site>`.
 
-```bash
-# Check if oCMS is running
-curl http://127.0.0.1:8081/health
+What changed in behaviour:
 
-# Check nginx config
-sudo nginx -t
+| Before | Now |
+|---|---|
+| `deploy.sh -v <dir> -o <owner> -g <group>` | `deploy --themes`; the server knows directory and owner |
+| `deploy-multi.sh <file> <sha256>` on the server | `deploy --all` from your machine; digest computed and checked for you |
+| one `ocms.backup` | last 3 releases, `ocmsctl rollback` |
+| failure output: "check the logs" | failure output includes the site's last log lines |
+| `sync-prod-to-dev.sh` stops production to copy the database | online snapshot; production keeps running |
+| `sync-prod-to-dev.sh` kills the local server | refuses to run while it is up |
+| `ocmsctl start` without systemd (PID file), `--foreground` | systemd only |
+| alerts by editing `healthcheck-multi.sh` | cron `MAILTO` or the `/etc/ocms/alert` hook |
+| `generate-logrotate.sh` after every site change | regenerated by `site add` and `site remove` |
+| `HEALTH_RETRIES`, `HEALTH_INTERVAL` | `--health-timeout` |
 
-# Check nginx logs
-tail -f /var/log/nginx/error.log
-```
+## For other projects
 
-### Duplicate Location "/" Error
-
-Plesk generates its own `location /` block. Use a regex pattern instead:
-
-```nginx
-# WRONG - causes duplicate location error
-location / {
-    proxy_pass http://127.0.0.1:8081;
-}
-
-# CORRECT - regex pattern avoids conflict, and no URI after the port
-location ~ ^/(.*)$ {
-    proxy_pass http://127.0.0.1:8081;
-}
-```
-
-Also ensure **Proxy mode** is unchecked in Apache & nginx Settings.
-
-### Images or URLs With Spaces Return 400
-
-Symptom: `/uploads/large/<id>/My%20Photo.jpg` returns **400 Bad Request** through
-nginx, while the same path returns 200 straight from the app on `127.0.0.1:<port>`.
-
-Cause: a `proxy_pass` with a URI component, such as
-`proxy_pass http://127.0.0.1:8081/$1$is_args$args;`. The `$1` capture is the
-**decoded** path, so nginx rebuilds the upstream request with a literal space in
-the request line. That is a malformed HTTP request and the upstream rejects it.
-
-Fix: drop the URI so nginx forwards the original request URI unchanged:
-
-```nginx
-location ~ ^/(.*)$ {
-    proxy_pass http://127.0.0.1:8081;
-}
-```
-
-This only shows up once content has filenames containing spaces or other
-percent-encoded characters, so a site can run for a long time before hitting it.
-Check with:
-
-```bash
-curl -s -o /dev/null -w '%{http_code}\n' "https://example.com/uploads/large/x/a%20b.jpg"
-# 404 = encoding is handled correctly; 400 = proxy_pass still has a URI
-```
-
-### Permission Errors
-
-```bash
-sudo chown -R {user}:psaserv {vhost}/ocms/data {vhost}/ocms/uploads
-sudo chmod 600 {vhost}/ocms/.env
-```
-
-### Sites Don't Come Back After Reboot
-
-Symptom: after a server restart, every domain returns 502 from nginx and `ocmsctl list` shows every site `stopped`.
-
-Cause: the systemd units were never `systemctl enable`-d, so they don't auto-start at boot. `setup-site.sh` prints the enable command as a final step, but it's easy to skip — or to get undone by a manual `systemctl disable`.
-
-Diagnose:
-
-```bash
-sudo /opt/ocms/bin/ocmsctl list          # all "stopped"?
-sudo systemctl is-enabled 'ocms@*'       # any "disabled"?
-```
-
-Fix — enable every site registered in `sites.conf`:
-
-```bash
-sudo awk '!/^#/ && NF>0 {print $1}' /etc/ocms/sites.conf \
-  | xargs -I{} sudo systemctl enable --now ocms@{}
-```
-
-After this, all sites auto-start on every future reboot.
-
-**Note:** `healthcheck-multi.sh` does **not** revive this class of failure. It restarts only sites that are `active` but unhealthy; it reports crash-looping (`activating`) and `failed` units without restarting them and skips `inactive` ones. `systemctl enable` is the only safety net that survives a reboot.
-
-### Database Corruption
-
-```bash
-# Check integrity
-sqlite3 {vhost}/ocms/data/ocms.db "PRAGMA integrity_check;"
-
-# Restore from backup
-sudo ocmsctl stop example_com
-gunzip {vhost}/ocms/backups/ocms_TIMESTAMP.db.gz -k
-mv {vhost}/ocms/data/ocms.db {vhost}/ocms/data/ocms.db.corrupted
-mv {vhost}/ocms/backups/ocms_TIMESTAMP.db {vhost}/ocms/data/ocms.db
-chown {user}:psaserv {vhost}/ocms/data/ocms.db
-sudo ocmsctl start example_com
-```
-
-## Security Checklist
-
-- [ ] Changed default admin password
-- [ ] Set strong `OCMS_SESSION_SECRET` (32+ bytes)
-- [ ] Set `OCMS_MFA_KEY` (32+ bytes, distinct from the session secret) and back it up
-- [ ] Set `OCMS_ENV=production`
-- [ ] Configure `OCMS_EMBED_PROXY_TOKEN` when embed proxy is enabled
-- [ ] Configure `OCMS_EMBED_ALLOWED_ORIGINS` for all public hostnames
-- [ ] Set `OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS` for your API host
-- [ ] SSL/TLS enabled with valid certificate
-- [ ] HTTP redirects to HTTPS
-- [ ] `.env` permissions set to 600
-- [ ] Firewall configured (only 80/443 open)
-- [ ] Backups scheduled (see Cron Jobs section)
-- [ ] Health monitoring enabled (see Health Checks section)
-
-## Migration from Separate Theme Directory
-
-If you're upgrading from a version that used a separate `themes/` directory:
-
-1. **Update the binary** — new versions have core themes embedded
-2. **Move custom themes** — if you have custom themes:
-   ```bash
-   # On the server, for each site:
-   mkdir -p /var/www/vhosts/example.com/ocms/custom/themes
-   # Move only custom themes (not default or developer)
-   mv /var/www/vhosts/example.com/ocms/themes/mytheme \
-      /var/www/vhosts/example.com/ocms/custom/themes/
-   # Remove old themes directory
-   rm -rf /var/www/vhosts/example.com/ocms/themes
-   ```
-3. **Update .env** — change `OCMS_THEMES_DIR` to `OCMS_CUSTOM_DIR`:
-   ```bash
-   # In .env file, replace:
-   # OCMS_THEMES_DIR=./themes
-   # With:
-   OCMS_CUSTOM_DIR=./custom
-   ```
-4. **Remove /opt/ocms/themes/** — no longer needed:
-   ```bash
-   sudo rm -rf /opt/ocms/themes
-   ```
-
-## Migration from vhost_path to instance_dir in sites.conf
-
-> **⚠️ Breaking change** — `sites.conf` format changed in this release. Existing deployments must run the migration below before updating the deploy scripts.
-
-The `sites.conf` format changed: column 2 is now the full instance directory
-instead of the vhost path (the scripts no longer append `/ocms` automatically).
-
-Old format:
-```
-example_com /var/www/vhosts/example.com example_com 8081
-```
-
-New format:
-```
-example_com /var/www/vhosts/example.com/ocms example_com 8081
-```
-
-### Upgrade sequence
-
-**All steps run on the server.** First put the new binary and scripts in the
-private upload directory described in [Quick Start](#quick-start). Complete the
-registry migration and script update together so their formats match.
-
-```bash
-# 1. Stop all instances
-sudo /opt/ocms/bin/ocmsctl list
-sudo /opt/ocms/bin/ocmsctl stop <site> # for each site
-# Or if using systemd: sudo systemctl stop ocms@<site_id>
-
-# 2. Backup sites.conf
-sudo cp /etc/ocms/sites.conf /etc/ocms/sites.conf.backup
-
-# 3. Migrate sites.conf (append /ocms to column 2)
-new_registry=$(mktemp)
-sudo awk '{
-    if (/^#/ || /^$/ || NF < 4) { print; next }
-    if ($2 !~ /\/ocms$/) $2 = $2 "/ocms"
-    print
-}' /etc/ocms/sites.conf > "$new_registry"
-sudo install -m 644 "$new_registry" /etc/ocms/sites.conf
-rm -- "$new_registry"
-
-# 4. Update deploy scripts
-sudo cp "$HOME/ocms-setup/ocmsctl" /opt/ocms/bin/ocmsctl
-sudo chmod 755 /opt/ocms/bin/ocmsctl
-for script in setup-site.sh backup-multi.sh deploy-multi.sh healthcheck-multi.sh generate-logrotate.sh helper.sh; do
-    sudo cp "$HOME/ocms-setup/$script" /opt/ocms/
-    sudo chmod 755 /opt/ocms/$script
-done
-
-# 5. Update binary
-sudo install -m 755 "$HOME/ocms-setup/ocms" /opt/ocms/bin/ocms
-
-# 6. Start all instances
-sudo /opt/ocms/bin/ocmsctl start <site> # for each site
-# Or if using systemd: sudo systemctl start ocms@<site_id>
-
-# 7. Verify
-sudo ocmsctl list
-sudo /opt/ocms/healthcheck-multi.sh
-```
-
-If something goes wrong, rollback:
-```bash
-sudo cp /etc/ocms/sites.conf.backup /etc/ocms/sites.conf
-# Restore old scripts and binary from backup
-sudo /opt/ocms/bin/ocmsctl start <site> # for each site
-```
+The logic is in `internal/sitectl`, which imports nothing from oCMS
+(`TestSitectlIsApplicationAgnostic`); `cmd/ocmsctl/main.go` supplies the name,
+paths, health endpoints, unit file and templates. A tool for another Go service
+is a `main.go` of that size.

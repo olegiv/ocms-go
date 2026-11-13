@@ -1,13 +1,15 @@
 # Deploying oCMS on Ubuntu with Plesk
 
-The full deployment guide has moved to [`scripts/deploy/README.md`](../scripts/deploy/README.md).
+The deployment guide is [`scripts/deploy/README.md`](../scripts/deploy/README.md).
 
-It covers:
+It covers `ocmsctl`, the deployment tool:
 
-- Server setup and binary installation
-- Site provisioning with `setup-site.sh`
-- Plesk SSL and Nginx configuration
-- Managing instances with `ocmsctl` and systemd
-- Deploying updates (single and multi-instance)
-- Backups, health checks, and cron jobs
-- Troubleshooting and security checklist
+- First-time server setup and adding a site (Plesk SSL and Nginx included)
+- Deploying a binary and custom themes, releases and rollback
+- Starting, stopping and inspecting sites under systemd
+- Backups, monitoring and alerts
+- Copying production to development
+- Troubleshooting and the security checklist
+
+The previous shell scripts are documented in
+[`scripts/deploy/LEGACY.md`](../scripts/deploy/LEGACY.md) until they are removed.

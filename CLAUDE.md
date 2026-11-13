@@ -51,6 +51,12 @@ make migrate-create      # Create new migration
 
 # Remove an account's second factor (lost authenticator, no other admin)
 go run ./cmd/ocms mfa-reset [-db ./data/ocms.db] admin@example.com
+
+# Deployment with ocmsctl (cmd/ocmsctl; guide: scripts/deploy/README.md)
+make build-ctl                                   # bin/ocmsctl + bin/ocmsctl-linux-amd64
+make server-setup HOST=root@server               # Install/update ocmsctl on a server
+make deploy HOST=root@server SITES="site1 site2" # Build, upload, install, restart, health-check
+make pull HOST=root@server SITE=site1            # Scrubbed production snapshot into this checkout
 ```
 
 ## Development MFA for Coding Agents
@@ -195,6 +201,14 @@ cmd/ocms/main.go
     ├── wiki/                (GitHub Wiki submodule)
     └── web                  (embedded admin templates/static)
 ```
+
+`cmd/ocmsctl` is a separate binary: the deployment tool. Its logic lives in
+`internal/sitectl`, which must not import any other package of this module
+(`TestSitectlIsApplicationAgnostic`) and runs every external command through
+`App.Exec`, never a shell. `cmd/ocmsctl/main.go` holds the oCMS specifics
+(paths, health endpoints, templates). The shell scripts in `scripts/deploy` are
+the previous implementation, kept until `ocmsctl` has done a production deploy;
+change deployment behaviour in the Go tool, not in them.
 
 ## Environment Variables
 
@@ -745,6 +759,7 @@ Additional documentation is available in the `docs/` directory:
 - `docs/custom-themes.md` - Custom theme creation, template structure, settings, translations, and testing
 - `docs/agent-ready.md` - Agent-Ready discovery (Link header, Markdown-for-Agents, `/.well-known/*` surfaces)
 - `docs/mcp-module.md` - MCP Server module: `/api/mcp` context and gated draft tools, scope/policy, limits
+- `scripts/deploy/README.md` - Deployment with `ocmsctl`: server setup, sites, deploys, rollback, backups, monitoring, production-to-dev copy
 
 Security audit documents are available in the `.audit/` directory (gitignored).
 
