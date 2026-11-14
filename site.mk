@@ -440,7 +440,7 @@ deploy: build-ctl ## Build, upload and install; restart DEPLOY_SITES on DEPLOY_H
 
 pull: build-ctl ## Copy a scrubbed production snapshot of SITE into this site
 	@[ -n "$(DEPLOY_HOST)" ] && [ -n "$(SITE)" ] || { echo "pull: set DEPLOY_HOST and SITE=<site id>" >&2; exit 1; }
-	@"$(build_dir)/ocmsctl" pull $(DEPLOY_HOST) $(SITE) --port $(server_port) $(PULL_OPTS)
+	@"$(build_dir)/ocmsctl" pull $(DEPLOY_HOST) $(SITE) --port $(server_port) --db "$(db_path)" $(PULL_OPTS)
 
 assets: ## Compile SCSS and copy JS dependencies
 	@$(with_core_lock) \

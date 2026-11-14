@@ -20,6 +20,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/joho/godotenv"
+
 	_ "modernc.org/sqlite" // database/sql driver "sqlite"
 )
 
@@ -61,6 +63,17 @@ func (a *App) asSiteUser(ctx context.Context, site Site, op string, stdin io.Rea
 
 // SiteOp runs one site operation in dir with the caller's own rights.
 func (a *App) SiteOp(ctx context.Context, op, dir string, stdin io.Reader, stdout io.Writer) error {
+	// Read site configuration with the site user's authority, including
+	// when this operation was re-executed after dropping root privileges.
+	if op == "backup" || op == "snapshot" {
+		path, err := a.siteDBPath(dir)
+		if err != nil {
+			return err
+		}
+		copy := *a
+		copy.DBPath = path
+		a = &copy
+	}
 	switch op {
 	case "backup":
 		return a.backupSite(ctx, dir)
@@ -95,7 +108,7 @@ func (a *App) backupSite(ctx context.Context, dir string) error {
 	stamp := a.Now().Format("20060102_150405")
 	var errs []error
 
-	if db := filepath.Join(dir, a.DBPath); exists(db) {
+	if db := a.databasePath(dir); exists(db) {
 		snapshot := filepath.Join(backups, a.Name+"_"+stamp+".db")
 		err := snapshotDB(ctx, db, snapshot)
 		if err == nil {
@@ -113,6 +126,10 @@ func (a *App) backupSite(ctx context.Context, dir string) error {
 		}
 	}
 
+	// Failed backups must leave the existing recovery copies intact.
+	if err := errors.Join(errs...); err != nil {
+		return err
+	}
 	entries, err := os.ReadDir(backups)
 	errs = append(errs, err)
 	for _, entry := range entries {
@@ -146,7 +163,7 @@ func (a *App) snapshotSite(ctx context.Context, dir string, w io.Writer) error {
 	}
 	defer func() { _ = os.RemoveAll(tmp) }()
 	snapshot := filepath.Join(tmp, "snapshot.db")
-	if err := snapshotDB(ctx, filepath.Join(dir, a.DBPath), snapshot); err != nil {
+	if err := snapshotDB(ctx, a.databasePath(dir), snapshot); err != nil {
 		return err
 	}
 	src, err := os.Open(snapshot) // #nosec G304 -- file this function just created
@@ -392,4 +409,29 @@ func extractTarGz(r io.Reader, dir string) error {
 			return fmt.Errorf("unsupported entry %q in archive", header.Name)
 		}
 	}
+}
+
+// siteDBPath reads only the configured key; it never executes the site's .env.
+func (a *App) siteDBPath(dir string) (string, error) {
+	if a.DBPathEnv == "" {
+		return a.DBPath, nil
+	}
+	values, err := godotenv.Read(filepath.Join(dir, ".env"))
+	if errors.Is(err, os.ErrNotExist) {
+		return a.DBPath, nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("site configuration: %w", err)
+	}
+	if path := values[a.DBPathEnv]; path != "" {
+		return path, nil
+	}
+	return a.DBPath, nil
+}
+
+func (a *App) databasePath(dir string) string {
+	if filepath.IsAbs(a.DBPath) {
+		return a.DBPath
+	}
+	return filepath.Join(dir, a.DBPath)
 }

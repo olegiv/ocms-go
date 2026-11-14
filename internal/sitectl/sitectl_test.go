@@ -28,17 +28,18 @@ import (
 // fakeHost stands in for the server's systemd and for every other external
 // command: it records each call and keeps a unit's state.
 type fakeHost struct {
-	mu    sync.Mutex
-	calls []string
-	state map[string]string // unit -> what `systemctl is-active` prints
-	fail  map[string]bool   // exact command line -> fails
+	mu     sync.Mutex
+	calls  []string
+	stdout string            // configured systemd StandardOutput
+	state  map[string]string // unit -> what `systemctl is-active` prints
+	fail   map[string]bool   // exact command line -> fails
 }
 
 func (h *fakeHost) exec(_ context.Context, c Cmd) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	line := c.String()
-	if c.Name != "systemctl" || c.Args[0] != "is-active" {
+	if c.Name != "systemctl" || c.Args[0] != "is-active" && c.Args[0] != "show" {
 		h.calls = append(h.calls, line)
 	}
 	if h.fail[line] {
@@ -53,6 +54,8 @@ func (h *fakeHost) exec(_ context.Context, c Cmd) error {
 		h.state[unit] = "active"
 	case "stop", "disable":
 		h.state[unit] = "inactive"
+	case "show":
+		_, _ = fmt.Fprintln(c.Stdout, h.stdout)
 	case "is-active":
 		state := h.state[unit]
 		if state == "" {
@@ -348,7 +351,7 @@ func TestInstallAdoptsLegacyBinarySwitchesAndPrunes(t *testing.T) {
 
 	for i := 2; i <= 5; i++ {
 		env.now = env.now.Add(time.Minute)
-		if err := env.install(t, "v"+strconv.Itoa(i)); err != nil {
+		if err := env.install(t, "v"+strconv.Itoa(i), a, b); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -418,7 +421,7 @@ func TestInstallFailureKeepsTheReleaseAndSaysHowToGoBack(t *testing.T) {
 	if env.Current() == first {
 		t.Error("the failed release was rolled back automatically; migrations may already have run")
 	}
-	if want := "rollback " + first; !strings.Contains(env.out.String(), want) {
+	if want := "rollback <site>... --to " + first; !strings.Contains(env.out.String(), want) {
 		t.Errorf("output does not offer %q:\n%s", want, env.out.String())
 	}
 

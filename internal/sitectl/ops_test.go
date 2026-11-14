@@ -452,6 +452,7 @@ func TestLogsReadTheSiteLogFileOrTheJournal(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeFiles(t, site.Dir, map[string]string{"logs/app.log": "line\n"})
+	env.host.stdout = "append:" + filepath.Join(site.Dir, "logs", "app.log")
 	if err := env.Logs(context.Background(), site, 5, false, false); err != nil {
 		t.Fatal(err)
 	}

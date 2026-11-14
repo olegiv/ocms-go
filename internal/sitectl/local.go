@@ -99,6 +99,9 @@ func (a *App) Deploy(ctx context.Context, o DeployOpts) error {
 	if err != nil {
 		return err
 	}
+	if len(o.Sites) == 0 && !o.All {
+		return errors.New("name at least one site, or use --all")
+	}
 	targets := o.Sites
 	if o.All {
 		if len(o.Sites) > 0 {

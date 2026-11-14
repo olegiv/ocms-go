@@ -75,6 +75,7 @@ func newApp() *sitectl.App {
 		HealthPath:     "/health",
 		ReadyPath:      "/health/ready",
 		DBPath:         "data/ocms.db",
+		DBPathEnv:      "OCMS_DB_PATH",
 		ThemesPath:     "custom/themes",
 		ThemeFile:      "theme.json",
 		ErrorLog:       "logs/error.log",
@@ -140,7 +141,10 @@ func run(ctx context.Context, app *sitectl.App, args []string, stdin io.Reader) 
 	command := args[0]
 	fs := flag.NewFlagSet(command, flag.ContinueOnError)
 	all := fs.Bool("all", false, "every registered site")
-	dryRun := fs.Bool("dry-run", false, "print the commands instead of running them")
+	dryRun := new(bool)
+	if command == "bootstrap" || command == "deploy" || command == "pull" {
+		fs.BoolVar(dryRun, "dry-run", false, "print the commands instead of running them")
+	}
 	fs.DurationVar(&app.HealthTimeout, "health-timeout", app.HealthTimeout, "how long a restarted site gets to answer")
 
 	// sites resolves the remaining arguments to registry entries; with
@@ -217,6 +221,9 @@ func run(ctx context.Context, app *sitectl.App, args []string, stdin io.Reader) 
 		return app.Pull(ctx, o)
 
 	case "init":
+		if rest, err := parse(fs, args[1:]); err != nil || len(rest) != 0 {
+			return errors.Join(err, errors.New("usage: ocmsctl init"))
+		}
 		if err := needRoot(); err != nil {
 			return err
 		}
@@ -300,6 +307,9 @@ func run(ctx context.Context, app *sitectl.App, args []string, stdin io.Reader) 
 		}
 
 	case "releases":
+		if rest, err := parse(fs, args[1:]); err != nil || len(rest) != 0 {
+			return errors.Join(err, errors.New("usage: ocmsctl releases"))
+		}
 		return app.PrintReleases()
 
 	case "health", "logs", "themes", "snapshot":

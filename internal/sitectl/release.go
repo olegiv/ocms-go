@@ -146,13 +146,17 @@ func (a *App) Install(ctx context.Context, r io.Reader, wantSHA string, sites []
 	a.logf("Installed release %s (%d bytes)", release, size)
 
 	err = a.Restart(ctx, sites)
-	if pruneErr := a.prune(); pruneErr != nil {
-		a.logf("warning: could not remove old releases: %v", pruneErr)
+	// Only a health-checked deployment may expire recovery releases. An
+	// install without sites has not demonstrated that the binary works.
+	if err == nil && len(sites) > 0 {
+		if pruneErr := a.prune(); pruneErr != nil {
+			a.logf("warning: could not remove old releases: %v", pruneErr)
+		}
 	}
 	if err != nil && previous != "" {
 		// No automatic rollback: the new binary may already have migrated a
 		// database, and the old one is not guaranteed to run on it.
-		a.logf("Release %s is still installed. To go back: %s rollback %s <site>...", release, filepath.Base(a.ctl()), previous)
+		a.logf("Release %s is still installed. To go back: %s rollback <site>... --to %s", release, filepath.Base(a.ctl()), previous)
 	}
 	return err
 }

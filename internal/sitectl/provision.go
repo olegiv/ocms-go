@@ -109,9 +109,19 @@ func (a *App) AddSite(ctx context.Context, spec SiteSpec) error {
 	if !strings.HasPrefix(dir, base+string(filepath.Separator)) {
 		return fmt.Errorf("site directory must be under %s", base)
 	}
-	if _, err := os.Stat(filepath.Dir(dir)); err != nil {
+	resolvedBase, err := filepath.EvalSymlinks(base)
+	if err != nil {
+		return fmt.Errorf("vhost directory: %w", err)
+	}
+	parent, err := filepath.EvalSymlinks(filepath.Dir(dir))
+	if err != nil {
 		return fmt.Errorf("parent directory: %w", err)
 	}
+	rel, err := filepath.Rel(resolvedBase, parent)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("site directory must resolve under %s", resolvedBase)
+	}
+	dir = filepath.Join(parent, filepath.Base(dir))
 	if _, err := os.Lstat(dir); err == nil {
 		return fmt.Errorf("%s already exists; remove it to provision the site again", dir)
 	}

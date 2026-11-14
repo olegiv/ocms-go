@@ -198,6 +198,22 @@ func (a *App) Logs(ctx context.Context, site Site, lines int, follow, errorsOnly
 	file := filepath.Join(site.Dir, "logs", a.Name+".log")
 	if errorsOnly {
 		file = filepath.Join(site.Dir, a.ErrorLog)
+	} else {
+		target, err := a.output(ctx, "systemctl", "show", "-p", "StandardOutput", "--value", a.unit(site.ID))
+		if err != nil {
+			return fmt.Errorf("log destination for %s: %w", site.ID, err)
+		}
+		kind, path, _ := strings.Cut(target, ":")
+		switch kind {
+		case "append", "file", "truncate":
+			file = path
+		default:
+			args := []string{"-u", a.unit(site.ID), "-n", strconv.Itoa(lines), "--no-pager"}
+			if follow {
+				args = append(args, "-f")
+			}
+			return a.run(ctx, "journalctl", args...)
+		}
 	}
 	c := Cmd{Name: "tail", Args: []string{"-n", strconv.Itoa(lines), file}, Stdout: a.Stdout, Stderr: a.Stderr}
 	if _, err := os.Stat(file); err != nil {

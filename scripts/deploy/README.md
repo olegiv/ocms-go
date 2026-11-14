@@ -47,14 +47,16 @@ database. The failed release stays installed and the output names the command
 that goes back (`ocmsctl rollback`).
 
 Sites you do not name keep running the old binary until they restart.
-The last 3 releases are kept.
+After a deployment passes its health checks, the last 3 releases are kept.
+Failed deployments and installs without restart targets do not prune releases,
+so retries preserve the last working binary.
 
 ## Layout on the server
 
 ```
 /opt/ocms/bin/ocms -> ../releases/<release>/ocms    current release (symlink)
 /opt/ocms/bin/ocmsctl                               this tool
-/opt/ocms/releases/<release>/ocms                   last 3 releases
+/opt/ocms/releases/<release>/ocms                   retained releases
 /etc/ocms/sites.conf                                site registry: ID DIR USER PORT
 /etc/ocms/alert                                     optional alert hook
 /etc/systemd/system/ocms@.service                   unit template
@@ -173,6 +175,10 @@ make deploy                        # binary
 make deploy DEPLOY_OPTS=--themes   # binary and custom/themes
 ```
 
+`--dry-run` is supported by the local `bootstrap`, `deploy` and `pull` commands.
+Server commands reject it before changing anything. Deploy requires named sites
+or `--all`.
+
 Or call the tool directly (`make build-ctl` builds `bin/ocmsctl`):
 
 ```bash
@@ -239,8 +245,8 @@ ocmsctl backup example_com
 Per site, into its `backups/` (mode 0700, files 0600): a consistent snapshot of
 the database taken while the site runs (`ocms_<time>.db.gz`, integrity-checked),
 `uploads_<time>.tar.gz` and `custom_<time>.tar.gz`. Backups older than 30 days
-are removed. Everything is done as the site's own user, never as root, so a
-directory a site user swapped for a symlink cannot redirect a root write.
+are removed only after the current backup succeeds. Everything is done as the
+site's own user, never as root, so a directory a site user swapped for a symlink cannot redirect a root write.
 
 The cron file runs this nightly at 03:00 and logs to `/var/log/ocms-backup.log`.
 
@@ -291,6 +297,9 @@ is not enabled does not come back after a reboot, and the check skips it:
 make pull HOST=root@server.example.com SITE=example_com
 # or: ocmsctl pull root@server example_com [--no-db] [--no-uploads] [--no-logs] [--themes] [--yes]
 ```
+
+Database snapshots and backups read `OCMS_DB_PATH` from the site's `.env`.
+Site-level `make pull` also uses its configured local database path.
 
 Production keeps running. The database arrives as an online snapshot and is
 scrubbed before it replaces `data/ocms.db`; `uploads/` is mirrored (local files

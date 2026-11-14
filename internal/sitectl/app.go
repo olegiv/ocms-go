@@ -45,7 +45,8 @@ type App struct {
 	BasePort     int    // first port handed to a new site
 	HealthPath   string // answers 200 when the site is up
 	ReadyPath    string // answers 200 when the site can serve
-	DBPath       string // SQLite database, relative to the site directory
+	DBPath       string // default SQLite database, relative to the site directory
+	DBPathEnv    string // optional .env key selecting each site's database
 	ThemesPath   string // themes directory, relative to the site directory
 	ThemeFile    string // file every theme directory holds, e.g. theme.json
 	ErrorLog     string // the application's error-only log, relative to the site directory
