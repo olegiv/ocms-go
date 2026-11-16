@@ -60,6 +60,15 @@ func TestDeploymentMakeTargetsUseGoCLI(t *testing.T) {
 				if command != "pull" && !strings.Contains(string(out), "--arch arm64") {
 					t.Fatalf("server architecture omitted: %s", out)
 				}
+				// A site's deploy and pull get its paths as make resolved
+				// them, and no env file: this site has none, and neither
+				// command needs one.
+				if file == "site.mk" {
+					want := `OCMS_UPLOADS_DIR="` + filepath.Join(site, "uploads") + `"`
+					if !strings.Contains(string(out), want) || strings.Contains(string(out), "OCMS_ENV_FILE") {
+						t.Fatalf("want %s and no OCMS_ENV_FILE in: %s", want, out)
+					}
+				}
 			})
 		}
 	}

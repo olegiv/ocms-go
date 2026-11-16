@@ -266,12 +266,23 @@ func (a *App) List(ctx context.Context, sites []Site) error {
 }
 
 // Logs shows the last lines of the site's log: its log file when the unit
-// writes one, the journal otherwise. errorsOnly shows the application's
-// error log.
+// writes one, the journal otherwise. errorsOnly shows the error log the
+// site's configuration names.
 func (a *App) Logs(ctx context.Context, site Site, lines int, follow, errorsOnly bool) error {
 	var file string
 	if errorsOnly {
-		file = filepath.Join(site.Dir, a.ErrorLog)
+		var out bytes.Buffer
+		if err := a.asSiteUser(ctx, site, "paths", nil, &out); err != nil {
+			return err
+		}
+		paths, err := a.parsePaths(out.String())
+		if err != nil {
+			return err
+		}
+		if paths.ErrorLog == "" {
+			return fmt.Errorf("%s keeps no error log (%s is not set)", site.ID, a.ErrorLog.Env)
+		}
+		file = paths.ErrorLog
 	} else {
 		target, err := a.output(ctx, "systemctl", "show", "-p", "StandardOutput", "--value", a.unit(site.ID))
 		if err != nil {

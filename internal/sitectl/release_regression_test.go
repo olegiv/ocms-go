@@ -44,7 +44,7 @@ func TestFailedSnapshotRetainsPreviousValidBackup(t *testing.T) {
 	env := newTestEnv(t)
 	dir := filepath.Join(env.SitesBase, "backup-regression")
 	writeFiles(t, dir, map[string]string{
-		env.DBPath: "not a SQLite database",
+		env.DB.Default: "not a SQLite database",
 	})
 	backups := filepath.Join(dir, "backups")
 	if err := os.MkdirAll(backups, 0o700); err != nil {
@@ -64,7 +64,7 @@ func TestFailedSnapshotRetainsPreviousValidBackup(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := env.backupSite(context.Background(), dir); err == nil {
+	if err := env.SiteOp(context.Background(), "backup", dir, nil, env.out); err == nil {
 		t.Fatal("backup of corrupt current database unexpectedly succeeded")
 	}
 	if _, err := os.Stat(previous); err != nil {

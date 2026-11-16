@@ -37,7 +37,7 @@ func writeFiles(t *testing.T, base string, files map[string]string) {
 func TestBackupWritesPrivateVerifiedCopiesAndExpiresOldOnes(t *testing.T) {
 	env := newTestEnv(t)
 	site, _ := env.addSite(t, "a")
-	createDB(t, filepath.Join(site.Dir, env.DBPath))
+	createDB(t, filepath.Join(site.Dir, env.DB.Default))
 	// Expired archives of this tool go; files it did not write stay, even
 	// when their names end like its archives.
 	operatorFiles := []string{"app_old.db.gz", "manual-before-upgrade.db.gz", "notes.txt", "other-tool.tar.gz"}
@@ -101,7 +101,7 @@ func TestBackupWritesPrivateVerifiedCopiesAndExpiresOldOnes(t *testing.T) {
 func TestSnapshotIsConsistentAndScrubRemovesCredentials(t *testing.T) {
 	env := newTestEnv(t)
 	site, _ := env.addSite(t, "a")
-	createDB(t, filepath.Join(site.Dir, env.DBPath))
+	createDB(t, filepath.Join(site.Dir, env.DB.Default))
 
 	var packed bytes.Buffer
 	env.Stdout = &packed

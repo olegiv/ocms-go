@@ -66,6 +66,12 @@ so retries preserve the last working binary.
 └── backups/             backups (0700)
 ```
 
+These are the defaults. A site's `.env` may move its database
+(`OCMS_DB_PATH`), uploads (`OCMS_UPLOADS_DIR`), custom files
+(`OCMS_CUSTOM_DIR`, themes in its `themes/`) and error log
+(`OCMS_ERROR_LOG_PATH`); backups, `pull`, themes and `logs --errors` follow
+it. ocmsctl reads that file as the site user, never as root.
+
 Each site listens on its own loopback port (8081, 8082, ...).
 
 ## First-time server setup
@@ -191,14 +197,16 @@ To deploy a published release instead of a local build, download and verify it
 
 ### Themes
 
-`--themes` replaces the site's `custom/themes` with your local `custom/themes`.
-Symlinked theme directories are followed and arrive as real files when their
-targets stay inside `custom/`, outside `custom/modules/`. Links to developer
-configuration or other files outside that tree abort deployment before upload.
-The upload is
+`--themes` replaces the site's themes (`themes/` in the custom directory its
+`.env` names) with this checkout's (`themes/` in `OCMS_CUSTOM_DIR`, read like
+`pull` reads it below; default `custom/themes`). Symlinked theme directories
+are followed and arrive as real files when their targets stay inside the
+custom directory, outside its `modules/`. Links to developer configuration or
+other files outside that tree abort deployment before upload. The upload is
 unpacked beside the old themes and swapped in, so a broken upload leaves the old
 set in place; themes you deleted locally disappear from the server. It refuses
-to run when `custom/themes` holds no theme (a directory with `theme.json`).
+to run when the local themes directory holds no theme (a directory with
+`theme.json`).
 
 Custom **modules** are Go code compiled into the binary; they travel with the
 binary, never as files. All sites share one binary, so it must contain every
@@ -228,7 +236,7 @@ On the server, as root:
 | `ocmsctl start\|stop <site>...\|--all` | `systemctl start\|stop ocms@<site>` |
 | `ocmsctl restart <site>...\|--all` | stop, start, require healthy (as a deploy does) |
 | `ocmsctl health <site>` | exit 0 when `/health` answers 200 |
-| `ocmsctl logs <site> [-f] [--errors]` | the site's log file, or the journal when it has none |
+| `ocmsctl logs <site> [-f] [--errors]` | the site's log file, or the journal when it has none; `--errors`: the file `OCMS_ERROR_LOG_PATH` names |
 
 Sites run only under systemd. To debug one in the foreground, stop its unit and
 run `/opt/ocms/bin/ocms` as the site user from the site directory.
@@ -242,11 +250,12 @@ ocmsctl backup example_com
 
 Per site, into its `backups/` (mode 0700, files 0600): a consistent snapshot of
 the database taken while the site runs (`ocms_<time>.db.gz`, integrity-checked),
-`uploads_<time>.tar.gz` and `custom_<time>.tar.gz`. An archive appears under its
+`uploads_<time>.tar.gz` and `custom_<time>.tar.gz` of the uploads and custom
+directories the site's `.env` names. An archive appears under its
 name only once it is complete. Everything is done as the site's own user, never
 as root, so a directory a site user swapped for a symlink cannot redirect a root
-write; an `uploads` or `custom` directory that is itself a symlink is archived
-from its target.
+write; an uploads or custom directory that is itself a symlink is archived
+from its target, and one that holds `backups/` fails the backup.
 
 A backup fails, and keeps every earlier copy, when the site directory or its
 database is missing or anything in it cannot be read. A site provisioned but
@@ -323,21 +332,37 @@ ocms@<site>` is the safety net.
 
 ```bash
 make pull HOST=root@server.example.com SITE=example_com
-# or: ocmsctl pull root@server example_com [--no-db] [--no-uploads] [--no-logs] [--themes] [--yes]
+# or: ocmsctl pull root@server example_com [--no-db] [--no-uploads] [--no-logs]
+#       [--themes] [--yes] [--db FILE] [--port N]
 ```
 
-Database snapshots and backups read `OCMS_DB_PATH` from the site's `.env`.
-Site-level `make pull` also uses its configured local database path.
+Each side's paths come from its own configuration. On the server, the site's
+`.env` names its database, uploads and custom directory. Here, `pull` reads
+what this checkout's server reads: the environment, then the file
+`OCMS_ENV_FILE` names or `.env`, then the defaults (`data/ocms.db`, `uploads`,
+`custom`, port 8080). A configuration it cannot read stops it. `--db` and
+`--port` override the database and port; site-level `make pull` passes the
+site's own values. `pull` asks the server for the site's paths with
+`ocmsctl site paths`, so update the server's ocmsctl (`make server-setup`) when
+you update this checkout.
 
 Production keeps running. The database arrives as an online snapshot and is
-scrubbed before it replaces `data/ocms.db`; `uploads/` is mirrored (local files
-the server lacks are deleted), `logs/` is copied, and `--themes` copies
-`custom/themes` without deleting local themes. Uploads are copied live, so a file
-uploaded during the pull may be missing from the database copy or the reverse.
+scrubbed before it replaces the local one; the uploads are mirrored (files are
+compared by content, and local files the server lacks are deleted), the
+unit's `logs/` is copied, and `--themes` copies the themes without deleting
+local ones. Uploads are copied live, so a file uploaded during the pull may be
+missing from the database copy or the reverse.
+
+Only directories and regular files arrive: a symlink or special file on the
+server is skipped, and the mirror removes any already in the local uploads.
+`pull` refuses an uploads directory that is the checkout, one above it, or one
+holding the local database or custom directory, as the mirror would delete
+them. The server's paths must be absolute and made of letters, digits and
+`._@:/=-`, since they cross ssh.
 
 Stop the local server first: the command refuses to replace the database while
-something listens on port 8080 (`--port N` names another port, `--port 0` skips
-the check).
+something listens on the checkout's port (`--port N` names another port,
+`--port 0` skips the check).
 
 The scrub ([sync-db-policy.sql](../cmd/ocmsctl/templates/sync-db-policy.sql)) deletes sessions, OAuth
 tokens and codes and preview links; clears webhook URLs, secrets and headers and

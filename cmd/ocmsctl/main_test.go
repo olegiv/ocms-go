@@ -36,6 +36,7 @@ type world struct {
 	out           *bytes.Buffer
 	systemctl     []string
 	rsync         []string
+	environ       map[string]string // the machine's process environment
 }
 
 func newWorld(t *testing.T) *world {
@@ -80,6 +81,14 @@ func newWorld(t *testing.T) *world {
 	w.local = newApp()
 	w.local.Root = w.server.Root // where the server's ocmsctl lives
 	w.local.Stdout, w.local.Stderr = w.out, w.out
+	// Never the developer's environment: an OCMS_DB_PATH there would
+	// have pull replace that database.
+	w.environ = map[string]string{}
+	w.local.LookupEnv = func(key string) (string, bool) {
+		value, ok := w.environ[key]
+		return value, ok
+	}
+	w.server.LookupEnv = nil
 	w.local.Exec = func(ctx context.Context, c sitectl.Cmd) error {
 		switch c.Name {
 		case "ssh":
@@ -279,9 +288,13 @@ func TestPullDeliversAScrubbedSnapshot(t *testing.T) {
 	if leftovers, _ := filepath.Glob("data/.pull-*"); len(leftovers) > 0 {
 		t.Errorf("left behind %v", leftovers)
 	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
 	want := []string{
-		"-az --delete root@server:" + dir + "/uploads/ uploads/",
-		"-az root@server:" + dir + "/logs/ logs/",
+		"-rtz --checksum --delete root@server:" + dir + "/uploads/ " + filepath.Join(cwd, "uploads") + "/",
+		"-rtz root@server:" + dir + "/logs/ " + filepath.Join(cwd, "logs") + "/",
 	}
 	if !slices.Equal(w.rsync, want) {
 		t.Errorf("rsync calls = %v, want %v", w.rsync, want)

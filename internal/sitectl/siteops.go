@@ -23,8 +23,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/joho/godotenv"
-
 	_ "modernc.org/sqlite" // database/sql driver "sqlite"
 )
 
@@ -64,28 +62,28 @@ func (a *App) asSiteUser(ctx context.Context, site Site, op string, stdin io.Rea
 	return a.Exec(ctx, Cmd{Name: a.ctl(), Args: []string{SiteOpCommand, op, site.Dir}, Stdin: stdin, Stdout: stdout, Stderr: a.Stderr, Cred: cred})
 }
 
+var siteOps = []string{"backup", "snapshot", "themes", "paths"}
+
 // SiteOp runs one site operation in dir with the caller's own rights.
 func (a *App) SiteOp(ctx context.Context, op, dir string, stdin io.Reader, stdout io.Writer) error {
-	// Read site configuration with the site user's authority, including
-	// when this operation was re-executed after dropping root privileges.
-	if op == "backup" || op == "snapshot" {
-		path, err := a.siteDBPath(dir)
-		if err != nil {
-			return err
-		}
-		copy := *a
-		copy.DBPath = path
-		a = &copy
+	if !slices.Contains(siteOps, op) {
+		return fmt.Errorf("unknown site operation %q", op)
+	}
+	// The site's configuration is read here, with the site user's rights
+	// also when root re-ran this tool as that user.
+	paths, err := a.readSitePaths(dir)
+	if err != nil {
+		return err
 	}
 	switch op {
 	case "backup":
-		return a.backupSite(ctx, dir)
+		return a.backupSite(ctx, dir, paths)
 	case "snapshot":
-		return a.snapshotSite(ctx, dir, stdout)
+		return snapshotSite(ctx, dir, paths.DB, stdout)
 	case "themes":
-		return a.installThemes(dir, stdin)
+		return installThemes(paths.themes(a), stdin)
 	default:
-		return fmt.Errorf("unknown site operation %q", op)
+		return a.writePaths(stdout, paths)
 	}
 }
 
@@ -134,11 +132,12 @@ func (k backupKind) matches(name string) bool {
 	return ok && backupStampRe.MatchString(stamp)
 }
 
-// backupSite writes a database snapshot and archives of uploads and custom
-// content into <dir>/backups (owner-only). Only when all of them succeed does
-// it drop archives older than backupRetention, of the kinds it just wrote.
-// Anything it cannot read is an error, never "nothing to back up".
-func (a *App) backupSite(ctx context.Context, dir string) error {
+// backupSite writes a database snapshot and archives of the uploads and
+// custom directories the site configures into <dir>/backups (owner-only).
+// Only when all of them succeed does it drop archives older than
+// backupRetention, of the kinds it just wrote. Anything it cannot read is an
+// error, never "nothing to back up".
+func (a *App) backupSite(ctx context.Context, dir string, paths sitePaths) error {
 	// Creating backups/ below would otherwise recreate a missing site.
 	if info, err := os.Stat(dir); err != nil {
 		return fmt.Errorf("site directory: %w", err)
@@ -157,25 +156,33 @@ func (a *App) backupSite(ctx context.Context, dir string) error {
 	var written []backupKind
 
 	dbKind := backupKind{a.Name + "_", ".db.gz"}
-	if err := backupDB(ctx, a.databasePath(dir), filepath.Join(backups, dbKind.name(stamp))); err != nil {
+	if err := backupDB(ctx, paths.DB, filepath.Join(backups, dbKind.name(stamp))); err != nil {
 		errs = append(errs, err)
 	} else {
 		written = append(written, dbKind)
 	}
-	for _, sub := range []string{"uploads", "custom"} {
-		kind := backupKind{sub + "_", ".tar.gz"}
-		root, err := contentRoot(filepath.Join(dir, sub))
+	for _, content := range []struct {
+		setting Setting
+		path    string
+	}{{a.Uploads, paths.Uploads}, {a.Custom, paths.Custom}} {
+		name := content.setting.Name
+		kind := backupKind{name + "_", ".tar.gz"}
+		root, err := contentRoot(content.path)
+		if err == nil && root != "" && within(resolved(backups), root) {
+			// Each run would archive every earlier archive again.
+			err = fmt.Errorf("%s holds the backups directory %s", root, backups)
+		}
 		switch {
 		case err != nil:
-			errs = append(errs, fmt.Errorf("%s: %w", sub, err))
+			errs = append(errs, fmt.Errorf("%s: %w", name, err))
 		case root == "":
-			a.logf("  %s: nothing to back up", sub)
+			a.logf("  %s: nothing to back up", name)
 		default:
 			err := writeNew(filepath.Join(backups, kind.name(stamp)), func(w io.Writer) error {
-				return writeTarGz(w, root, sub, false)
+				return writeTarGz(w, root, name, false)
 			})
 			if err != nil {
-				errs = append(errs, fmt.Errorf("%s: %w", sub, err))
+				errs = append(errs, fmt.Errorf("%s: %w", name, err))
 			} else {
 				written = append(written, kind)
 			}
@@ -267,9 +274,9 @@ func (a *App) Snapshot(ctx context.Context, site Site) error {
 	return a.asSiteUser(ctx, site, "snapshot", nil, a.Stdout)
 }
 
-// snapshotSite writes a gzipped, consistent copy of the site's database to
-// w. The site keeps running: VACUUM INTO reads inside one transaction.
-func (a *App) snapshotSite(ctx context.Context, dir string, w io.Writer) error {
+// snapshotSite writes a gzipped, consistent copy of the site's database db
+// to w. The site keeps running: VACUUM INTO reads inside one transaction.
+func snapshotSite(ctx context.Context, dir, db string, w io.Writer) error {
 	backups := filepath.Join(dir, "backups")
 	if err := os.MkdirAll(backups, 0o700); err != nil {
 		return err
@@ -280,7 +287,7 @@ func (a *App) snapshotSite(ctx context.Context, dir string, w io.Writer) error {
 	}
 	defer func() { _ = os.RemoveAll(tmp) }()
 	snapshot := filepath.Join(tmp, "snapshot.db")
-	if err := snapshotDB(ctx, a.databasePath(dir), snapshot); err != nil {
+	if err := snapshotDB(ctx, db, snapshot); err != nil {
 		return err
 	}
 	src, err := os.Open(snapshot) // #nosec G304 -- file this function just created
@@ -561,8 +568,7 @@ func (a *App) InstallThemes(ctx context.Context, site Site, r io.Reader) error {
 
 // installThemes unpacks the archive beside the themes directory and swaps
 // the two, so a broken upload leaves the old themes in place.
-func (a *App) installThemes(dir string, r io.Reader) error {
-	themes := filepath.Join(dir, a.ThemesPath)
+func installThemes(themes string, r io.Reader) error {
 	parent := filepath.Dir(themes)
 	if err := os.MkdirAll(parent, 0o755); err != nil {
 		return err
@@ -629,29 +635,4 @@ func extractTarGz(r io.Reader, dir string) error {
 			return fmt.Errorf("unsupported entry %q in archive", header.Name)
 		}
 	}
-}
-
-// siteDBPath reads only the configured key; it never executes the site's .env.
-func (a *App) siteDBPath(dir string) (string, error) {
-	if a.DBPathEnv == "" {
-		return a.DBPath, nil
-	}
-	values, err := godotenv.Read(filepath.Join(dir, ".env"))
-	if errors.Is(err, os.ErrNotExist) {
-		return a.DBPath, nil
-	}
-	if err != nil {
-		return "", fmt.Errorf("site configuration: %w", err)
-	}
-	if path := values[a.DBPathEnv]; path != "" {
-		return path, nil
-	}
-	return a.DBPath, nil
-}
-
-func (a *App) databasePath(dir string) string {
-	if filepath.IsAbs(a.DBPath) {
-		return a.DBPath
-	}
-	return filepath.Join(dir, a.DBPath)
 }

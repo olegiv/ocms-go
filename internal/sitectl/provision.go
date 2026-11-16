@@ -251,7 +251,17 @@ func (a *App) createSiteTree(vhost *os.Root, dir string, env []byte, uid, gid in
 	if len(entries) != 0 || !errors.Is(err, io.EOF) {
 		return errors.New("new site directory is not empty")
 	}
-	for sub, mode := range map[string]os.FileMode{"data": 0o755, "uploads": 0o755, a.ThemesPath: 0o755, "logs": 0o755, "backups": 0o700} {
+	// The defaults: a new site's .env comes from EnvTemplate.
+	for sub, mode := range map[string]os.FileMode{
+		filepath.Dir(a.DB.Default):                    0o755,
+		a.Uploads.Default:                             0o755,
+		filepath.Join(a.Custom.Default, a.ThemesPath): 0o755,
+		a.LogsPath: 0o755,
+		"backups":  0o700,
+	} {
+		if sub == "" {
+			continue
+		}
 		if err := root.MkdirAll(sub, mode); err != nil {
 			return err
 		}

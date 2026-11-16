@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net"
 	"os"
 	"path/filepath"
@@ -85,7 +86,7 @@ type DeployOpts struct {
 	Build      []string // command that builds Binary; empty skips the build
 	Themes     bool     // also replace the named sites' themes with ThemesDir
 	ThemesOnly bool     // replace themes and restart, leave the binary alone
-	ThemesDir  string
+	ThemesDir  string   // empty: the checkout's own, from its configuration
 	DryRun     bool
 
 	HealthTimeout time.Duration // passed to the server when set
@@ -115,6 +116,13 @@ func (a *App) Deploy(ctx context.Context, o DeployOpts) error {
 	themes := o.Themes || o.ThemesOnly
 	if themes && (o.All || len(o.Sites) == 0) {
 		return errors.New("name the sites whose themes to replace")
+	}
+	if themes && o.ThemesDir == "" {
+		local, err := a.readLocalConfig(".")
+		if err != nil {
+			return err
+		}
+		o.ThemesDir = local.themes(a)
 	}
 	// The upload replaces the server's themes, so placeholders alone
 	// (.gitkeep, a README) must not count as a set of themes.
@@ -194,29 +202,61 @@ func (a *App) Bootstrap(ctx context.Context, host, ctlBinary string, dryRun bool
 	return r.ctl(ctx, "", nil, "init")
 }
 
-// PullOpts is what `pull` takes.
+// PullOpts is what `pull` takes. Where the copies go comes from the
+// configuration of the checkout in the working directory, as its own server
+// reads it (see readLocalConfig); LocalDB and LocalPort override it.
 type PullOpts struct {
-	Host      string
-	Site      string
-	DB        bool   // replace LocalDB with a scrubbed snapshot
-	Uploads   bool   // mirror uploads/ (deletes local files the server lacks)
-	Logs      bool   // copy logs/
-	Themes    bool   // copy themes, keeping local-only files
-	LocalDB   string // e.g. data/ocms.db
-	LocalPort int    // refuse to run while something listens here; 0 skips the check
-	Yes       bool   // do not ask
-	DryRun    bool
-	Confirm   io.Reader // where the answer to the question comes from
+	Host        string
+	Site        string
+	DB          bool   // replace the local database with a scrubbed snapshot
+	Uploads     bool   // mirror the uploads (deletes local files the server lacks)
+	Logs        bool   // copy the unit's log directory
+	Themes      bool   // copy themes, keeping local-only files
+	LocalDB     string // database to replace; empty: the checkout's
+	LocalPort   int    // refuse to run while something listens here; 0: the checkout's port
+	NoPortCheck bool
+	Yes         bool // do not ask
+	DryRun      bool
+	Confirm     io.Reader // where the answer to the question comes from
 }
 
 // Pull copies a production site into the working directory for development.
 // Production keeps running: the database arrives as an online snapshot, and
 // it is scrubbed (App.ScrubSQL) before it replaces the local one. The result
 // is still production data: treat it as such.
+//
+// Files arrive as directories and regular files only. A symlink the server
+// holds is skipped, and the uploads mirror drops the ones an older pull left,
+// so nothing the server controls can point a development server outside
+// its own files.
 func (a *App) Pull(ctx context.Context, o PullOpts) error {
 	r, err := a.remote(o.Host, o.DryRun)
 	if err != nil {
 		return err
+	}
+	if o.LocalPort < 0 || o.LocalPort > 65535 {
+		return fmt.Errorf("invalid port %d", o.LocalPort)
+	}
+	local, err := a.readLocalConfig(".")
+	if err != nil {
+		return err
+	}
+	if o.LocalDB == "" {
+		o.LocalDB = local.DB
+	}
+	if o.LocalDB, err = filepath.Abs(o.LocalDB); err != nil {
+		return err
+	}
+	if o.LocalPort == 0 {
+		o.LocalPort = local.Port
+	}
+	if o.Uploads {
+		if err := mirrorTarget(local.Uploads, local.Dir, o.LocalDB, local.Custom); err != nil {
+			return err
+		}
+	}
+	if o.Themes && local.Custom == "" {
+		return errors.New("the local configuration names no custom directory for themes")
 	}
 	if !o.Yes && !o.DryRun {
 		_, _ = fmt.Fprintf(a.Stdout, "This overwrites local data with production data from %s. Continue? [y/N] ", o.Site)
@@ -225,7 +265,7 @@ func (a *App) Pull(ctx context.Context, o PullOpts) error {
 			return errors.New("aborted")
 		}
 	}
-	if o.DB && o.LocalPort != 0 {
+	if o.DB && !o.NoPortCheck && o.LocalPort != 0 {
 		conn, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(o.LocalPort)), time.Second)
 		if err == nil {
 			_ = conn.Close()
@@ -246,33 +286,48 @@ func (a *App) Pull(ctx context.Context, o PullOpts) error {
 			return err
 		}
 	}
+	remote := sitePaths{Uploads: "<uploads-dir>", Custom: "<custom-dir>"}
+	if o.Uploads || o.Themes {
+		var out bytes.Buffer
+		if err := r.ctl(ctx, "", &out, "site", "paths", o.Site); err != nil {
+			return fmt.Errorf("%w (an ocmsctl on the server that predates `site paths` needs updating: make server-setup)", err)
+		}
+		if !o.DryRun {
+			if remote, err = a.parsePaths(out.String()); err != nil {
+				return err
+			}
+		}
+	}
 
 	if o.DB {
 		if err := a.pullDB(ctx, r, o); err != nil {
 			return err
 		}
 	}
-	rsync := func(sub, local string, flags ...string) error {
+	rsync := func(from, to string, mirror bool) error {
 		if !o.DryRun {
-			if err := os.MkdirAll(local, 0o755); err != nil {
+			if err := os.MkdirAll(to, 0o755); err != nil {
 				return err
 			}
 		}
-		flags = append(flags, o.Host+":"+site.Dir+"/"+sub+"/", local+"/")
-		return r.exec(ctx, "", nil, "rsync", flags...)
+		args := append(pullFlags(mirror), o.Host+":"+from+"/", to+"/")
+		return r.exec(ctx, "", nil, "rsync", args...)
 	}
 	if o.Uploads {
-		if err := rsync("uploads", "uploads", "-az", "--delete"); err != nil {
+		if err := a.dropSpecialFiles(local.Uploads, o.DryRun); err != nil {
+			return err
+		}
+		if err := rsync(remote.Uploads, local.Uploads, true); err != nil {
 			return err
 		}
 	}
 	if o.Logs {
-		if err := rsync("logs", "logs", "-az"); err != nil {
+		if err := rsync(site.Dir+"/"+filepath.ToSlash(a.LogsPath), filepath.Join(local.Dir, a.LogsPath), false); err != nil {
 			return err
 		}
 	}
 	if o.Themes {
-		if err := rsync(filepath.ToSlash(a.ThemesPath), a.ThemesPath, "-az"); err != nil {
+		if err := rsync(remote.Custom+"/"+filepath.ToSlash(a.ThemesPath), local.themes(a), false); err != nil {
 			return err
 		}
 	}
@@ -280,6 +335,59 @@ func (a *App) Pull(ctx context.Context, o PullOpts) error {
 		a.logf("Pulled %s from %s", o.Site, o.Host)
 	}
 	return nil
+}
+
+// pullFlags copies directories and regular files with their times: no
+// symlinks, devices or special files, and no owners or modes from the
+// server. A mirror also compares content, as a local file can differ from
+// the server's with the same size and time, and deletes what the server
+// lacks.
+func pullFlags(mirror bool) []string {
+	flags := []string{"-rtz"}
+	if mirror {
+		flags = append(flags, "--checksum", "--delete")
+	}
+	return flags
+}
+
+// mirrorTarget refuses an uploads directory that the mirror's --delete
+// would turn against the checkout: the checkout itself or a directory above
+// it, or one that holds the database or the custom directory, also when a
+// symlink leads there.
+func mirrorTarget(uploads string, keep ...string) error {
+	if uploads == "" {
+		return errors.New("the local configuration names no uploads directory")
+	}
+	for _, kept := range keep {
+		if within(resolved(kept), resolved(uploads)) {
+			return fmt.Errorf("the uploads directory %s holds %s, which mirroring production's uploads would delete", uploads, kept)
+		}
+	}
+	return nil
+}
+
+// dropSpecialFiles removes what is neither a directory nor a regular file
+// below dir (a link the developer made to dir itself is followed). rsync
+// leaves such entries alone even with --delete; the server sends none.
+func (a *App) dropSpecialFiles(dir string, dryRun bool) error {
+	root, err := filepath.EvalSymlinks(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return filepath.WalkDir(root, func(name string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() || entry.Type().IsRegular() {
+			return err
+		}
+		if dryRun {
+			a.logf("[dry-run] remove %s", name)
+			return nil
+		}
+		a.logf("Removing %s: the server sends directories and regular files only", name)
+		return os.Remove(name)
+	})
 }
 
 // pullDB downloads a snapshot beside the local database, scrubs it and only

@@ -204,9 +204,16 @@ func TestSiteMakePullUsesConfiguredDatabase(t *testing.T) {
 			if err != nil {
 				t.Fatalf("make pull: %v: %s", err, output)
 			}
-			want := `--port 8397 --db "` + filepath.Join(site, dbPath) + `"`
-			if !strings.Contains(string(output), want) {
-				t.Fatalf("missing %s in %s", want, output)
+			// The uploads and custom directories reach pull through
+			// the environment, resolved against the site as make does.
+			for _, want := range []string{
+				`--port 8397 --db "` + filepath.Join(site, dbPath) + `"`,
+				`OCMS_UPLOADS_DIR="` + filepath.Join(site, "uploads") + `"`,
+				`OCMS_CUSTOM_DIR="` + filepath.Join(site, "custom") + `"`,
+			} {
+				if !strings.Contains(string(output), want) {
+					t.Fatalf("missing %s in %s", want, output)
+				}
 			}
 		})
 	}

@@ -363,7 +363,7 @@ func TestBackupAlertsWaitForTheNextCheck(t *testing.T) {
 	if err := os.Chmod(hook, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Remove(filepath.Join(site.Dir, env.DBPath)); err != nil {
+	if err := os.Remove(filepath.Join(site.Dir, env.DB.Default)); err != nil {
 		t.Fatal(err)
 	}
 	if err := env.Backup(context.Background(), sitesOf(site)); err == nil {

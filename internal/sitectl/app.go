@@ -46,11 +46,18 @@ type App struct {
 	BasePort     int    // first port handed to a new site
 	HealthPath   string // answers 200 when the site is up
 	ReadyPath    string // answers 200 when the site can serve
-	DBPath       string // default SQLite database, relative to the site directory
-	DBPathEnv    string // optional .env key selecting each site's database
-	ThemesPath   string // themes directory, relative to the site directory
-	ThemeFile    string // file every theme directory holds, e.g. theme.json
-	ErrorLog     string // the application's error-only log, relative to the site directory
+
+	// What a site's .env, or a development checkout's configuration, may
+	// set. Every path ocmsctl reads or writes for a site comes from these.
+	DB         Setting // SQLite database
+	Uploads    Setting // uploaded files: backed up, mirrored by pull
+	Custom     Setting // the site's own files: backed up; holds ThemesPath
+	ErrorLog   Setting // the application's error-only log; no Default: none
+	Port       Setting // port a development checkout's server listens on
+	EnvFileEnv string  // variable naming a checkout's env file instead of .env
+	ThemesPath string  // themes directory, relative to Custom
+	ThemeFile  string  // file every theme directory holds, e.g. theme.json
+	LogsPath   string  // where the unit writes its output, relative to the site directory
 
 	Unit           []byte // systemd template unit <Name>@.service
 	EnvTemplate    string // a new site's .env (text/template)
@@ -58,9 +65,10 @@ type App struct {
 	ProxyTemplate  string // reverse-proxy snippet printed for a new site
 	ScrubSQL       string // query returning the statements that scrub a pulled database
 
-	Stdout io.Writer
-	Stderr io.Writer
-	Exec   func(ctx context.Context, c Cmd) error // runs external commands
+	Stdout    io.Writer
+	Stderr    io.Writer
+	Exec      func(ctx context.Context, c Cmd) error // runs external commands
+	LookupEnv func(key string) (string, bool)        // the process environment (pull); nil: none
 
 	HealthTimeout time.Duration // how long a restarted site gets to answer
 	Settle        time.Duration // pause before a healthy site is asked again

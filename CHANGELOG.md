@@ -21,7 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `/opt/ocms/releases`; `ocmsctl rollback` returns to an earlier one.
   - A failed deploy prints the last log lines of each failed site.
   - `ocmsctl pull` copies production to development from an online
-    snapshot; production is no longer stopped.
+    snapshot; production is no longer stopped. It writes where the
+    checkout's own server reads (environment, `OCMS_ENV_FILE` or `.env`),
+    port included, and copies directories and regular files only; the
+    uploads mirror compares content and refuses a directory that would
+    delete the checkout.
+  - Backups, `pull`, `deploy --themes` and `logs --errors` follow the
+    paths a site's `.env` sets (`OCMS_DB_PATH`, `OCMS_UPLOADS_DIR`,
+    `OCMS_CUSTOM_DIR`, `OCMS_ERROR_LOG_PATH`), read as the site user.
   - `ocmsctl check` alerts through cron `MAILTO` or an executable
     `/etc/ocms/alert` hook. A unit state it cannot read counts as down
     rather than stopped; its own failures (registry, state, time limit)

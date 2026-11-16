@@ -42,7 +42,8 @@ On your machine (host is an ssh destination: root@server or an ssh alias):
   ocmsctl deploy <host> <site>...|--all    build, upload, install, restart, health-check
         [--themes | --themes-only] [--no-build] [--binary FILE] [--arch amd64|arm64]
   ocmsctl pull <host> <site>               copy a scrubbed production snapshot here
-        [--no-db] [--no-uploads] [--no-logs] [--themes] [--yes]
+        [--no-db] [--no-uploads] [--no-logs] [--themes] [--yes] [--db FILE] [--port N]
+        (paths and port as this checkout's server reads them: environment, .env)
   Add --dry-run to print the commands instead of running them.
 
 On the server, as root:
@@ -59,30 +60,36 @@ On the server, as root:
   ocmsctl backup [site...]                 all sites by default
   ocmsctl check [site...]                  monitor for cron; restarts unhealthy sites
 
-Used by deploy and pull over ssh: init, install, themes, snapshot, site show.
+Used by deploy and pull over ssh: init, install, themes, snapshot, site show,
+site paths.
 `
 
 // newApp returns the oCMS deployment: a Plesk-style server with one binary in
 // /opt/ocms shared by every site under /var/www/vhosts.
 func newApp() *sitectl.App {
 	return &sitectl.App{
-		Name:           "ocms",
-		Root:           "/opt/ocms",
-		ConfDir:        "/etc/ocms",
-		SystemdDir:     "/etc/systemd/system",
-		CronFile:       "/etc/cron.d/ocms",
-		LogrotateFile:  "/etc/logrotate.d/ocms",
-		StateDir:       "/run/ocms",
-		SitesBase:      "/var/www/vhosts",
-		DefaultGroup:   "psaserv",
-		BasePort:       8081,
-		HealthPath:     "/health",
-		ReadyPath:      "/health/ready",
-		DBPath:         "data/ocms.db",
-		DBPathEnv:      "OCMS_DB_PATH",
-		ThemesPath:     "custom/themes",
+		Name:          "ocms",
+		Root:          "/opt/ocms",
+		ConfDir:       "/etc/ocms",
+		SystemdDir:    "/etc/systemd/system",
+		CronFile:      "/etc/cron.d/ocms",
+		LogrotateFile: "/etc/logrotate.d/ocms",
+		StateDir:      "/run/ocms",
+		SitesBase:     "/var/www/vhosts",
+		DefaultGroup:  "psaserv",
+		BasePort:      8081,
+		HealthPath:    "/health",
+		ReadyPath:     "/health/ready",
+		// internal/config's keys and defaults (TestSettingsFollowTheServerConfig).
+		DB:             sitectl.Setting{Name: "db", Env: "OCMS_DB_PATH", Default: "data/ocms.db"},
+		Uploads:        sitectl.Setting{Name: "uploads", Env: "OCMS_UPLOADS_DIR", Default: "uploads"},
+		Custom:         sitectl.Setting{Name: "custom", Env: "OCMS_CUSTOM_DIR", Default: "custom"},
+		ErrorLog:       sitectl.Setting{Name: "errorlog", Env: "OCMS_ERROR_LOG_PATH"},
+		Port:           sitectl.Setting{Name: "port", Env: "OCMS_SERVER_PORT", Default: "8080"},
+		EnvFileEnv:     "OCMS_ENV_FILE",
+		ThemesPath:     "themes",
 		ThemeFile:      "theme.json",
-		ErrorLog:       "logs/error.log",
+		LogsPath:       "logs", // templates/dropin.tmpl
 		Unit:           unitTemplate,
 		EnvTemplate:    envTemplate,
 		DropInTemplate: dropInTemplate,
@@ -91,6 +98,7 @@ func newApp() *sitectl.App {
 		Stdout:         os.Stdout,
 		Stderr:         os.Stderr,
 		Exec:           sitectl.RunCmd,
+		LookupEnv:      os.LookupEnv,
 		HealthTimeout:  30 * time.Second,
 		Settle:         3 * time.Second,
 		Now:            time.Now,
@@ -181,12 +189,12 @@ func run(ctx context.Context, app *sitectl.App, args []string, stdin io.Reader) 
 		return app.Bootstrap(ctx, rest[0], *ctlBinary, *dryRun)
 
 	case "deploy":
-		o := sitectl.DeployOpts{ThemesDir: "custom/themes"}
+		o := sitectl.DeployOpts{}
 		arch := fs.String("arch", "amd64", "server architecture")
 		build := fs.String("build", "", "build command (default: make build-linux-<arch>)")
 		noBuild := fs.Bool("no-build", false, "upload the binary as it is")
 		fs.StringVar(&o.Binary, "binary", "", "Linux binary to upload (default bin/ocms-linux-<arch>)")
-		fs.BoolVar(&o.Themes, "themes", false, "also replace the sites' themes with custom/themes")
+		fs.BoolVar(&o.Themes, "themes", false, "also replace the sites' themes with this checkout's")
 		fs.BoolVar(&o.ThemesOnly, "themes-only", false, "replace themes and restart; leave the binary alone")
 		timeout := app.HealthTimeout
 		rest, err := parse(fs, args[1:])
@@ -213,14 +221,15 @@ func run(ctx context.Context, app *sitectl.App, args []string, stdin io.Reader) 
 		noDB := fs.Bool("no-db", false, "skip the database")
 		noUploads := fs.Bool("no-uploads", false, "skip uploads/")
 		noLogs := fs.Bool("no-logs", false, "skip logs/")
-		fs.BoolVar(&o.Themes, "themes", false, "also copy custom/themes")
-		fs.StringVar(&o.LocalDB, "db", "data/ocms.db", "local database to replace")
-		fs.IntVar(&o.LocalPort, "port", 8080, "local server port that must be free; 0 skips the check")
+		fs.BoolVar(&o.Themes, "themes", false, "also copy the themes")
+		fs.StringVar(&o.LocalDB, "db", "", "local database to replace (default: the checkout's)")
+		fs.IntVar(&o.LocalPort, "port", 0, "local server port that must be free (default: the checkout's); 0 skips the check")
 		fs.BoolVar(&o.Yes, "yes", false, "do not ask before overwriting local data")
 		rest, err := parse(fs, args[1:])
 		if err != nil || len(rest) != 2 {
-			return errors.Join(err, errors.New("usage: ocmsctl pull <host> <site> [--no-db] [--no-uploads] [--no-logs] [--themes] [--yes]"))
+			return errors.Join(err, errors.New("usage: ocmsctl pull <host> <site> [--no-db] [--no-uploads] [--no-logs] [--themes] [--yes] [--db FILE] [--port N]"))
 		}
+		fs.Visit(func(f *flag.Flag) { o.NoPortCheck = o.NoPortCheck || f.Name == "port" && o.LocalPort == 0 })
 		o.Host, o.Site, o.DryRun = rest[0], rest[1], *dryRun
 		o.DB, o.Uploads, o.Logs = !*noDB, !*noUploads, !*noLogs
 		return app.Pull(ctx, o)
@@ -386,6 +395,12 @@ func runSite(ctx context.Context, app *sitectl.App, fs *flag.FlagSet, args []str
 		}
 		_, err = fmt.Fprintln(app.Stdout, site)
 		return err
+	case len(rest) == 2 && rest[0] == "paths":
+		site, err := app.Site(rest[1])
+		if err != nil {
+			return err
+		}
+		return app.SitePaths(ctx, site)
 	}
-	return errors.New("usage: ocmsctl site add <domain> <user> | site remove <site> | site show <site>")
+	return errors.New("usage: ocmsctl site add <domain> <user> | site remove <site> | site show <site> | site paths <site>")
 }

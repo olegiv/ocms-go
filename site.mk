@@ -154,8 +154,12 @@ server_port = $(call env_no_refs,$(or $(OCMS_SERVER_PORT),8080),OCMS_SERVER_PORT
 
 # Passed explicitly to anything that runs the server from inside CORE_DIR.
 # godotenv.Load does not overwrite variables already in the environment, so these
-# win over the .env while still being derived from it.
-site_env = OCMS_ENV_FILE="$(env_file)" OCMS_DB_PATH="$(db_path)" OCMS_CUSTOM_DIR="$(custom_dir)" OCMS_UPLOADS_DIR="$(uploads_dir)"$(if $(server_port), OCMS_SERVER_PORT="$(server_port)")
+# win over the .env while still being derived from it. ocmsctl deploy and pull
+# resolve the same settings the same way and get path_env alone: these values
+# are all they read, and a named OCMS_ENV_FILE that does not exist stops them,
+# while deploy and pull need no .env.
+path_env = OCMS_DB_PATH="$(db_path)" OCMS_CUSTOM_DIR="$(custom_dir)" OCMS_UPLOADS_DIR="$(uploads_dir)"$(if $(server_port), OCMS_SERVER_PORT="$(server_port)")
+site_env = OCMS_ENV_FILE="$(env_file)" $(path_env)
 
 # Self-documenting: scrapes the "## " descriptions off the target lines below.
 # The character class needs digits, or build-linux-amd64 and build-darwin-arm64
@@ -425,7 +429,8 @@ build-all-platforms: build-linux-amd64 build-linux-arm64 build-darwin-arm64 ## C
 #     DEPLOY_SITES ?= example_com
 #     include core/site.mk
 #
-# DEPLOY_OPTS=--themes also replaces the sites' themes with custom/themes.
+# DEPLOY_OPTS=--themes also replaces the sites' themes with the site's own
+# (themes/ in its custom directory, custom/themes by default).
 SERVER_ARCH ?= amd64
 
 build-ctl: ## Build ocmsctl, the deployment tool
@@ -434,12 +439,12 @@ build-ctl: ## Build ocmsctl, the deployment tool
 
 deploy: build-ctl ## Build, upload and install; restart DEPLOY_SITES on DEPLOY_HOST
 	@[ -n "$(DEPLOY_HOST)" ] && [ -n "$(DEPLOY_SITES)" ] || { echo "deploy: set DEPLOY_HOST and DEPLOY_SITES" >&2; exit 1; }
-	@"$(build_dir)/ocmsctl" deploy $(DEPLOY_HOST) $(DEPLOY_SITES) --arch $(SERVER_ARCH) \
+	@$(path_env) "$(build_dir)/ocmsctl" deploy $(DEPLOY_HOST) $(DEPLOY_SITES) --arch $(SERVER_ARCH) \
 		--binary "$(build_dir)/$(BINARY_NAME)-linux-$(SERVER_ARCH)" $(DEPLOY_OPTS)
 
 pull: build-ctl ## Copy a scrubbed production snapshot of SITE into this site
 	@[ -n "$(DEPLOY_HOST)" ] && [ -n "$(SITE)" ] || { echo "pull: set DEPLOY_HOST and SITE=<site id>" >&2; exit 1; }
-	@"$(build_dir)/ocmsctl" pull $(DEPLOY_HOST) $(SITE) --port $(server_port) --db "$(db_path)" $(PULL_OPTS)
+	@$(path_env) "$(build_dir)/ocmsctl" pull $(DEPLOY_HOST) $(SITE) --port $(server_port) --db "$(db_path)" $(PULL_OPTS)
 
 assets: ## Compile SCSS and copy JS dependencies
 	@$(with_core_lock) \

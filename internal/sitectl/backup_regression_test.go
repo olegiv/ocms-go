@@ -23,7 +23,7 @@ func backupEnv(t *testing.T) (*testEnv, Site, string) {
 	t.Helper()
 	env := newTestEnv(t)
 	site, _ := env.addSite(t, "a")
-	createDB(t, filepath.Join(site.Dir, env.DBPath))
+	createDB(t, filepath.Join(site.Dir, env.DB.Default))
 	if err := os.WriteFile(filepath.Join(env.ConfDir, "alert"), []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -78,8 +78,7 @@ func skipAsRoot(t *testing.T) {
 
 func TestBackupFailsWhenTheDatabaseIsMissing(t *testing.T) {
 	env, site, backups := backupEnv(t)
-	env.DBPathEnv = "OCMS_DB_PATH"
-	writeFiles(t, site.Dir, map[string]string{".env": "OCMS_DB_PATH=./data/typo.db\n"})
+	writeFiles(t, site.Dir, map[string]string{".env": "APP_DB=./data/typo.db\n"})
 	err := env.Backup(context.Background(), sitesOf(site))
 	requireFailedBackup(t, env, site, backups, err, "typo.db")
 }
