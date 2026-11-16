@@ -190,7 +190,10 @@ To deploy a published release instead of a local build, download and verify it
 ### Themes
 
 `--themes` replaces the site's `custom/themes` with your local `custom/themes`.
-Symlinked theme directories are followed and arrive as real files. The upload is
+Symlinked theme directories are followed and arrive as real files when their
+targets stay inside `custom/`, outside `custom/modules/`. Links to developer
+configuration or other files outside that tree abort deployment before upload.
+The upload is
 unpacked beside the old themes and swapped in, so a broken upload leaves the old
 set in place; themes you deleted locally disappear from the server. It refuses
 to run when `custom/themes` holds no theme (a directory with `theme.json`).

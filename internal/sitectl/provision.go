@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/user"
@@ -122,8 +123,36 @@ func (a *App) AddSite(ctx context.Context, spec SiteSpec) error {
 		return fmt.Errorf("site directory must resolve under %s", resolvedBase)
 	}
 	dir = filepath.Join(parent, filepath.Base(dir))
-	if _, err := os.Lstat(dir); err == nil {
+	// Canonical paths are embedded in the registry, systemd and logrotate
+	// configuration. Reject control characters and configuration syntax even
+	// when the operator's original path was an ordinary symlink name.
+	if err := checkArgs(dir); err != nil {
+		return fmt.Errorf("site directory: %w", err)
+	}
+	baseInfo, err := os.Stat(resolvedBase)
+	if err != nil {
+		return err
+	}
+	vhost, err := os.OpenRoot(resolvedBase)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = vhost.Close() }()
+	openedInfo, err := vhost.Stat(".")
+	if err != nil {
+		return err
+	}
+	if !os.SameFile(baseInfo, openedInfo) {
+		return errors.New("vhost directory changed while opening it")
+	}
+	relativeDir, err := filepath.Rel(resolvedBase, dir)
+	if err != nil {
+		return err
+	}
+	if _, err := vhost.Lstat(relativeDir); err == nil {
 		return fmt.Errorf("%s already exists; remove it to provision the site again", dir)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
 	}
 
 	sites, err := a.Sites()
@@ -159,29 +188,7 @@ func (a *App) AddSite(ctx context.Context, spec SiteSpec) error {
 		return err
 	}
 
-	// The directory stays private to root until everything in it is owned
-	// by the site user.
-	if err := os.Mkdir(dir, 0o700); err != nil {
-		return err
-	}
-	for sub, mode := range map[string]os.FileMode{"data": 0o755, "uploads": 0o755, a.ThemesPath: 0o755, "logs": 0o755, "backups": 0o700} {
-		if err := os.MkdirAll(filepath.Join(dir, sub), mode); err != nil {
-			return err
-		}
-	}
-	if err := writeFileAtomic(filepath.Join(dir, ".env"), env, 0o600); err != nil {
-		return err
-	}
-	err = filepath.WalkDir(dir, func(path string, _ fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		return os.Lchown(path, uid, gid)
-	})
-	if err != nil {
-		return err
-	}
-	if err := os.Chmod(dir, 0o750); err != nil {
+	if err := a.createSiteTree(vhost, relativeDir, env, uid, gid); err != nil {
 		return err
 	}
 
@@ -206,6 +213,68 @@ func (a *App) AddSite(ctx context.Context, spec SiteSpec) error {
 	a.logf("Review %s, then: systemctl enable --now %s\n", filepath.Join(dir, ".env"), a.unit(site.ID))
 	_, _ = a.Stdout.Write(proxy)
 	return nil
+}
+
+// createSiteTree confines creation to the opened vhost. The new directory
+// stays private to the caller until every descendant has its final owner;
+// the last ownership/mode changes use the directory descriptor itself.
+func (a *App) createSiteTree(vhost *os.Root, dir string, env []byte, uid, gid int) error {
+	if err := vhost.Mkdir(dir, 0o700); err != nil {
+		return err
+	}
+	created, err := vhost.Lstat(dir)
+	if err != nil {
+		return err
+	}
+	stat, ok := created.Sys().(*syscall.Stat_t)
+	if !created.IsDir() || created.Mode().Perm()&0o077 != 0 || !ok || int(stat.Uid) != os.Geteuid() {
+		return errors.New("new site directory is not private to the caller")
+	}
+	root, err := vhost.OpenRoot(dir)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = root.Close() }()
+	directory, err := root.Open(".")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = directory.Close() }()
+	opened, err := directory.Stat()
+	if err != nil {
+		return err
+	}
+	if !os.SameFile(created, opened) {
+		return errors.New("new site directory changed while opening it")
+	}
+	entries, err := directory.ReadDir(1)
+	if len(entries) != 0 || !errors.Is(err, io.EOF) {
+		return errors.New("new site directory is not empty")
+	}
+	for sub, mode := range map[string]os.FileMode{"data": 0o755, "uploads": 0o755, a.ThemesPath: 0o755, "logs": 0o755, "backups": 0o700} {
+		if err := root.MkdirAll(sub, mode); err != nil {
+			return err
+		}
+	}
+	if err := root.WriteFile(".env", env, 0o600); err != nil {
+		return err
+	}
+	if err := fs.WalkDir(root.FS(), ".", func(path string, _ fs.DirEntry, err error) error {
+		if err != nil || path == "." {
+			return err
+		}
+		file, err := root.Open(path)
+		if err != nil {
+			return err
+		}
+		return errors.Join(file.Chown(uid, gid), file.Close())
+	}); err != nil {
+		return err
+	}
+	if err := directory.Chown(uid, gid); err != nil {
+		return err
+	}
+	return directory.Chmod(0o750)
 }
 
 // RemoveSite stops and unregisters a site. Its directory is left alone.

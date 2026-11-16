@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -272,19 +273,61 @@ func tarGzFile(dst, base, sub string) error {
 // point to (a site repository may link its themes in); otherwise they are
 // stored as links.
 func writeTarGz(w io.Writer, root, prefix string, follow bool) error {
+	var confined *os.Root
+	var base string
+	if follow {
+		// A shared theme may live beside themes/, but a pulled symlink must
+		// never export developer files or compiled module sources.
+		var err error
+		base, err = filepath.EvalSymlinks(filepath.Dir(filepath.Clean(root)))
+		if err != nil {
+			return err
+		}
+		base, err = filepath.Abs(base)
+		if err != nil {
+			return err
+		}
+		confined, err = os.OpenRoot(base)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = confined.Close() }()
+		root = filepath.Join(base, filepath.Base(filepath.Clean(root)))
+	}
 	zw := gzip.NewWriter(w)
 	tw := tar.NewWriter(zw)
-	err := addToTar(tw, root, prefix, follow, 0)
+	err := addToTar(tw, root, prefix, confined, base, 0)
 	return errors.Join(err, tw.Close(), zw.Close())
 }
 
-func addToTar(tw *tar.Writer, path, name string, follow bool, depth int) error {
+func addToTar(tw *tar.Writer, path, name string, confined *os.Root, base string, depth int) error {
 	if depth > 64 {
 		return fmt.Errorf("%s: nested too deep (a symlink loop?)", path)
 	}
-	info, err := os.Lstat(path)
-	if err == nil && follow && info.Mode()&fs.ModeSymlink != 0 {
-		info, err = os.Stat(path)
+	var file *os.File
+	var info os.FileInfo
+	var err error
+	if confined != nil {
+		// Canonicalization permits absolute links that stay in custom/.
+		// The actual open below independently refuses changed symlinks.
+		resolved, resolveErr := filepath.EvalSymlinks(path)
+		if resolveErr != nil {
+			return resolveErr
+		}
+		rel, relErr := filepath.Rel(base, resolved)
+		first, _, _ := strings.Cut(rel, string(filepath.Separator))
+		// Case aliases name the same directory on common macOS volumes.
+		if relErr != nil || !filepath.IsLocal(rel) || strings.EqualFold(first, "modules") {
+			return fmt.Errorf("theme path %q must stay inside %s and outside modules", path, base)
+		}
+		file, err = openArchiveFile(confined, rel)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = file.Close() }()
+		info, err = file.Stat()
+	} else {
+		info, err = os.Lstat(path)
 	}
 	if err != nil {
 		return err
@@ -310,24 +353,76 @@ func addToTar(tw *tar.Writer, path, name string, follow bool, depth int) error {
 	}
 	switch {
 	case info.IsDir():
-		entries, err := os.ReadDir(path)
+		var entries []os.DirEntry
+		if file != nil {
+			entries, err = file.ReadDir(-1)
+			sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
+		} else {
+			entries, err = os.ReadDir(path)
+		}
 		if err != nil {
 			return err
 		}
 		for _, entry := range entries {
-			if err := addToTar(tw, filepath.Join(path, entry.Name()), filepath.Join(name, entry.Name()), follow, depth+1); err != nil {
+			if err := addToTar(tw, filepath.Join(path, entry.Name()), filepath.Join(name, entry.Name()), confined, base, depth+1); err != nil {
 				return err
 			}
 		}
 	case info.Mode().IsRegular():
-		f, err := os.Open(path) // #nosec G304 -- walking a tree the caller named
-		if err != nil {
-			return err
+		if file == nil {
+			file, err = os.Open(path) // #nosec G304 -- backup runs as the site user
+			if err != nil {
+				return err
+			}
 		}
-		_, err = io.Copy(tw, f)
-		return errors.Join(err, f.Close())
+		_, err = io.Copy(tw, file)
+		return errors.Join(err, file.Close())
 	}
 	return nil
+}
+
+// openArchiveFile opens a canonical relative name without following another
+// symlink at any component. Each descriptor is checked against its no-follow
+// metadata, so a replacement cannot redirect reads after the policy check.
+func openArchiveFile(root *os.Root, path string) (*os.File, error) {
+	parts := strings.Split(filepath.ToSlash(path), "/")
+	for _, part := range parts[:len(parts)-1] {
+		info, err := root.Lstat(part)
+		if err != nil {
+			return nil, err
+		}
+		if !info.IsDir() {
+			return nil, fmt.Errorf("archive directory %q changed", part)
+		}
+		next, err := root.OpenRoot(part)
+		if err != nil {
+			return nil, err
+		}
+		defer func() { _ = next.Close() }()
+		opened, err := next.Stat(".")
+		if err != nil || !os.SameFile(info, opened) {
+			return nil, fmt.Errorf("archive directory %q changed while opening", part)
+		}
+		root = next
+	}
+	leaf := parts[len(parts)-1]
+	info, err := root.Lstat(leaf)
+	if err != nil {
+		return nil, err
+	}
+	if info.Mode()&fs.ModeSymlink != 0 {
+		return nil, fmt.Errorf("archive path %q changed to a symlink", path)
+	}
+	file, err := root.OpenFile(leaf, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, err
+	}
+	opened, err := file.Stat()
+	if err != nil || !os.SameFile(info, opened) {
+		_ = file.Close()
+		return nil, fmt.Errorf("archive path %q changed while opening", path)
+	}
+	return file, nil
 }
 
 // InstallThemes replaces a site's themes with the gzipped tar read from r.
