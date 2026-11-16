@@ -258,8 +258,8 @@ func (a *App) Pull(ctx context.Context, o PullOpts) error {
 				return err
 			}
 		}
-		args := append(flags, o.Host+":"+site.Dir+"/"+sub+"/", local+"/")
-		return r.exec(ctx, "", nil, "rsync", args...)
+		flags = append(flags, o.Host+":"+site.Dir+"/"+sub+"/", local+"/")
+		return r.exec(ctx, "", nil, "rsync", flags...)
 	}
 	if o.Uploads {
 		if err := rsync("uploads", "uploads", "-az", "--delete"); err != nil {

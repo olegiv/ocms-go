@@ -24,7 +24,7 @@ import (
 const reviewedSyncSchema = "2e7a67685af390c317234ff758def25eae3afc14fe68f7ad88d5ed17d8b047a0"
 
 // Changes to built-in credential storage need an explicit production-copy
-// policy. The test reads the same classification CTE the shell script uses.
+// policy. The test reads the same classification CTE Go ocmsctl embeds.
 func TestSyncDatabasePolicyClassifiesCredentialSchema(t *testing.T) {
 	db, cleanup := testutil.TestDB(t)
 	t.Cleanup(cleanup)
@@ -125,7 +125,7 @@ func TestSyncDatabasePolicyClassifiesCredentialSchema(t *testing.T) {
 
 func readSyncDBPolicy(t *testing.T) string {
 	t.Helper()
-	policy, err := os.ReadFile("../../scripts/deploy/sync-db-policy.sql")
+	policy, err := os.ReadFile("../../cmd/ocmsctl/templates/sync-db-policy.sql")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -18,8 +18,7 @@
 #     BINARY_NAME ?= mysite
 #     include core/site.mk
 #
-# `make deploy` follows BINARY_NAME. The legacy deploy-binary.sh needs it
-# exported too, or it looks for bin/ocms-linux-amd64.
+# `make deploy` passes the BINARY_NAME-specific output path to Go ocmsctl.
 #
 # Provides: help, dev, run, stop, restart, build, build-prod, build-linux-amd64,
 # build-linux-arm64, build-darwin-arm64, build-all-platforms, assets, test, clean,
@@ -222,8 +221,8 @@ endef
 # success with failing tests inside it.
 #
 # This ADDS another site's modules; it does not evict them. One binary serves
-# every instance (scripts/deploy/ocmsctl and ocms@.service both exec
-# /opt/ocms/bin/ocms, and a site's deploy-binary.sh pushes it to all of them), so
+# every instance (each ocms@.service executes /opt/ocms/bin/ocms, and
+# Go ocmsctl deploy replaces that shared binary), so
 # that binary must carry the UNION of every site's modules. Evicting another
 # site's would build a binary without them and ship it to the instance that
 # needs them. Registry.InitAll migrates every registered module regardless of
@@ -246,7 +245,7 @@ endef
 # The union exists ONLY in this tree: a build sees its own site plus whatever
 # earlier syncs left behind, and nothing else. After a fresh clone or a
 # `git clean -fdx` here, a binary built from one site omits every other site's
-# modules — and deploy-binary.sh ships it to every instance. Re-run
+# modules — and make deploy replaces the binary shared by every instance. Re-run
 # `make sync-modules` from each site that owns modules first. Giving each
 # instance its own binary path is the structural fix; see docs/custom-modules.md.
 #

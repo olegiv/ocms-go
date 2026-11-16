@@ -1,5 +1,5 @@
 .PHONY: build-ctl deploy server-setup pull
-.PHONY: run stop restart build build-prod build-linux-amd64 build-linux-arm64 build-darwin-arm64 build-all-platforms test coverage coverage-html clean clean-db migrate-up migrate-down migrate-status migrate-create assets dev sqlc templ deploy-binary commit-prepare commit-do code-quality security-audit commit-prepare-local commit-do-local code-quality-local security-audit-local install-hooks install-git-guard install-test-gate check-no-absolute-paths
+.PHONY: run stop restart build build-prod build-linux-amd64 build-linux-arm64 build-darwin-arm64 build-all-platforms test coverage coverage-html clean clean-db migrate-up migrate-down migrate-status migrate-create assets dev sqlc templ commit-prepare commit-do code-quality security-audit commit-prepare-local commit-do-local code-quality-local security-audit-local install-hooks install-git-guard install-test-gate check-no-absolute-paths
 
 # Build variables
 BINARY_NAME=ocms
@@ -180,11 +180,6 @@ server-setup: build-ctl
 # Usage: make pull HOST=root@server.example.com SITE=site1 [PULL_OPTS=--no-logs]
 pull: build-ctl
 	$(BUILD_DIR)/ocmsctl pull $(HOST) $(SITE) $(PULL_OPTS)
-
-# Legacy shell deploy, kept until ocmsctl has done a production deploy.
-# Usage: make deploy-binary SERVER=server.example.com INSTANCES="site1 site2"
-deploy-binary:
-	./scripts/deploy/deploy-binary.sh $(SERVER) $(INSTANCES) $(DEPLOY_OPTS)
 
 # Prepare and execute commit workflow (Codex/Claude-compatible)
 commit-prepare:

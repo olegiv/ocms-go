@@ -131,9 +131,8 @@ BINARY_NAME ?= mysite
 include core/site.mk
 ```
 
-`make deploy` (see [scripts/deploy/README.md](../scripts/deploy/README.md))
-uploads the binary under whatever `BINARY_NAME` is. The legacy `deploy-binary.sh`
-looks for `bin/ocms-linux-amd64` unless `BINARY_NAME` is exported for it too.
+`make deploy` (see the [deployment guide](deploy-ubuntu-plesk.md))
+uploads the binary under whatever `BINARY_NAME` is.
 
 Sharing one definition is the point: `git pull` in this repository updates the
 build logic for every site at once, so a site cannot end up unable to compile a

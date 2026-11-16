@@ -20,10 +20,13 @@ import (
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/sitectl"
-	deployfiles "github.com/olegiv/ocms-go/scripts/deploy"
 )
 
 var (
+	//go:embed templates/ocms@.service
+	unitTemplate []byte
+	//go:embed templates/sync-db-policy.sql
+	scrubSQL string
 	//go:embed templates/env.tmpl
 	envTemplate string
 	//go:embed templates/dropin.tmpl
@@ -79,11 +82,11 @@ func newApp() *sitectl.App {
 		ThemesPath:     "custom/themes",
 		ThemeFile:      "theme.json",
 		ErrorLog:       "logs/error.log",
-		Unit:           deployfiles.Unit,
+		Unit:           unitTemplate,
 		EnvTemplate:    envTemplate,
 		DropInTemplate: dropInTemplate,
 		ProxyTemplate:  proxyTemplate,
-		ScrubSQL:       deployfiles.ScrubSQL,
+		ScrubSQL:       scrubSQL,
 		Stdout:         os.Stdout,
 		Stderr:         os.Stderr,
 		Exec:           sitectl.RunCmd,
@@ -230,39 +233,7 @@ func run(ctx context.Context, app *sitectl.App, args []string, stdin io.Reader) 
 		return app.Init(ctx)
 
 	case "site":
-		spec := sitectl.SiteSpec{}
-		fs.IntVar(&spec.Port, "port", 0, "port (default: first free one from 8081)")
-		fs.StringVar(&spec.Group, "group", "", "group of the site's files (default psaserv)")
-		fs.StringVar(&spec.Dir, "dir", "", "site directory (default /var/www/vhosts/<domain>/ocms)")
-		rest, err := parse(fs, args[1:])
-		if err != nil {
-			return err
-		}
-		switch {
-		case len(rest) == 3 && rest[0] == "add":
-			if err := needRoot(); err != nil {
-				return err
-			}
-			spec.Domain, spec.User = rest[1], rest[2]
-			return app.AddSite(ctx, spec)
-		case len(rest) == 2 && rest[0] == "remove":
-			if err := needRoot(); err != nil {
-				return err
-			}
-			site, err := app.Site(rest[1])
-			if err != nil {
-				return err
-			}
-			return app.RemoveSite(ctx, site)
-		case len(rest) == 2 && rest[0] == "show":
-			site, err := app.Site(rest[1])
-			if err != nil {
-				return err
-			}
-			_, err = fmt.Fprintln(app.Stdout, site)
-			return err
-		}
-		return errors.New("usage: ocmsctl site add <domain> <user> | site remove <site> | site show <site>")
+		return runSite(ctx, app, fs, args[1:])
 
 	case "status", "list":
 		rest, err := parse(fs, args[1:])
@@ -276,35 +247,7 @@ func run(ctx context.Context, app *sitectl.App, args []string, stdin io.Reader) 
 		return app.List(ctx, picked)
 
 	case "start", "stop", "restart", "rollback", "install":
-		release := fs.String("to", "", "release to roll back to (default: the one before the current)")
-		sum := fs.String("sha256", "", "SHA-256 of the binary on standard input")
-		rest, err := parse(fs, args[1:])
-		if err != nil {
-			return err
-		}
-		if err := needRoot(); err != nil {
-			return err
-		}
-		// install may name no site: the binary is installed and running
-		// sites keep the old one until they restart.
-		var picked []sitectl.Site
-		if command != "install" || len(rest) > 0 || *all {
-			if picked, err = sites(rest, false); err != nil {
-				return err
-			}
-		}
-		switch command {
-		case "start":
-			return app.Start(ctx, picked)
-		case "stop":
-			return app.Stop(ctx, picked)
-		case "restart":
-			return app.Restart(ctx, picked)
-		case "rollback":
-			return app.Rollback(ctx, *release, picked)
-		default:
-			return app.Install(ctx, stdin, *sum, picked)
-		}
+		return runLifecycle(ctx, app, command, fs, all, args[1:], stdin)
 
 	case "releases":
 		if rest, err := parse(fs, args[1:]); err != nil || len(rest) != 0 {
@@ -361,4 +304,77 @@ func run(ctx context.Context, app *sitectl.App, args []string, stdin io.Reader) 
 		return app.SiteOp(ctx, args[1], args[2], stdin, app.Stdout)
 	}
 	return fmt.Errorf("unknown command %q (see ocmsctl help)", command)
+}
+
+// runLifecycle handles server commands that install or switch running binaries.
+func runLifecycle(ctx context.Context, app *sitectl.App, command string, fs *flag.FlagSet, all *bool, args []string, stdin io.Reader) error {
+	release := fs.String("to", "", "release to roll back to (default: the one before the current)")
+	sum := fs.String("sha256", "", "SHA-256 of the binary on standard input")
+	rest, err := parse(fs, args)
+	if err != nil {
+		return err
+	}
+	if err := needRoot(); err != nil {
+		return err
+	}
+	// install may name no site: the binary is installed and running
+	// sites keep the old one until they restart.
+	var picked []sitectl.Site
+	if command != "install" || len(rest) > 0 || *all {
+		if len(rest) == 0 && !*all {
+			return errors.New("name at least one site, or use --all")
+		}
+		if picked, err = app.Pick(rest, *all); err != nil {
+			return err
+		}
+	}
+	switch command {
+	case "start":
+		return app.Start(ctx, picked)
+	case "stop":
+		return app.Stop(ctx, picked)
+	case "restart":
+		return app.Restart(ctx, picked)
+	case "rollback":
+		return app.Rollback(ctx, *release, picked)
+	default:
+		return app.Install(ctx, stdin, *sum, picked)
+	}
+}
+
+// runSite handles registration and per-site provisioning commands.
+func runSite(ctx context.Context, app *sitectl.App, fs *flag.FlagSet, args []string) error {
+	spec := sitectl.SiteSpec{}
+	fs.IntVar(&spec.Port, "port", 0, "port (default: first free one from 8081)")
+	fs.StringVar(&spec.Group, "group", "", "group of the site's files (default psaserv)")
+	fs.StringVar(&spec.Dir, "dir", "", "site directory (default /var/www/vhosts/<domain>/ocms)")
+	rest, err := parse(fs, args)
+	if err != nil {
+		return err
+	}
+	switch {
+	case len(rest) == 3 && rest[0] == "add":
+		if err := needRoot(); err != nil {
+			return err
+		}
+		spec.Domain, spec.User = rest[1], rest[2]
+		return app.AddSite(ctx, spec)
+	case len(rest) == 2 && rest[0] == "remove":
+		if err := needRoot(); err != nil {
+			return err
+		}
+		site, err := app.Site(rest[1])
+		if err != nil {
+			return err
+		}
+		return app.RemoveSite(ctx, site)
+	case len(rest) == 2 && rest[0] == "show":
+		site, err := app.Site(rest[1])
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Fprintln(app.Stdout, site)
+		return err
+	}
+	return errors.New("usage: ocmsctl site add <domain> <user> | site remove <site> | site show <site>")
 }

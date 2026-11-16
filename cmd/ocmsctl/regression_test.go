@@ -145,7 +145,7 @@ func TestPullUsesConfiguredRemoteAndLocalDB(t *testing.T) {
 			dir := w.addSite(t)
 			custom := filepath.Join(dir, "data", "tenant.db")
 			for path, title := range map[string]string{custom: "current", filepath.Join(dir, "data", "ocms.db"): "stale"} {
-				db, err := sql.Open("sqlite", path)
+				db, err := sql.Open("sqlite", "file:"+path)
 				if err != nil {
 					t.Fatal(err)
 				}

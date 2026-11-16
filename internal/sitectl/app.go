@@ -7,8 +7,8 @@
 // The same code runs in two places. On the server it provisions sites,
 // installs releases, restarts sites behind a health gate, backs them up and
 // monitors them. On a development machine it builds, uploads and calls the
-// server half over ssh. No shell is generated: every command is an argument
-// list, and the server half is this package, not a script sent over the wire.
+// server half over ssh. Commands use argument lists; only initial bootstrap
+// sends a fixed installer line before the server tool is available.
 //
 // The package knows nothing about the application it deploys; App carries
 // everything specific to it. It must not import other packages of this module

@@ -109,9 +109,8 @@ func (a *App) each(sites []Site, fn func(Site) error) error {
 
 // Restart stops the sites, starts them and requires each to be healthy.
 //
-// Every site is stopped before any is started, as the deploy scripts always
-// did. A site that fails is reported and the others carry on. A site that
-// did not stop is not started: its old process may still hold the port and
+// Every site is stopped before any is started. A site that fails is reported
+// and the others carry on. A site that did not stop is not started: its old process may still hold the port and
 // answer the health check. A healthy site is asked once more after a pause,
 // because systemd restarts a binary that exits, so one that dies right after
 // its first answer would otherwise pass (on 2026-10-23 every instance
@@ -195,7 +194,7 @@ func (a *App) List(ctx context.Context, sites []Site) error {
 // writes one, the journal otherwise. errorsOnly shows the application's
 // error log.
 func (a *App) Logs(ctx context.Context, site Site, lines int, follow, errorsOnly bool) error {
-	file := filepath.Join(site.Dir, "logs", a.Name+".log")
+	var file string
 	if errorsOnly {
 		file = filepath.Join(site.Dir, a.ErrorLog)
 	} else {

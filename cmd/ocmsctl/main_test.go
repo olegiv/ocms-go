@@ -4,10 +4,13 @@
 package main
 
 import (
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -148,6 +151,12 @@ func TestSiteAddWritesAStartableProductionConfig(t *testing.T) {
 	} {
 		if env[key] != want {
 			t.Errorf("%s = %q, want %q", key, env[key], want)
+		}
+	}
+
+	for _, secret := range secrets {
+		if strings.Contains(w.out.String(), secret) {
+			t.Error("provisioning printed a private credential")
 		}
 	}
 
@@ -392,6 +401,62 @@ func TestSiteOperationsRunAsTheSiteUser(t *testing.T) {
 		t.Errorf("backup is owned by %d with mode %o, want nobody and 600", owner, info.Mode().Perm())
 	}
 
+	// Snapshot and theme installation use the same re-exec boundary as backups.
+	w.out.Reset()
+	if err := run(t.Context(), w.server, []string{"snapshot", "site"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	zr, err := gzip.NewReader(bytes.NewReader(w.out.Bytes()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := io.ReadAll(zr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := zr.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.HasPrefix(snapshot, []byte("SQLite format 3")) {
+		t.Fatal("snapshot is not SQLite")
+	}
+	var archive bytes.Buffer
+	zw := gzip.NewWriter(&archive)
+	tw := tar.NewWriter(zw)
+	if err := tw.WriteHeader(&tar.Header{Name: "mine/theme.json", Typeflag: tar.TypeReg, Mode: 0644, Size: 2}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tw.Write([]byte("{}")); err != nil {
+		t.Fatal(err)
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := run(t.Context(), w.server, []string{"themes", "site"}, bytes.NewReader(archive.Bytes())); err != nil {
+		t.Fatal(err)
+	}
+	themePath := filepath.Join(site, "custom", "themes", "mine", "theme.json")
+	theme, err := os.Stat(themePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if owner := theme.Sys().(*syscall.Stat_t).Uid; int(owner) != uid {
+		t.Fatalf("theme owned by %d, want %d", owner, uid)
+	}
+	// Neither a redirected custom tree nor a redirected backup tree may grant root's access.
+	if err := os.RemoveAll(filepath.Join(site, "custom")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(rootOnly, filepath.Join(site, "custom")); err != nil {
+		t.Fatal(err)
+	}
+	if err := run(t.Context(), w.server, []string{"themes", "site"}, bytes.NewReader(archive.Bytes())); err == nil {
+		t.Error("themes through a redirected custom tree succeeded")
+	}
+
 	// The site user redirects backups/ at a directory only root may write.
 	if err := os.RemoveAll(filepath.Join(site, "backups")); err != nil {
 		t.Fatal(err)
@@ -402,6 +467,10 @@ func TestSiteOperationsRunAsTheSiteUser(t *testing.T) {
 	if err := run(context.Background(), w.server, []string{"backup", "site"}, nil); err == nil {
 		t.Error("backup through a redirected backups/ succeeded")
 	}
+	if err := run(t.Context(), w.server, []string{"snapshot", "site"}, nil); err == nil {
+		t.Error("snapshot through a redirected backups/ succeeded")
+	}
+
 	if leaked, _ := os.ReadDir(rootOnly); len(leaked) != 0 {
 		t.Errorf("root wrote %d entries where the site user pointed it", len(leaked))
 	}

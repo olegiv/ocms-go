@@ -1,6 +1,11 @@
 # Migration Plan: Embed Core Themes in Binary
 
-This document outlines the migration plan to embed core themes (`default`, `developer`) into the binary and create a unified `custom/` directory for user-created content.
+This historical design plan records the migration to embed core themes (`default`, `developer`) into the binary and create a unified `custom/` directory for user-created content.
+
+Core theme embedding is implemented. Operational deployment instructions are
+maintained in the [Go deployment guide](deploy-ubuntu-plesk.md); the deployment
+sections below use the current Go commands. Earlier theme-layout and rollback
+sections record the original design, rather than a current rollout procedure.
 
 ## Goals
 
@@ -210,233 +215,22 @@ GET /theme/static/{file}
 
 3. Update `README.md` if it references theme directory
 
-### Phase 8: Update Deployment and Sync Procedures
+### Phase 8: Deployment and Sync Procedures
 
-**Tasks:**
+Core themes ship in the application binary. The Go deployment tool in
+`cmd/ocmsctl` and `internal/sitectl` manages optional custom themes:
 
-With embedded themes, the deployment model changes significantly. Core themes ship with the binary, so only custom themes need syncing.
+- `make deploy` builds and deploys the binary, including compiled custom modules.
+- `make deploy DEPLOY_OPTS=--themes` also replaces the named sites' custom themes.
+- `ocmsctl deploy <host> <site> --themes-only` changes themes and restarts the site.
+- `ocmsctl site add` provisions `custom/themes/` and a per-site configuration.
+- `ocmsctl pull <host> <site> --themes` copies custom themes to development;
+  the database is an online snapshot, scrubbed before local installation.
+- `ocmsctl backup` archives custom content alongside database and uploads.
 
-#### 8.1 Update `scripts/deploy/deploy.sh`
-
-**Current behavior:**
-- Line 16: `LOCAL_THEMES_DIR="themes/"`
-- Line 129: `REMOTE_THEMES_DIR="${VHOST}/ocms/themes"`
-- Lines 193-198: rsync themes with `--delete`
-
-**New behavior:**
-- Only sync custom themes if `custom/themes/` exists and is non-empty
-- Change local path from `themes/` to `custom/themes/`
-- Change remote path from `{vhost}/ocms/themes` to `{vhost}/ocms/custom/themes`
-- Make theme sync optional (skip if no custom themes)
-
-**Code changes:**
-```bash
-# Old
-LOCAL_THEMES_DIR="themes/"
-REMOTE_THEMES_DIR="${VHOST}/ocms/themes"
-
-# New
-LOCAL_CUSTOM_DIR="custom/"
-REMOTE_CUSTOM_DIR="${VHOST}/ocms/custom"
-```
-
-**New sync logic:**
-```bash
-# Step 5: Sync custom content (only if exists)
-if [[ -d "${LOCAL_CUSTOM_DIR}/themes" ]] && [[ -n "$(ls -A ${LOCAL_CUSTOM_DIR}/themes 2>/dev/null)" ]]; then
-    echo_step "Syncing custom themes..."
-    rsync_cmd -avz --delete "${LOCAL_CUSTOM_DIR}/themes/" "${SSH_USER}@${SERVER}:${REMOTE_CUSTOM_DIR}/themes/"
-    echo_ok "Custom themes synced"
-else
-    echo_info "No custom themes to sync (using embedded themes)"
-fi
-```
-
-#### 8.2 Update `scripts/deploy/setup-site.sh`
-
-**Current behavior:**
-- Line 185: Creates `themes` directory
-- Lines 208-209: Sets `OCMS_THEMES_DIR=./themes`
-- Lines 263-282: Copies themes from `/opt/ocms/themes/`
-
-**New behavior:**
-- Create `custom/themes` instead of `themes`
-- Replace `OCMS_THEMES_DIR` with `OCMS_CUSTOM_DIR`
-- Remove theme copying (binary has embedded themes)
-- Add note about custom themes
-
-**Directory structure change:**
-```bash
-# Old
-mkdir -p "$INSTANCE_DIR"/{data,uploads,themes,backups,logs}
-
-# New
-mkdir -p "$INSTANCE_DIR"/{data,uploads,custom/themes,custom/modules,backups,logs}
-```
-
-**Environment file change:**
-```bash
-# Old
-OCMS_THEMES_DIR=./themes
-OCMS_ACTIVE_THEME=default
-
-# New
-OCMS_CUSTOM_DIR=./custom
-OCMS_ACTIVE_THEME=default
-# Note: Core themes (default, developer) are embedded in binary
-# Place custom themes in ./custom/themes/
-```
-
-**Remove theme copying section** (lines 262-282):
-- Delete the `/opt/ocms/themes/` check and copy logic
-- Binary includes default and developer themes
-- Custom themes are optional
-
-#### 8.3 Update `scripts/deploy/deploy-multi.sh`
-
-**Current behavior:**
-- Only handles binary deployment, no theme sync
-
-**New behavior:**
-- No changes needed (binary includes themes)
-- Document that custom themes require separate sync
-
-#### 8.4 Update `scripts/deploy/sync-prod-to-dev.sh`
-
-**Current behavior:**
-- Syncs data, uploads, logs (not themes)
-
-**New behavior:**
-- Add optional `--custom` flag to sync custom themes/modules
-- Sync from `{vhost}/ocms/custom/` to local `./custom/`
-
-**New option:**
-```bash
---sync-custom          Sync custom themes/modules from production
-```
-
-**New function:**
-```bash
-sync_custom() {
-    if [[ "$SYNC_CUSTOM" != true ]]; then
-        echo_info "Skipping custom content sync (use --sync-custom to include)"
-        return
-    fi
-
-    echo_step "Syncing custom content..."
-    mkdir -p "${LOCAL_CUSTOM_DIR}"
-    rsync_cmd -avz --progress \
-        "${SSH_USER}@${SERVER}:${REMOTE_CUSTOM_DIR}/" \
-        "${LOCAL_CUSTOM_DIR}/"
-    echo_ok "Custom content synced"
-}
-```
-
-#### 8.5 Update `scripts/deploy/backup-multi.sh`
-
-**Current behavior:**
-- Backs up database and uploads
-
-**New behavior:**
-- Add custom themes/modules to backup
-- Only if `custom/` directory exists and is non-empty
-
-**Add to backup_site function:**
-```bash
-# Backup custom content
-local custom_path="$instance_dir/custom"
-if [ -d "$custom_path" ] && [ "$(ls -A "$custom_path" 2>/dev/null)" ]; then
-    local custom_backup="$backup_dir/custom_${TIMESTAMP}.tar.gz"
-    tar -czf "$custom_backup" -C "$instance_dir" custom
-    echo "  Custom: $custom_backup ($(ls -lh "$custom_backup" | awk '{print $5}'))"
-fi
-```
-
-#### 8.6 Update `scripts/deploy/README.md`
-
-**Major documentation changes:**
-
-1. **Architecture section** - Update directory structure:
-   ```
-   # Old
-   /opt/ocms/themes/               ← shared theme source (copied per site)
-
-   # New
-   # (removed - themes embedded in binary)
-   ```
-
-   Per-site structure:
-   ```
-   # Old
-   ├── themes/                     ← theme files
-
-   # New
-   ├── custom/                     ← user content (optional)
-   │   ├── themes/                 ← custom/override themes
-   │   └── modules/                ← custom modules (future)
-   ```
-
-2. **Quick Start section** - Remove theme copying:
-   ```bash
-   # Old
-   scp -r themes user@server:/tmp/ocms-themes
-   sudo cp -r /tmp/ocms-themes/* /opt/ocms/themes/
-
-   # New
-   # (removed - themes are embedded in binary)
-   ```
-
-3. **Remove the "Important" note** about themes loaded from disk
-
-4. **Update deploy.sh section**:
-   - Remove `-v` vhost requirement for themes
-   - Document that only custom themes are synced
-   - Add `--no-custom` flag documentation
-
-5. **Add new section: Custom Themes**:
-   ```markdown
-   ## Custom Themes
-
-   Core themes (default, developer) are embedded in the binary.
-   To add custom themes:
-
-   1. Create theme in `custom/themes/mytheme/` locally
-   2. Deploy with: `./deploy.sh ... --sync-custom`
-   3. Or manually copy to server: `{vhost}/ocms/custom/themes/`
-
-   Custom themes override embedded themes with the same name.
-   ```
-
-6. **Update Copying Local Data section** - remove theme references
-
-7. **Update sync-prod-to-dev section** - add `--sync-custom` option
-
-8. **Update File Permissions table**:
-   ```
-   # Old
-   | `/opt/ocms/themes/` | `root:root` | `755` |
-
-   # New (removed, add instead):
-   | `{vhost}/ocms/custom/` | `{user}:psaserv` | `755` |
-   ```
-
-#### 8.7 Remove `/opt/ocms/themes/` from Server
-
-After migration, the shared themes directory is no longer needed:
-
-```bash
-# On server, after all sites are updated:
-sudo rm -rf /opt/ocms/themes
-```
-
-**Files to modify:**
-| File | Changes |
-|------|---------|
-| `scripts/deploy/deploy.sh` | Change theme sync to custom sync, make optional |
-| `scripts/deploy/setup-site.sh` | Remove theme copying, update env vars, change directory structure |
-| `scripts/deploy/sync-prod-to-dev.sh` | Add `--sync-custom` option |
-| `scripts/deploy/backup-multi.sh` | Add custom directory backup |
-| `scripts/deploy/README.md` | Major updates for new architecture |
+The systemd unit, site templates and scrub policy are embedded from
+`cmd/ocmsctl/templates`. See [deployment](deploy-ubuntu-plesk.md) for server
+setup, ownership, migration from older servers and rollback.
 
 ### Phase 9: Testing
 
@@ -460,11 +254,10 @@ sudo rm -rf /opt/ocms/themes
    - Switch between embedded and custom themes
 
 4. Deployment testing:
-   - Test `deploy.sh` with no custom themes
-   - Test `deploy.sh` with custom themes
-   - Test `setup-site.sh` creates correct directory structure
-   - Test `sync-prod-to-dev.sh --sync-custom`
-   - Test `backup-multi.sh` includes custom content
+   - Test Go deployments with and without custom themes
+   - Test `ocmsctl site add` creates the private site layout
+   - Test `ocmsctl pull --themes` copies custom themes
+   - Test `ocmsctl backup` includes custom content
 
 ## File Changes Summary
 
@@ -490,11 +283,6 @@ sudo rm -rf /opt/ocms/themes
 | `cmd/ocms/main.go` | Pass embed.FS to theme manager |
 | `.gitignore` | Add custom/ patterns |
 | `CLAUDE.md` | Update env vars and architecture |
-| `scripts/deploy/deploy.sh` | Change theme sync to optional custom sync |
-| `scripts/deploy/setup-site.sh` | Remove theme copying, update directory structure |
-| `scripts/deploy/sync-prod-to-dev.sh` | Add `--sync-custom` option |
-| `scripts/deploy/backup-multi.sh` | Add custom directory backup |
-| `scripts/deploy/README.md` | Major updates for embedded themes architecture |
 
 ### Deleted Files
 | File | Reason |
@@ -520,10 +308,9 @@ sudo rm -rf /opt/ocms/themes
    - Custom themes need migration: `mv themes custom/themes`
    - Update `.env`: replace `OCMS_THEMES_DIR` with `OCMS_CUSTOM_DIR`
 
-5. **deploy.sh usage**: Script interface changes
-   - Old: Required `-v` (vhost) for theme sync
-   - New: `-v` only needed if syncing custom themes
-   - Add migration notes to script help text
+5. **Deployment commands**: use `make deploy DEPLOY_OPTS=--themes` or
+   `ocmsctl deploy <host> <site> --themes`; directory and ownership come from
+   the server registry.
 
 ## Rollback Plan
 
@@ -533,7 +320,7 @@ If issues arise:
 2. Move themes back from `internal/themes/` to `themes/`
 3. Remove embed.go
 4. Restore original config handling
-5. Revert deployment script changes
+5. Restore the matching Go deployment tool and follow the deployment guide
 6. On servers: restore `/opt/ocms/themes/` and move custom themes back
 
 Keep the old `themes/` directory structure in a branch until migration is verified stable.
@@ -561,10 +348,10 @@ sudo rmdir {vhost}/ocms/custom/themes {vhost}/ocms/custom/modules {vhost}/ocms/c
 6. Static assets serve correctly from both sources
 7. All existing tests pass
 8. No performance regression in theme loading
-9. `deploy.sh` works with and without custom themes
-10. `setup-site.sh` provisions sites without requiring `/opt/ocms/themes/`
-11. `backup-multi.sh` includes custom content in backups
-12. `sync-prod-to-dev.sh --sync-custom` syncs custom themes correctly
+9. Go deployments work with and without custom themes
+10. `ocmsctl site add` provisions sites without shared external core themes
+11. `ocmsctl backup` includes custom content in backups
+12. `ocmsctl pull --themes` copies custom themes correctly
 
 ## Estimated Effort
 
@@ -595,7 +382,5 @@ sudo rmdir {vhost}/ocms/custom/themes {vhost}/ocms/custom/modules {vhost}/ocms/c
    - Updates `.env` files
    - Removes `/opt/ocms/themes/`
 
-6. **deploy.sh vhost requirement**: Currently `-v` (vhost) is required. Options:
-   - Make it optional (only for custom themes)
-   - Keep required for ownership setting on custom content
-   - Add `--custom-only` flag for targeted sync
+6. **Deployment theme selection**: named sites select whose themes are replaced;
+   the server registry provides their directories and users.
