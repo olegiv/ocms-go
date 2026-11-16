@@ -199,6 +199,47 @@ func TestArchiveOpenRejectsLinksReplacedAfterResolution(t *testing.T) {
 	}
 }
 
+func TestThemePackingAcceptsWorkingDirectoryBehindSymlink(t *testing.T) {
+	// Deploy packs the relative custom/themes. filepath.Abs builds on $PWD,
+	// which keeps a symlinked working directory, while the containment
+	// check resolves every entry: both sides must be canonical. Only alias
+	// is a symlink, as on Linux, where the temporary directory is not.
+	parent, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	work := filepath.Join(parent, "work")
+	writeFiles(t, work, map[string]string{"custom/themes/mine/theme.json": "{}"})
+	alias := filepath.Join(parent, "alias")
+	if err := os.Symlink(work, alias); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(alias)
+	var packed bytes.Buffer
+	if err := writeTarGz(&packed, filepath.Join("custom", "themes"), ".", true); err != nil {
+		t.Fatalf("packing themes from a symlinked working directory: %v", err)
+	}
+	zr, err := gzip.NewReader(&packed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = zr.Close() }()
+	tr := tar.NewReader(zr)
+	for {
+		header, err := tr.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.HasSuffix(header.Name, "mine/theme.json") {
+			return
+		}
+	}
+	t.Error("the archive omits mine/theme.json")
+}
+
 func TestBackupArchivePreservesLinksWithoutReadingTargets(t *testing.T) {
 	work := t.TempDir()
 	writeFiles(t, work, map[string]string{"custom/theme.json": "{}", "private": "private-fixture"})

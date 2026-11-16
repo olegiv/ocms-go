@@ -278,12 +278,14 @@ func writeTarGz(w io.Writer, root, prefix string, follow bool) error {
 	if follow {
 		// A shared theme may live beside themes/, but a pulled symlink must
 		// never export developer files or compiled module sources.
+		// Abs first: it builds on $PWD, which may itself pass through a
+		// symlink, and addToTar compares fully resolved paths against base.
 		var err error
-		base, err = filepath.EvalSymlinks(filepath.Dir(filepath.Clean(root)))
+		base, err = filepath.Abs(filepath.Dir(filepath.Clean(root)))
 		if err != nil {
 			return err
 		}
-		base, err = filepath.Abs(base)
+		base, err = filepath.EvalSymlinks(base)
 		if err != nil {
 			return err
 		}

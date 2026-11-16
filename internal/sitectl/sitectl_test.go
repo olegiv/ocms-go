@@ -97,7 +97,12 @@ type testEnv struct {
 
 func newTestEnv(t *testing.T) *testEnv {
 	t.Helper()
-	root := t.TempDir()
+	// AddSite records canonical paths; on macOS the temporary directory
+	// sits behind the /var -> /private/var symlink.
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	env := &testEnv{host: &fakeHost{state: map[string]string{}, fail: map[string]bool{}}, out: &bytes.Buffer{}}
 	env.now = time.Date(2026, 11, 13, 10, 0, 0, 0, time.UTC)
 	env.App = &App{

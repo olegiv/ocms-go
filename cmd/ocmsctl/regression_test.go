@@ -172,7 +172,7 @@ func TestPullUsesConfiguredRemoteAndLocalDB(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 			var title string
 			if err := db.QueryRow("SELECT title FROM pages").Scan(&title); err != nil {
 				t.Fatal(err)

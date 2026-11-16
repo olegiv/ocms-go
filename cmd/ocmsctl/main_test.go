@@ -40,7 +40,12 @@ type world struct {
 
 func newWorld(t *testing.T) *world {
 	t.Helper()
-	root := t.TempDir()
+	// Provisioning records canonical paths; on macOS the temporary
+	// directory sits behind the /var -> /private/var symlink.
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	w := &world{out: &bytes.Buffer{}}
 	euid = func() int { return 0 }
 	t.Cleanup(func() { euid = os.Geteuid })
