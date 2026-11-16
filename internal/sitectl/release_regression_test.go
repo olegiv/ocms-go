@@ -55,7 +55,7 @@ func TestFailedSnapshotRetainsPreviousValidBackup(t *testing.T) {
 	if err := checkIntegrity(context.Background(), previous); err != nil {
 		t.Fatalf("previous backup is invalid: %v", err)
 	}
-	if err := gzipFile(previous); err != nil {
+	if err := gzipFile(previous, previous+".gz"); err != nil {
 		t.Fatalf("compress previous valid backup: %v", err)
 	}
 	previous += ".gz"

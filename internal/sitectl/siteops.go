@@ -15,6 +15,8 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -91,14 +93,45 @@ func (a *App) SiteOp(ctx context.Context, op, dir string, stdin io.Reader, stdou
 func (a *App) Backup(ctx context.Context, sites []Site) error {
 	return a.each(sites, func(site Site) error {
 		a.logf("Backing up %s", site.ID)
-		return a.asSiteUser(ctx, site, "backup", nil, a.Stdout)
+		err := a.asSiteUser(ctx, site, "backup", nil, a.Stdout)
+		if err != nil {
+			// Cron appends this run to a log nobody reads: the hook is how
+			// a failed backup reaches someone.
+			a.alert(ctx, site, "BACKUP FAILED", err.Error())
+		}
+		return err
 	})
 }
 
+var backupStampRe = regexp.MustCompile(`^[0-9]{8}_[0-9]{6}$`)
+
+// backupKind is one kind of archive backupSite writes: <prefix><stamp><suffix>.
+type backupKind struct{ prefix, suffix string }
+
+func (k backupKind) name(stamp string) string { return k.prefix + stamp + k.suffix }
+
+// matches reports whether name is an archive of this kind. Retention removes
+// nothing else: other files in backups/ are the operator's.
+func (k backupKind) matches(name string) bool {
+	stamp, ok := strings.CutPrefix(name, k.prefix)
+	if !ok {
+		return false
+	}
+	stamp, ok = strings.CutSuffix(stamp, k.suffix)
+	return ok && backupStampRe.MatchString(stamp)
+}
+
 // backupSite writes a database snapshot and archives of uploads and custom
-// content into <dir>/backups (owner-only), then drops backups older than
-// backupRetention.
+// content into <dir>/backups (owner-only). Only when all of them succeed does
+// it drop archives older than backupRetention, of the kinds it just wrote.
+// Anything it cannot read is an error, never "nothing to back up".
 func (a *App) backupSite(ctx context.Context, dir string) error {
+	// Creating backups/ below would otherwise recreate a missing site.
+	if info, err := os.Stat(dir); err != nil {
+		return fmt.Errorf("site directory: %w", err)
+	} else if !info.IsDir() {
+		return fmt.Errorf("site directory %s is not a directory", dir)
+	}
 	backups := filepath.Join(dir, "backups")
 	if err := os.MkdirAll(backups, 0o700); err != nil {
 		return err
@@ -108,22 +141,31 @@ func (a *App) backupSite(ctx context.Context, dir string) error {
 	}
 	stamp := a.Now().Format("20060102_150405")
 	var errs []error
+	var written []backupKind
 
-	if db := a.databasePath(dir); exists(db) {
-		snapshot := filepath.Join(backups, a.Name+"_"+stamp+".db")
-		err := snapshotDB(ctx, db, snapshot)
-		if err == nil {
-			// A snapshot that fails the check is kept, but the run fails.
-			errs = append(errs, checkIntegrity(ctx, snapshot))
-			err = gzipFile(snapshot)
-		}
+	dbKind := backupKind{a.Name + "_", ".db.gz"}
+	if err := backupDB(ctx, a.databasePath(dir), filepath.Join(backups, dbKind.name(stamp))); err != nil {
 		errs = append(errs, err)
 	} else {
-		a.logf("  no database at %s", db)
+		written = append(written, dbKind)
 	}
 	for _, sub := range []string{"uploads", "custom"} {
-		if hasFiles(filepath.Join(dir, sub)) {
-			errs = append(errs, tarGzFile(filepath.Join(backups, sub+"_"+stamp+".tar.gz"), dir, sub))
+		kind := backupKind{sub + "_", ".tar.gz"}
+		root, err := contentRoot(filepath.Join(dir, sub))
+		switch {
+		case err != nil:
+			errs = append(errs, fmt.Errorf("%s: %w", sub, err))
+		case root == "":
+			a.logf("  %s: nothing to back up", sub)
+		default:
+			err := writeNew(filepath.Join(backups, kind.name(stamp)), func(w io.Writer) error {
+				return writeTarGz(w, root, sub, false)
+			})
+			if err != nil {
+				errs = append(errs, fmt.Errorf("%s: %w", sub, err))
+			} else {
+				written = append(written, kind)
+			}
 		}
 	}
 
@@ -131,18 +173,79 @@ func (a *App) backupSite(ctx context.Context, dir string) error {
 	if err := errors.Join(errs...); err != nil {
 		return err
 	}
+	return a.expireBackups(backups, written)
+}
+
+// backupDB writes a gzipped, integrity-checked snapshot of the database db to
+// the new file dst. A missing database is an error: a registered site without
+// one is broken or names the wrong file in its configuration.
+func backupDB(ctx context.Context, db, dst string) error {
+	if _, err := os.Stat(db); err != nil {
+		return fmt.Errorf("database: %w", err)
+	}
+	tmp, err := os.MkdirTemp(filepath.Dir(dst), ".snapshot-*")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.RemoveAll(tmp) }()
+	snapshot := filepath.Join(tmp, "snapshot.db")
+	if err := snapshotDB(ctx, db, snapshot); err != nil {
+		return err
+	}
+	if err := checkIntegrity(ctx, snapshot); err != nil {
+		// Kept uncompressed for inspection; retention never matches it.
+		return errors.Join(err, os.Rename(snapshot, strings.TrimSuffix(dst, ".gz")+".failed"))
+	}
+	return gzipFile(snapshot, dst)
+}
+
+// expireBackups removes this tool's archives older than backupRetention, of
+// the given kinds.
+func (a *App) expireBackups(backups string, kinds []backupKind) error {
 	entries, err := os.ReadDir(backups)
-	errs = append(errs, err)
+	if err != nil {
+		return err
+	}
+	var errs []error
 	for _, entry := range entries {
-		info, err := entry.Info()
-		if err != nil || !info.Mode().IsRegular() || a.Now().Sub(info.ModTime()) < backupRetention {
+		if !slices.ContainsFunc(kinds, func(k backupKind) bool { return k.matches(entry.Name()) }) {
 			continue
 		}
-		if name := entry.Name(); strings.HasSuffix(name, ".db.gz") || strings.HasSuffix(name, ".tar.gz") {
-			errs = append(errs, os.Remove(filepath.Join(backups, name)))
+		info, err := entry.Info()
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		if info.Mode().IsRegular() && a.Now().Sub(info.ModTime()) >= backupRetention {
+			errs = append(errs, os.Remove(filepath.Join(backups, entry.Name())))
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// contentRoot returns the directory to archive for path, the target when path
+// is a symlink, or "" when path does not exist or holds no file.
+func contentRoot(path string) (string, error) {
+	if _, err := os.Lstat(path); errors.Is(err, fs.ErrNotExist) {
+		return "", nil
+	} else if err != nil {
+		return "", err
+	}
+	// Backups run as the site user, so following the site's own link
+	// reaches nothing that user cannot already read. A dangling link is
+	// an error: its content is gone.
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return "", err
+	}
+	found, err := hasFiles(resolved)
+	if err != nil || !found {
+		return "", err
+	}
+	return resolved, nil
 }
 
 // Snapshot writes a gzipped snapshot of the site's database to the app's
@@ -220,52 +323,59 @@ func checkIntegrity(ctx context.Context, path string) error {
 	return nil
 }
 
-func exists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
-}
-
-// hasFiles reports whether dir holds at least one regular file.
-func hasFiles(dir string) bool {
+// hasFiles reports whether dir holds at least one regular file. An entry it
+// cannot read is an error: skipping it would back up nothing and succeed.
+func hasFiles(dir string) (bool, error) {
+	info, err := os.Stat(dir)
+	if err != nil {
+		return false, err
+	}
+	if !info.IsDir() {
+		return false, fmt.Errorf("%s is not a directory", dir)
+	}
 	found := false
-	_ = filepath.WalkDir(dir, func(_ string, entry fs.DirEntry, err error) error {
-		if err == nil && entry.Type().IsRegular() {
+	err = filepath.WalkDir(dir, func(_ string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.Type().IsRegular() {
 			found = true
 			return fs.SkipAll
 		}
 		return nil
 	})
-	return found
+	return found, err
 }
 
-// gzipFile replaces path with path.gz (0600).
-func gzipFile(path string) error {
-	src, err := os.Open(path) // #nosec G304 -- backup file this process created
+// gzipFile writes src gzipped to the new file dst (0600).
+func gzipFile(src, dst string) error {
+	in, err := os.Open(src) // #nosec G304 -- backup file this process created
 	if err != nil {
 		return err
 	}
-	defer func() { _ = src.Close() }()
-	dst, err := os.OpenFile(path+".gz", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600) // #nosec G304
-	if err != nil {
-		return err
-	}
-	zw := gzip.NewWriter(dst)
-	_, err = io.Copy(zw, src)
-	err = errors.Join(err, zw.Close(), dst.Close())
-	if err != nil {
-		return err
-	}
-	return os.Remove(path)
+	defer func() { _ = in.Close() }()
+	return writeNew(dst, func(w io.Writer) error {
+		zw := gzip.NewWriter(w)
+		_, err := io.Copy(zw, in)
+		return errors.Join(err, zw.Close())
+	})
 }
 
-// tarGzFile archives <base>/<sub> into the new file dst (0600).
-func tarGzFile(dst, base, sub string) error {
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600) // #nosec G304 -- inside the site's backups directory
+// writeNew creates the file path (0600) holding what fill writes. The content
+// goes to a temporary name beside path first, so path only ever appears
+// complete; a failure leaves nothing behind, and an existing path is never
+// replaced.
+func writeNew(path string, fill func(io.Writer) error) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".partial-*")
 	if err != nil {
 		return err
 	}
-	err = writeTarGz(out, filepath.Join(base, sub), sub, false)
-	return errors.Join(err, out.Close())
+	defer func() { _ = os.Remove(tmp.Name()) }()
+	if err := errors.Join(fill(tmp), tmp.Close()); err != nil {
+		return err
+	}
+	// A link, unlike a rename, fails when path already exists.
+	return os.Link(tmp.Name(), path)
 }
 
 // writeTarGz writes the tree at root to w as a gzipped tar whose entries

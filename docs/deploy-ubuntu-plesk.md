@@ -240,11 +240,22 @@ ocmsctl backup example_com
 
 Per site, into its `backups/` (mode 0700, files 0600): a consistent snapshot of
 the database taken while the site runs (`ocms_<time>.db.gz`, integrity-checked),
-`uploads_<time>.tar.gz` and `custom_<time>.tar.gz`. Backups older than 30 days
-are removed only after the current backup succeeds. Everything is done as the
-site's own user, never as root, so a directory a site user swapped for a symlink cannot redirect a root write.
+`uploads_<time>.tar.gz` and `custom_<time>.tar.gz`. An archive appears under its
+name only once it is complete. Everything is done as the site's own user, never
+as root, so a directory a site user swapped for a symlink cannot redirect a root
+write; an `uploads` or `custom` directory that is itself a symlink is archived
+from its target.
+
+A backup fails, and keeps every earlier copy, when the site directory or its
+database is missing or anything in it cannot be read. A site provisioned but
+not yet started has no database, so its backup fails until it first runs. Only
+after a successful backup are archives older than 30 days removed, and only the
+tool's own (`ocms_<time>.db.gz`, `uploads_<time>.tar.gz`, `custom_<time>.tar.gz`)
+of the kinds it just wrote: anything else you keep in `backups/` stays.
 
 The cron file runs this nightly at 03:00 and logs to `/var/log/ocms-backup.log`.
+Nobody reads that log, so a failed backup also calls the
+[alert hook](#monitoring) with the status `BACKUP FAILED`.
 
 Restore a database:
 
@@ -274,7 +285,8 @@ the restarts run out, the site recovers. Set `MAILTO=you@example.com` in
 minutes. It exits 1 while any site is down.
 
 For other channels create an executable `/etc/ocms/alert`; it is called with
-the site ID, the status (`DOWN`, `NEEDS ATTENTION`, `recovered`) and a message:
+the site ID, the status (`DOWN`, `NEEDS ATTENTION`, `recovered`, or
+`BACKUP FAILED` from the nightly backup) and a message:
 
 ```bash
 #!/bin/sh

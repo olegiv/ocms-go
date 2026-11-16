@@ -38,17 +38,26 @@ func TestBackupWritesPrivateVerifiedCopiesAndExpiresOldOnes(t *testing.T) {
 	env := newTestEnv(t)
 	site, _ := env.addSite(t, "a")
 	createDB(t, filepath.Join(site.Dir, env.DBPath))
-	writeFiles(t, site.Dir, map[string]string{
-		"uploads/2026/photo.jpg":      "jpeg",
-		"custom/themes/mine/base.css": "body{}",
-		"backups/app_old.db.gz":       "old",
-		"backups/uploads_old.tar.gz":  "old",
-		"backups/notes.txt":           "keep me",
-	})
+	// Expired archives of this tool go; files it did not write stay, even
+	// when their names end like its archives.
+	operatorFiles := []string{"app_old.db.gz", "manual-before-upgrade.db.gz", "notes.txt", "other-tool.tar.gz"}
+	files := map[string]string{
+		"uploads/2026/photo.jpg":                 "jpeg",
+		"custom/themes/mine/base.css":            "body{}",
+		"backups/app_20261001_030000.db.gz":      "old",
+		"backups/uploads_20261001_030000.tar.gz": "old",
+		"backups/custom_20261001_030000.tar.gz":  "old",
+	}
+	for _, name := range operatorFiles {
+		files["backups/"+name] = "keep me"
+	}
+	writeFiles(t, site.Dir, files)
 	old := env.now.Add(-backupRetention - time.Hour)
-	for _, name := range []string{"app_old.db.gz", "uploads_old.tar.gz", "notes.txt"} {
-		if err := os.Chtimes(filepath.Join(site.Dir, "backups", name), old, old); err != nil {
-			t.Fatal(err)
+	for name := range files {
+		if strings.HasPrefix(name, "backups/") {
+			if err := os.Chtimes(filepath.Join(site.Dir, name), old, old); err != nil {
+				t.Fatal(err)
+			}
 		}
 	}
 
@@ -67,11 +76,11 @@ func TestBackupWritesPrivateVerifiedCopiesAndExpiresOldOnes(t *testing.T) {
 	var names []string
 	for _, entry := range entries {
 		names = append(names, entry.Name())
-		if info, _ := entry.Info(); entry.Name() != "notes.txt" && info.Mode().Perm() != 0o600 {
+		if info, _ := entry.Info(); !slices.Contains(operatorFiles, entry.Name()) && info.Mode().Perm() != 0o600 {
 			t.Errorf("%s has mode %o, want 600", entry.Name(), info.Mode().Perm())
 		}
 	}
-	want := []string{"app_20261113_100000.db.gz", "custom_20261113_100000.tar.gz", "notes.txt", "uploads_20261113_100000.tar.gz"}
+	want := []string{"app_20261113_100000.db.gz", "app_old.db.gz", "custom_20261113_100000.tar.gz", "manual-before-upgrade.db.gz", "notes.txt", "other-tool.tar.gz", "uploads_20261113_100000.tar.gz"}
 	if !slices.Equal(names, want) {
 		t.Fatalf("backups/ holds %v, want %v", names, want)
 	}

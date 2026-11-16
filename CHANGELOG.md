@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     snapshot; production is no longer stopped.
   - `ocmsctl check` alerts through cron `MAILTO` or an executable
     `/etc/ocms/alert` hook.
+  - `ocmsctl backup` fails, keeps the earlier copies and calls the alert
+    hook when a site's directory or database is missing or its content
+    cannot be read. Archives appear only once complete, and expiry removes
+    only the tool's own archives.
   - Sites run under systemd only; the PID-file mode of the shell `ocmsctl`
     is not carried over.
   The legacy deployment scripts, their Make target and script-specific
