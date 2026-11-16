@@ -63,6 +63,20 @@ jobs:
         OCMS_SESSION_SECRET: test-secret-key-32-bytes-long!!!
         OCMS_REQUIRE_SHARED_TOOLING: "1"
 
+    # ocmsctl drops root's rights to each site user; only root can test that.
+    # TestRoot* run as root with nobody as the site user, and
+    # OCMS_REQUIRE_ROOT_TESTS fails them instead of skipping. Root keeps its
+    # own Go caches, so the steps after this one can still write theirs.
+    - name: Root tests (ocmsctl privilege drops)
+      run: |
+        sudo env "PATH=$PATH" HOME=/root GOCACHE=/tmp/root-go-cache GOMODCACHE=/tmp/root-go-mod \
+          OCMS_SESSION_SECRET="$OCMS_SESSION_SECRET" OCMS_REQUIRE_ROOT_TESTS=1 \
+          go test -count=1 -v -run '^TestRoot' ./cmd/ocmsctl/ | tee "$RUNNER_TEMP/root-tests.log"
+        # A pattern that matches no test passes too.
+        grep '^--- PASS: TestRoot' "$RUNNER_TEMP/root-tests.log"
+      env:
+        OCMS_SESSION_SECRET: test-secret-key-32-bytes-long!!!
+
     # The settings tests drive saves and request-time reads concurrently;
     # only the race detector turns a missing lock into a failure.
     - name: Race tests (module settings locks)

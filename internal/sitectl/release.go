@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -76,34 +77,64 @@ func (a *App) switchTo(release string) error {
 }
 
 // adoptLegacy turns a plain binary at <Root>/bin/<Name>, as the shell scripts
-// installed it, into the oldest release, so the first install keeps it for
-// rollback.
+// installed it, into the oldest release and makes it current, so the first
+// install keeps it for rollback and names it as the release to go back to.
+// The binary is linked into the release first: <Root>/bin/<Name> never goes
+// missing.
 func (a *App) adoptLegacy() error {
 	info, err := os.Lstat(a.binary())
 	if err != nil || !info.Mode().IsRegular() {
 		return nil
 	}
-	dir := filepath.Join(a.releasesDir(), info.ModTime().UTC().Format(releaseStamp)+"-legacy")
+	release := info.ModTime().UTC().Format(releaseStamp) + "-legacy"
+	dir := filepath.Join(a.releasesDir(), release)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	return os.Rename(a.binary(), filepath.Join(dir, a.Name))
+	if err := os.Link(a.binary(), filepath.Join(dir, a.Name)); err != nil && !errors.Is(err, os.ErrExist) {
+		return err
+	}
+	return a.switchTo(release)
+}
+
+// release checks that name is an installed release.
+func (a *App) release(name string) error {
+	releases, err := a.Releases()
+	if err != nil {
+		return err
+	}
+	if !slices.Contains(releases, name) {
+		return fmt.Errorf("no release %q (see %s releases)", name, filepath.Base(a.ctl()))
+	}
+	return nil
 }
 
 // Install reads a new binary from r, verifies it against the SHA-256 computed
 // where it was built, makes it the current release and restarts the sites on
 // it. Nothing is stopped until the binary is verified and in place.
 func (a *App) Install(ctx context.Context, r io.Reader, wantSHA string, sites []Site) error {
+	release, err := a.Stage(r, wantSHA)
+	if err != nil {
+		return err
+	}
+	return a.Activate(ctx, release, sites)
+}
+
+// Stage reads a new binary from r, verifies it against the SHA-256 computed
+// where it was built and keeps it as a release without switching to it.
+// deploy --themes stages first, so a binary that does not arrive intact
+// leaves the themes alone too.
+func (a *App) Stage(r io.Reader, wantSHA string) (string, error) {
 	if !sha256Re.MatchString(wantSHA) {
-		return errors.New("--sha256 must be 64 hex digits")
+		return "", errors.New("--sha256 must be 64 hex digits")
 	}
 	if err := os.MkdirAll(a.releasesDir(), 0o755); err != nil {
-		return err
+		return "", err
 	}
 	// Staged inside releases/: the rename below must not cross filesystems.
 	tmp, err := os.CreateTemp(a.releasesDir(), ".upload-*")
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer func() { _ = os.Remove(tmp.Name()) }()
 	hash := sha256.New()
@@ -112,28 +143,59 @@ func (a *App) Install(ctx context.Context, r io.Reader, wantSHA string, sites []
 		err = closeErr
 	}
 	if err != nil {
-		return fmt.Errorf("receiving the binary: %w", err)
+		return "", fmt.Errorf("receiving the binary: %w", err)
 	}
 	if size > maxBinaryBytes {
-		return fmt.Errorf("binary is larger than %d MiB", maxBinaryBytes>>20)
+		return "", fmt.Errorf("binary is larger than %d MiB", maxBinaryBytes>>20)
 	}
 	sum := hex.EncodeToString(hash.Sum(nil))
 	if sum != strings.ToLower(wantSHA) {
-		return fmt.Errorf("received %d bytes with SHA-256 %s, expected %s: nothing installed", size, sum, wantSHA)
+		return "", fmt.Errorf("received %d bytes with SHA-256 %s, expected %s: nothing installed", size, sum, wantSHA)
 	}
 	if head, err := readHead(tmp.Name(), 4); err != nil || !bytes.Equal(head, []byte("\x7fELF")) {
-		return errors.New("upload is not a Linux executable: nothing installed")
+		return "", errors.New("upload is not a Linux executable: nothing installed")
 	}
 
 	release := a.Now().UTC().Format(releaseStamp) + "-" + sum[:8]
 	dir := filepath.Join(a.releasesDir(), release)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
+		return "", err
 	}
 	if err := os.Chmod(tmp.Name(), 0o755); err != nil {
-		return err
+		return "", err
 	}
 	if err := os.Rename(tmp.Name(), filepath.Join(dir, a.Name)); err != nil {
+		return "", err
+	}
+	a.logf("Received release %s (%d bytes)", release, size)
+	return release, nil
+}
+
+// StagedRelease returns the newest release whose binary has the SHA-256
+// wantSHA: the one Stage kept.
+func (a *App) StagedRelease(wantSHA string) (string, error) {
+	if !sha256Re.MatchString(wantSHA) {
+		return "", errors.New("--sha256 must be 64 hex digits")
+	}
+	want := strings.ToLower(wantSHA)
+	releases, err := a.Releases()
+	if err != nil {
+		return "", err
+	}
+	for _, name := range slices.Backward(releases) {
+		if !strings.HasSuffix(name, "-"+want[:8]) {
+			continue
+		}
+		if sum, err := fileSHA256(filepath.Join(a.releasesDir(), name, a.Name)); err == nil && sum == want {
+			return name, nil
+		}
+	}
+	return "", fmt.Errorf("no installed release has SHA-256 %s", want)
+}
+
+// Activate makes an installed release current and restarts the sites on it.
+func (a *App) Activate(ctx context.Context, release string, sites []Site) error {
+	if err := a.release(release); err != nil {
 		return err
 	}
 	if err := a.adoptLegacy(); err != nil {
@@ -143,9 +205,9 @@ func (a *App) Install(ctx context.Context, r io.Reader, wantSHA string, sites []
 	if err := a.switchTo(release); err != nil {
 		return err
 	}
-	a.logf("Installed release %s (%d bytes)", release, size)
+	a.logf("Installed release %s", release)
 
-	err = a.Restart(ctx, sites)
+	err := a.Restart(ctx, sites)
 	// Only a health-checked deployment may expire recovery releases. An
 	// install without sites has not demonstrated that the binary works.
 	if err == nil && len(sites) > 0 {
@@ -189,6 +251,9 @@ func (a *App) Rollback(ctx context.Context, release string, sites []Site) error 
 		if release == "" {
 			return fmt.Errorf("no release older than the current one (%s)", current)
 		}
+	}
+	if err := a.release(release); err != nil {
+		return err
 	}
 	if err := a.switchTo(release); err != nil {
 		return err

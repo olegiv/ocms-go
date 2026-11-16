@@ -147,11 +147,17 @@ func newTestEnv(t *testing.T) *testEnv {
 	return env
 }
 
+// currentUser is the site user of the tests' sites. Sites never run as
+// root, so as root these tests skip (the privilege drops are TestRoot* in
+// cmd/ocmsctl).
 func currentUser(t *testing.T) string {
 	t.Helper()
 	u, err := user.Current()
 	if err != nil {
 		t.Fatal(err)
+	}
+	if u.Uid == "0" {
+		t.Skip("the site user would be root, which sites never run as")
 	}
 	return u.Username
 }

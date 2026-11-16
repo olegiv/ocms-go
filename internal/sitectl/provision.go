@@ -102,6 +102,10 @@ func (a *App) AddSite(ctx context.Context, spec SiteSpec) error {
 	if err != nil {
 		return err
 	}
+	if uid == 0 {
+		// Site operations drop root's rights to the site user's.
+		return fmt.Errorf("user %s has uid 0: a site needs a user of its own", spec.User)
+	}
 	base := filepath.Join(a.SitesBase, spec.Domain)
 	dir := filepath.Join(base, a.Name)
 	if spec.Dir != "" {
@@ -356,7 +360,7 @@ func (a *App) writeLogrotate() error {
 	out.WriteString("# Generated from " + a.registry() + "; do not edit.\n")
 	const options = "    rotate 30\n    compress\n    delaycompress\n    missingok\n    notifempty\n"
 	for _, site := range sites {
-		fmt.Fprintf(&out, "\n%s/logs/*.log {\n    su %s %s\n    daily\n%s    copytruncate\n}\n", site.Dir, site.User, a.groupOf(site.Dir), options)
+		fmt.Fprintf(&out, "\n%s/*.log {\n    su %s %s\n    daily\n%s    copytruncate\n}\n", filepath.Join(site.Dir, a.LogsPath), site.User, a.groupOf(site.Dir), options)
 	}
 	fmt.Fprintf(&out, "\n/var/log/%s-backup.log {\n    weekly\n%s}\n", a.Name, options)
 	return writeFileAtomic(a.LogrotateFile, []byte(out.String()), 0o644)

@@ -6,7 +6,6 @@ package main
 import (
 	"os"
 	"os/exec"
-	"os/user"
 	"path/filepath"
 	"strconv"
 	"syscall"
@@ -14,19 +13,8 @@ import (
 	"time"
 )
 
-func TestProvisioningKeepsSiteAccountOutsideRootPaths(t *testing.T) {
-	nobody, err := user.Lookup("nobody")
-	if os.Geteuid() != 0 || err != nil {
-		t.Skip("requires disposable root and a nobody account")
-	}
-	uid, err := strconv.Atoi(nobody.Uid)
-	if err != nil {
-		t.Fatal(err)
-	}
-	gid, err := strconv.Atoi(nobody.Gid)
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestRootProvisioningKeepsSiteAccountOutsideRootPaths(t *testing.T) {
+	uid, gid := rootAndNobody(t)
 	for _, swapped := range []bool{false, true} {
 		t.Run(strconv.FormatBool(swapped), func(t *testing.T) {
 			w := newWorld(t)
@@ -67,7 +55,7 @@ func TestProvisioningKeepsSiteAccountOutsideRootPaths(t *testing.T) {
 				}
 			}
 			dir := filepath.Join(parent, "ocms")
-			err := run(t.Context(), w.server, []string{"site", "add", "example.com", nobody.Username, "--dir", dir}, nil)
+			err := run(t.Context(), w.server, []string{"site", "add", "example.com", "nobody", "--dir", dir}, nil)
 			if swapped {
 				if err == nil {
 					t.Error("provisioning followed the site account's replacement")

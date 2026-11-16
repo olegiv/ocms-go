@@ -150,10 +150,11 @@ func TestPullUsesEachSidesConfiguredPaths(t *testing.T) {
 	if got := read(t, filepath.Join("local-media", "kept.jpg")); got != "x" {
 		t.Errorf("the cleanup touched a regular file: %q", got)
 	}
+	send := "--rsync-path=" + filepath.Join(w.server.Root, "bin", "ocmsctl") + " _send example_com "
 	want := []string{
-		"-rtz --checksum --delete root@server:" + filepath.Join(dir, "media") + "/ " + filepath.Join(cwd, "local-media") + "/",
-		"-rtz root@server:" + filepath.Join(dir, "logs") + "/ " + filepath.Join(cwd, "logs") + "/",
-		"-rtz root@server:" + filepath.Join(shared, "themes") + "/ " + filepath.Join(cwd, "lc", "themes") + "/",
+		"-rtz --checksum --delete " + send + "root@server:" + filepath.Join(dir, "media") + "/ " + filepath.Join(cwd, "local-media") + "/",
+		"-rtz " + send + "root@server:" + filepath.Join(dir, "logs") + "/ " + filepath.Join(cwd, "logs") + "/",
+		"-rtz " + send + "root@server:" + filepath.Join(shared, "themes") + "/ " + filepath.Join(cwd, "lc", "themes") + "/",
 	}
 	if !slices.Equal(w.rsync, want) {
 		t.Errorf("rsync calls:\n%s\nwant:\n%s", strings.Join(w.rsync, "\n"), strings.Join(want, "\n"))
@@ -194,6 +195,47 @@ func TestPullRefusesAnUploadsMirrorOverTheCheckout(t *testing.T) {
 	}
 }
 
+// installTestCtl makes this test binary the server's ocmsctl (see TestMain).
+func installTestCtl(t *testing.T, root string) {
+	t.Helper()
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	program, err := os.ReadFile(self)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeTree(t, filepath.Join(root, "bin"), map[string]string{"ocmsctl": string(program)})
+	if err := os.Chmod(filepath.Join(root, "bin", "ocmsctl"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// realRsync has the machine run rsync for real, with an ssh stand-in that
+// runs the remote command here: the server's ocmsctl _send, then rsync.
+func (w *world) realRsync(t *testing.T) {
+	t.Helper()
+	installTestCtl(t, w.server.Root)
+	t.Setenv("OCMSCTL_TEST_CONF", w.server.ConfDir)
+	ssh := filepath.Join(t.TempDir(), "ssh")
+	script := "#!/bin/sh\n# Skip the options and the host, run the command here.\n" +
+		"while [ $# -gt 0 ]; do case \"$1\" in -l|-p|-o|-i) shift 2 ;; -*) shift ;; *) shift; break ;; esac; done\n" +
+		"exec /bin/sh -c \"$*\"\n"
+	if err := os.WriteFile(ssh, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	fake := w.local.Exec // the ssh calls of the server's ocmsctl
+	w.local.Exec = func(ctx context.Context, c sitectl.Cmd) error {
+		if c.Name != "rsync" {
+			return fake(ctx, c)
+		}
+		c.Args = append([]string{"-e", ssh}, c.Args...)
+		c.Stdout, c.Stderr = w.out, w.out
+		return sitectl.RunCmd(ctx, c)
+	}
+}
+
 // Real rsync, as the operator's machine runs it: openrsync on macOS, rsync
 // elsewhere. Production's links never arrive, links an older pull left in
 // the uploads are dropped, and a local file that differs only in content is
@@ -204,19 +246,7 @@ func TestPullCopiesOnlyFilesAndDirectories(t *testing.T) {
 	}
 	w := newWorld(t)
 	dir := w.addSite(t)
-	fake := w.local.Exec // the server half over ssh
-	w.local.Exec = func(ctx context.Context, c sitectl.Cmd) error {
-		if c.Name != "rsync" {
-			return fake(ctx, c)
-		}
-		// The server's directories are on this machine.
-		c.Args = slices.Clone(c.Args)
-		for i, arg := range c.Args {
-			c.Args[i] = strings.TrimPrefix(arg, "root@server:")
-		}
-		c.Stdout, c.Stderr = w.out, w.out
-		return sitectl.RunCmd(ctx, c)
-	}
+	w.realRsync(t)
 
 	same := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	writeTree(t, dir, map[string]string{"uploads/a.jpg": "production", "uploads/sub/b.jpg": "b", "logs/app.log": "log"})

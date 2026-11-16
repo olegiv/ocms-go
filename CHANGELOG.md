@@ -29,6 +29,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Backups, `pull`, `deploy --themes` and `logs --errors` follow the
     paths a site's `.env` sets (`OCMS_DB_PATH`, `OCMS_UPLOADS_DIR`,
     `OCMS_CUSTOM_DIR`, `OCMS_ERROR_LOG_PATH`), read as the site user.
+    On the server, `pull`'s rsync also reads as the site user.
+  - `deploy --themes` verifies the binary on the server before it replaces
+    the themes, and restarts the sites once.
+  - A site user must not be root, and `rollback --to` takes only an
+    installed release. The first deploy over a legacy binary names it as
+    the release to roll back to.
   - `ocmsctl check` alerts through cron `MAILTO` or an executable
     `/etc/ocms/alert` hook. A unit state it cannot read counts as down
     rather than stopped; its own failures (registry, state, time limit)

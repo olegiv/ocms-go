@@ -34,32 +34,72 @@ const backupRetention = 30 * 24 * time.Hour
 // user runs the operation directly.
 const SiteOpCommand = "_site"
 
-// asSiteUser runs a site operation with the site user's rights.
-func (a *App) asSiteUser(ctx context.Context, site Site, op string, stdin io.Reader, stdout io.Writer) error {
+// siteCred returns the credentials of the site user, nil when this process
+// already runs as that user. Group IDs are left empty on purpose: the site
+// user gets its primary group and none of root's. A site user that is root
+// is refused, for sites registered before this check too: running as it
+// would undo every drop of privileges below.
+func (a *App) siteCred(site Site) (*syscall.Credential, error) {
 	u, err := user.Lookup(site.User)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	uid, err := strconv.ParseUint(u.Uid, 10, 32)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	gid, err := strconv.ParseUint(u.Gid, 10, 32)
 	if err != nil {
-		return err
+		return nil, err
+	}
+	if uid == 0 {
+		return nil, fmt.Errorf("site %s runs as %s, which has uid 0: give it a user of its own", site.ID, site.User)
 	}
 	if uint64(os.Geteuid()) == uid {
-		return a.SiteOp(ctx, op, site.Dir, stdin, stdout)
+		return nil, nil
 	}
 	if os.Geteuid() != 0 {
-		return fmt.Errorf("run this as root or as %s", site.User)
+		return nil, fmt.Errorf("run this as root or as %s", site.User)
+	}
+	return &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid)}, nil
+}
+
+// asSiteUser runs a site operation with the site user's rights.
+func (a *App) asSiteUser(ctx context.Context, site Site, op string, stdin io.Reader, stdout io.Writer) error {
+	cred, err := a.siteCred(site)
+	if err != nil {
+		return err
+	}
+	if cred == nil {
+		return a.SiteOp(ctx, op, site.Dir, stdin, stdout)
 	}
 	// The installed tool, not os.Executable: the site user must be able to
-	// run it, and a copy in root's home would not be. Group IDs are left
-	// empty on purpose: the site user gets its primary group and none of
-	// root's.
-	cred := &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid)}
+	// run it, and a copy in root's home would not be.
 	return a.Exec(ctx, Cmd{Name: a.ctl(), Args: []string{SiteOpCommand, op, site.Dir}, Stdin: stdin, Stdout: stdout, Stderr: a.Stderr, Cred: cred})
+}
+
+// SendCommand is the internal command pull's rsync runs on the server
+// (through --rsync-path) to read a site's files: see Send.
+const SendCommand = "_send"
+
+// Send serves the sending half of one rsync for pull, as the site user, so
+// it reads only what that user can: neither a path in the site's .env nor a
+// symlink in its tree reaches another site's files or root's. args are the
+// server arguments rsync passes; only a sender that removes nothing runs.
+func (a *App) Send(ctx context.Context, site Site, args []string, stdin io.Reader) error {
+	if len(args) < 2 || args[0] != "--server" || args[1] != "--sender" {
+		return errors.New("only a sending rsync server runs here")
+	}
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "--remove-") {
+			return fmt.Errorf("refused rsync option %s", arg)
+		}
+	}
+	cred, err := a.siteCred(site)
+	if err != nil {
+		return err
+	}
+	return a.Exec(ctx, Cmd{Name: "rsync", Args: args, Stdin: stdin, Stdout: a.Stdout, Stderr: a.Stderr, Cred: cred})
 }
 
 var siteOps = []string{"backup", "snapshot", "themes", "paths"}

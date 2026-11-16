@@ -61,7 +61,7 @@ On the server, as root:
   ocmsctl check [site...]                  monitor for cron; restarts unhealthy sites
 
 Used by deploy and pull over ssh: init, install, themes, snapshot, site show,
-site paths.
+site paths, _send.
 `
 
 // newApp returns the oCMS deployment: a Plesk-style server with one binary in
@@ -322,6 +322,17 @@ func run(ctx context.Context, app *sitectl.App, args []string, stdin io.Reader) 
 			return errors.New("usage: ocmsctl _site <operation> <directory>")
 		}
 		return app.SiteOp(ctx, args[1], args[2], stdin, app.Stdout)
+
+	case sitectl.SendCommand:
+		// Internal: the server half of pull's rsync. See sitectl.Send.
+		if len(args) < 2 {
+			return errors.New("usage: ocmsctl _send <site> <rsync server arguments>")
+		}
+		site, err := app.Site(args[1])
+		if err != nil {
+			return err
+		}
+		return app.Send(ctx, site, args[2:], stdin)
 	}
 	return fmt.Errorf("unknown command %q (see ocmsctl help)", command)
 }
@@ -330,11 +341,20 @@ func run(ctx context.Context, app *sitectl.App, args []string, stdin io.Reader) 
 func runLifecycle(ctx context.Context, app *sitectl.App, command string, fs *flag.FlagSet, all *bool, args []string, stdin io.Reader) error {
 	release := fs.String("to", "", "release to roll back to (default: the one before the current)")
 	sum := fs.String("sha256", "", "SHA-256 of the binary on standard input")
+	stage := fs.Bool("stage", false, "install: verify and keep the binary, switch to nothing")
+	staged := fs.Bool("staged", false, "install: switch to the kept binary with --sha256, read none")
 	rest, err := parse(fs, args)
 	if err != nil {
 		return err
 	}
 	if err := needRoot(); err != nil {
+		return err
+	}
+	if command == "install" && *stage {
+		if len(rest) > 0 || *all || *staged {
+			return errors.New("install --stage takes no site")
+		}
+		_, err := app.Stage(stdin, *sum)
 		return err
 	}
 	// install may name no site: the binary is installed and running
@@ -357,9 +377,15 @@ func runLifecycle(ctx context.Context, app *sitectl.App, command string, fs *fla
 		return app.Restart(ctx, picked)
 	case "rollback":
 		return app.Rollback(ctx, *release, picked)
-	default:
-		return app.Install(ctx, stdin, *sum, picked)
 	}
+	if *staged {
+		kept, err := app.StagedRelease(*sum)
+		if err != nil {
+			return err
+		}
+		return app.Activate(ctx, kept, picked)
+	}
+	return app.Install(ctx, stdin, *sum, picked)
 }
 
 // runSite handles registration and per-site provisioning commands.

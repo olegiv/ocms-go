@@ -331,7 +331,7 @@ func TestDeploySendsTheDigestOfTheBinaryItUploads(t *testing.T) {
 	var uploaded []byte
 	exec := env.Exec
 	env.Exec = func(ctx context.Context, c Cmd) error {
-		if c.Name == "ssh" && slices.Contains(c.Args, "install") {
+		if c.Name == "ssh" && slices.Contains(c.Args, "install") && c.Stdin != nil {
 			uploaded, _ = io.ReadAll(c.Stdin)
 		}
 		return exec(ctx, c)
@@ -344,10 +344,12 @@ func TestDeploySendsTheDigestOfTheBinaryItUploads(t *testing.T) {
 	if env.host.calls[0] != "make build-linux-amd64" {
 		t.Errorf("first command = %q, want the build", env.host.calls[0])
 	}
+	// The binary is verified and kept before the themes change.
 	want := []string{
+		"ssh -C root@server " + ctl + " install --sha256 " + sum + " --stage",
 		"ssh -C root@server " + ctl + " themes a",
 		"ssh -C root@server " + ctl + " themes b",
-		"ssh -C root@server " + ctl + " install --sha256 " + sum + " a b",
+		"ssh -C root@server " + ctl + " install --sha256 " + sum + " --staged a b",
 	}
 	if got := sshCalls(env); !slices.Equal(got, want) {
 		t.Errorf("ssh calls:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))

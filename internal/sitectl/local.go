@@ -130,42 +130,61 @@ func (a *App) Deploy(ctx context.Context, o DeployOpts) error {
 		return fmt.Errorf("no theme (a directory with %s) in %s", a.ThemeFile, o.ThemesDir)
 	}
 
-	sum := ""
-	if !o.ThemesOnly {
-		if len(o.Build) > 0 {
-			if err := r.exec(ctx, "", nil, o.Build[0], o.Build[1:]...); err != nil {
-				return err
-			}
-		}
-		if sum, err = fileSHA256(o.Binary); err != nil && !o.DryRun {
-			return fmt.Errorf("binary: %w", err)
-		}
-	}
-
+	var archive string
 	if themes {
-		archive, err := os.CreateTemp("", a.Name+"-themes-*.tar.gz")
+		// Packed before anything is sent: a theme that cannot be packed
+		// stops the deploy with the server untouched.
+		f, err := os.CreateTemp("", a.Name+"-themes-*.tar.gz")
 		if err != nil {
 			return err
 		}
-		defer func() { _ = os.Remove(archive.Name()) }()
-		err = writeTarGz(archive, o.ThemesDir, ".", true)
-		if err = errors.Join(err, archive.Close()); err != nil {
+		archive = f.Name()
+		defer func() { _ = os.Remove(archive) }()
+		err = writeTarGz(f, o.ThemesDir, ".", true)
+		if err = errors.Join(err, f.Close()); err != nil {
 			return fmt.Errorf("packing %s: %w", o.ThemesDir, err)
 		}
+	}
+	sendThemes := func() error {
 		for _, site := range o.Sites {
-			if err := r.ctl(ctx, archive.Name(), nil, "themes", site); err != nil {
+			if err := r.ctl(ctx, archive, nil, "themes", site); err != nil {
 				return err
 			}
 		}
+		return nil
 	}
-
 	if o.ThemesOnly {
+		if err := sendThemes(); err != nil {
+			return err
+		}
 		return r.ctl(ctx, "", nil, append([]string{"restart"}, targets...)...)
 	}
-	if sum == "" {
+
+	if len(o.Build) > 0 {
+		if err := r.exec(ctx, "", nil, o.Build[0], o.Build[1:]...); err != nil {
+			return err
+		}
+	}
+	sum, err := fileSHA256(o.Binary)
+	if err != nil {
+		if !o.DryRun {
+			return fmt.Errorf("binary: %w", err)
+		}
 		sum = strings.Repeat("0", 64) // dry run before the first build
 	}
-	return r.ctl(ctx, o.Binary, nil, append([]string{"install", "--sha256", sum}, targets...)...)
+	if !themes {
+		return r.ctl(ctx, o.Binary, nil, append([]string{"install", "--sha256", sum}, targets...)...)
+	}
+	// The server verifies and keeps the binary before the themes change, so
+	// an upload that does not arrive intact changes nothing; then it
+	// switches to that binary and restarts the sites once.
+	if err := r.ctl(ctx, o.Binary, nil, "install", "--sha256", sum, "--stage"); err != nil {
+		return err
+	}
+	if err := sendThemes(); err != nil {
+		return err
+	}
+	return r.ctl(ctx, "", nil, append([]string{"install", "--sha256", sum, "--staged"}, targets...)...)
 }
 
 func fileSHA256(path string) (string, error) {
@@ -228,10 +247,17 @@ type PullOpts struct {
 // Files arrive as directories and regular files only. A symlink the server
 // holds is skipped, and the uploads mirror drops the ones an older pull left,
 // so nothing the server controls can point a development server outside
-// its own files.
+// its own files. On the server, rsync reads as the site user (Send), so a
+// site's configuration cannot make it copy another site's files or root's.
 func (a *App) Pull(ctx context.Context, o PullOpts) error {
 	r, err := a.remote(o.Host, o.DryRun)
 	if err != nil {
+		return err
+	}
+	if !siteIDRe.MatchString(o.Site) {
+		return fmt.Errorf("invalid site %q", o.Site)
+	}
+	if err := checkArgs(a.ctl()); err != nil { // the remote shell reads it (--rsync-path)
 		return err
 	}
 	if o.LocalPort < 0 || o.LocalPort > 65535 {
@@ -310,7 +336,8 @@ func (a *App) Pull(ctx context.Context, o PullOpts) error {
 				return err
 			}
 		}
-		args := append(pullFlags(mirror), o.Host+":"+from+"/", to+"/")
+		// The server side reads as the site user (Send).
+		args := append(pullFlags(mirror), "--rsync-path="+a.ctl()+" "+SendCommand+" "+o.Site, o.Host+":"+from+"/", to+"/")
 		return r.exec(ctx, "", nil, "rsync", args...)
 	}
 	if o.Uploads {

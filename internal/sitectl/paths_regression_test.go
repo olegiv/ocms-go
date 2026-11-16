@@ -222,8 +222,9 @@ func TestSitectlNamesNoApplicationDirectory(t *testing.T) {
 			if err != nil {
 				return true
 			}
-			first, _, _ := strings.Cut(strings.TrimPrefix(value, "./"), "/")
-			if slices.Contains(forbidden, first) && !slices.Contains(siteOps, value) {
+			// Any element of a path, also inside a format string.
+			elements := strings.Split(value, "/")
+			if slices.ContainsFunc(elements, func(e string) bool { return slices.Contains(forbidden, e) }) && !slices.Contains(siteOps, value) {
 				t.Errorf("%s: %q names an application directory; use App's settings", fset.Position(lit.Pos()), value)
 			}
 			return true

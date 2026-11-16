@@ -99,7 +99,9 @@ On the server, as root. The domain must exist as a Plesk vhost.
 ocmsctl site add example.com example_com
 ```
 
-Arguments are the domain and the vhost's system user. Options: `--port N`
+Arguments are the domain and the vhost's system user, which must not be root
+(uid 0): every site operation runs with that user's rights, and a registered
+site whose user is root is refused too. Options: `--port N`
 (default: first free port from 8081), `--group G` (default `psaserv`),
 `--dir PATH` (default `/var/www/vhosts/<domain>/ocms`; must stay under the
 vhost).
@@ -202,7 +204,10 @@ To deploy a published release instead of a local build, download and verify it
 `pull` reads it below; default `custom/themes`). Symlinked theme directories
 are followed and arrive as real files when their targets stay inside the
 custom directory, outside its `modules/`. Links to developer configuration or
-other files outside that tree abort deployment before upload. The upload is
+other files outside that tree abort deployment before upload. With a binary,
+the server verifies and keeps the binary first, then replaces the themes, then
+switches to the binary and restarts the sites once: a binary that does not
+arrive intact leaves the themes alone too. The themes upload is
 unpacked beside the old themes and swapped in, so a broken upload leaves the old
 set in place; themes you deleted locally disappear from the server. It refuses
 to run when the local themes directory holds no theme (a directory with
@@ -223,7 +228,7 @@ ocmsctl rollback example_com --to 20261113T101500Z-3728df6f
 ```
 
 Rollback switches the symlink and restarts the named sites behind the same
-health check. An older binary is not guaranteed to run on a database a newer one
+health check. `--to` takes only a release `ocmsctl releases` lists. An older binary is not guaranteed to run on a database a newer one
 migrated; restore the database from a backup if it does not.
 
 ## Operating sites
@@ -343,8 +348,10 @@ what this checkout's server reads: the environment, then the file
 `custom`, port 8080). A configuration it cannot read stops it. `--db` and
 `--port` override the database and port; site-level `make pull` passes the
 site's own values. `pull` asks the server for the site's paths with
-`ocmsctl site paths`, so update the server's ocmsctl (`make server-setup`) when
-you update this checkout.
+`ocmsctl site paths`, and the server's rsync runs through `ocmsctl _send`, as
+the site user: `pull` copies only what that user can read, whatever the site's
+`.env` names. Update the server's ocmsctl (`make server-setup`) when you update
+this checkout.
 
 Production keeps running. The database arrives as an online snapshot and is
 scrubbed before it replaces the local one; the uploads are mirrored (files are
@@ -428,9 +435,10 @@ updating the source checkout alone does not perform them.
    entries after checking the new backup and monitor jobs, so they do not run
    twice. Remove former deployment scripts in `/opt/ocms` once nothing refers
    to them; preserve unrelated scripts and any alert integrations.
-3. The first `ocmsctl deploy` moves the plain file `/opt/ocms/bin/ocms` into
+3. The first `ocmsctl deploy` keeps the plain file `/opt/ocms/bin/ocms` as
    `/opt/ocms/releases/<time>-legacy/` and makes `bin/ocms` a symlink, so
-   `ocmsctl rollback` can return to it. `ocms.backup` is no longer written.
+   `ocmsctl rollback` can return to it; if the new release fails, the output
+   names that release. `ocms.backup` is no longer written.
 4. For each site moved from PID-file mode, use
    `systemctl enable --now ocms@<site>`. Check `ocmsctl status` and
    `ocmsctl health <site>` after the move.

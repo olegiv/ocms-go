@@ -125,6 +125,9 @@ func (w *world) addSite(t *testing.T) (dir string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if me.Uid == "0" {
+		t.Skip("the site user would be root, which sites never run as (see TestRoot*)")
+	}
 	if err := run(context.Background(), w.server, []string{"site", "add", "example.com", me.Username, "--port", u.Port()}, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -292,9 +295,10 @@ func TestPullDeliversAScrubbedSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	send := "--rsync-path=" + filepath.Join(w.server.Root, "bin", "ocmsctl") + " _send example_com "
 	want := []string{
-		"-rtz --checksum --delete root@server:" + dir + "/uploads/ " + filepath.Join(cwd, "uploads") + "/",
-		"-rtz root@server:" + dir + "/logs/ " + filepath.Join(cwd, "logs") + "/",
+		"-rtz --checksum --delete " + send + "root@server:" + dir + "/uploads/ " + filepath.Join(cwd, "uploads") + "/",
+		"-rtz " + send + "root@server:" + dir + "/logs/ " + filepath.Join(cwd, "logs") + "/",
 	}
 	if !slices.Equal(w.rsync, want) {
 		t.Errorf("rsync calls = %v, want %v", w.rsync, want)
@@ -325,27 +329,34 @@ func TestServerCommandsNeedRoot(t *testing.T) {
 	}
 }
 
-// TestMain lets the test binary stand in for ocmsctl when a root ocmsctl
-// re-executes itself as a site user (sitectl.SiteOpCommand).
-func TestMain(m *testing.M) {
-	if len(os.Args) > 1 && os.Args[1] == sitectl.SiteOpCommand {
-		main()
-		return
-	}
-	os.Exit(m.Run())
-}
-
-// Root must not write into a site directory itself: a site user who swaps
-// backups/ or custom/themes for a symlink would aim root's write anywhere.
-func TestSiteOperationsRunAsTheSiteUser(t *testing.T) {
+// rootAndNobody skips a test that needs root and a nobody account to drop
+// to. With OCMS_REQUIRE_ROOT_TESTS set (CI runs these packages as root) a
+// missing requirement fails it instead.
+func rootAndNobody(t *testing.T) (uid, gid int) {
+	t.Helper()
 	nobody, err := user.Lookup("nobody")
 	if os.Geteuid() != 0 || err != nil {
+		if os.Getenv("OCMS_REQUIRE_ROOT_TESTS") != "" {
+			t.Fatalf("OCMS_REQUIRE_ROOT_TESTS is set, but this is not root with a nobody account (euid %d, %v)", os.Geteuid(), err)
+		}
 		t.Skip("needs root and a nobody account")
 	}
-	uid, _ := strconv.Atoi(nobody.Uid)
-	gid, _ := strconv.Atoi(nobody.Gid)
+	if uid, err = strconv.Atoi(nobody.Uid); err != nil {
+		t.Fatal(err)
+	}
+	if gid, err = strconv.Atoi(nobody.Gid); err != nil {
+		t.Fatal(err)
+	}
+	return uid, gid
+}
 
-	w := newWorld(t)
+// nobodySite is a server whose ocmsctl is this test binary (see TestMain),
+// with a registered site "site" of user nobody (call giveTo once its files
+// are in place) and a directory only root may enter.
+func nobodySite(t *testing.T) (w *world, site, rootOnly string, uid int) {
+	t.Helper()
+	uid, _ = rootAndNobody(t)
+	w = newWorld(t)
 	w.server.Exec = sitectl.RunCmd
 	base := t.TempDir()
 	// The test directories are root's alone by default.
@@ -354,29 +365,65 @@ func TestSiteOperationsRunAsTheSiteUser(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	// Install this test binary as the server's ocmsctl (see TestMain).
 	w.server.Root = filepath.Join(base, "opt")
-	self, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
-	}
-	program, err := os.ReadFile(self)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(filepath.Join(w.server.Root, "bin"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(w.server.Root, "bin", "ocmsctl"), program, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	site := filepath.Join(base, "site")
-	rootOnly := filepath.Join(base, "root-only")
+	w.local.Root = w.server.Root
+	installTestCtl(t, w.server.Root)
+	site = filepath.Join(base, "site")
+	rootOnly = filepath.Join(base, "root-only")
 	for dir, mode := range map[string]os.FileMode{filepath.Join(site, "data"): 0o755, rootOnly: 0o700} {
 		if err := os.MkdirAll(dir, mode); err != nil {
 			t.Fatal(err)
 		}
 	}
+	writeTree(t, w.server.ConfDir, map[string]string{"sites.conf": fmt.Sprintf("site %s nobody 8081\n", site)})
+	return w, site, rootOnly, uid
+}
+
+// giveTo hands the tree at dir to the named user.
+func giveTo(t *testing.T, dir, name string) {
+	t.Helper()
+	u, err := user.Lookup(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	uid, _ := strconv.Atoi(u.Uid)
+	gid, _ := strconv.Atoi(u.Gid)
+	err = filepath.Walk(dir, func(path string, _ os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		return os.Lchown(path, uid, gid)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestMain lets the test binary stand in for ocmsctl when a root ocmsctl
+// re-executes itself as a site user (sitectl.SiteOpCommand).
+func TestMain(m *testing.M) {
+	if len(os.Args) > 1 && os.Args[1] == sitectl.SiteOpCommand {
+		main()
+		return
+	}
+	// pull's rsync runs `ocmsctl _send` on the server (realRsync); the
+	// tests' server keeps its registry in OCMSCTL_TEST_CONF.
+	if len(os.Args) > 1 && os.Args[1] == sitectl.SendCommand {
+		app := newApp()
+		app.ConfDir = os.Getenv("OCMSCTL_TEST_CONF")
+		if err := run(context.Background(), app, os.Args[1:], os.Stdin); err != nil {
+			_, _ = fmt.Fprintln(os.Stderr, "ocmsctl:", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+	os.Exit(m.Run())
+}
+
+// Root must not write into a site directory itself: a site user who swaps
+// backups/ or custom/themes for a symlink would aim root's write anywhere.
+func TestRootSiteOperationsRunAsTheSiteUser(t *testing.T) {
+	w, site, rootOnly, uid := nobodySite(t)
 	db, err := sql.Open("sqlite", filepath.Join(site, "data", "ocms.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -387,22 +434,7 @@ func TestSiteOperationsRunAsTheSiteUser(t *testing.T) {
 	if err := db.Close(); err != nil {
 		t.Fatal(err)
 	}
-	err = filepath.Walk(site, func(path string, _ os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		return os.Lchown(path, uid, gid)
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(w.server.ConfDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	registry := fmt.Sprintf("site %s nobody 8081\n", site)
-	if err := os.WriteFile(filepath.Join(w.server.ConfDir, "sites.conf"), []byte(registry), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	giveTo(t, site, "nobody")
 
 	if err := run(context.Background(), w.server, []string{"backup", "site"}, nil); err != nil {
 		t.Fatalf("%v\n%s", err, w.out.String())
