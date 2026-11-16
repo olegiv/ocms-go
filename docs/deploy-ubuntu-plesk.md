@@ -275,8 +275,10 @@ tool's own (`ocms_<time>.db.gz`, `uploads_<time>.tar.gz`, `custom_<time>.tar.gz`
 of the kinds it just wrote: anything else you keep in `backups/` stays.
 
 The cron file runs this nightly at 03:00 and logs to `/var/log/ocms-backup.log`.
-Nobody reads that log, so a failed backup also calls the
-[alert hook](#monitoring) with the status `BACKUP FAILED`.
+Nobody reads that log, so a failed backup also prints one line outside it,
+which cron mails when `MAILTO` is set, and calls the
+[alert hook](#monitoring) with the status `BACKUP FAILED`; without a hook, the
+next check prints the failure too. The error carries every part that failed.
 
 Restore a database:
 
@@ -329,9 +331,10 @@ The hook gets 30 seconds, and at the end of them its whole process group is
 stopped (a `curl` it started included). When it fails, times out, or is there
 but not an executable file, the event is printed with the reason and kept: each
 check tries the kept events again, oldest first, before its own. A hook that
-keeps failing is said once, with the events earlier runs left for it, and once
-more when it delivers again; the tries in between are quiet. 20 events are
-kept; past that, `recovered` events go first, then the oldest. Once the hook
+keeps failing is said once, and once more when it delivers again; the tries in
+between are quiet. An event that reached only a backup's log is printed by the
+next check, whatever the hook does. 20 events are
+kept; past that, each site keeps its newest event, and older ones go first. Once the hook
 fails in a run, that run's later events wait for the next check. When the
 restarts run out, `NEEDS ATTENTION` says why the last one failed, if it did. A
 failure of the check itself is reported once, like an outage, while its state
@@ -444,7 +447,10 @@ updating the source checkout alone does not perform them.
    can keep running during the tool update.
 2. From the core checkout, run `make server-setup HOST=root@server`. It replaces
    `/opt/ocms/bin/ocmsctl` with the Go tool and creates `/etc/cron.d/ocms` if
-   missing. Review an existing cron file: initialization preserves it.
+   missing. Review an existing cron file: initialization preserves it. Its
+   backup line should end with
+   `|| echo "/opt/ocms/bin/ocmsctl backup failed; see /var/log/ocms-backup.log"`,
+   so cron mails a failed backup.
    Retire the old `/etc/cron.d/ocms-multi` and any other old deployment cron
    entries after checking the new backup and monitor jobs, so they do not run
    twice. Remove former deployment scripts in `/opt/ocms` once nothing refers

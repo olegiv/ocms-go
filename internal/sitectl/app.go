@@ -94,7 +94,13 @@ func RunCmd(ctx context.Context, c Cmd) error {
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = c.Stdin, c.Stdout, c.Stderr
 	cmd.SysProcAttr = &syscall.SysProcAttr{Credential: c.Cred, Setpgid: c.Group}
 	if c.Group {
-		cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+		cmd.Cancel = func() error {
+			err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+			if errors.Is(err, syscall.ESRCH) {
+				return os.ErrProcessDone // it ended as its time ran out
+			}
+			return err
+		}
 		cmd.WaitDelay = time.Second // for output pipes a stray child still holds
 	}
 	return cmd.Run()
@@ -125,6 +131,31 @@ func (t *tailBuffer) Write(p []byte) (int, error) {
 		t.data = t.data[extra:]
 	}
 	return len(p), nil
+}
+
+// childError returns the error a child ocmsctl printed: from its last line
+// that starts with prefix ("ocmsctl: "; a joined error goes on over the
+// lines after it) to the end, joined with "; ". Without one, a panic's first
+// line; otherwise the last line.
+func (t *tailBuffer) childError(prefix string) string {
+	lines := strings.Split(strings.TrimSpace(string(t.data)), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		if rest, ok := strings.CutPrefix(lines[i], prefix); ok {
+			parts := []string{strings.TrimSpace(rest)}
+			for _, line := range lines[i+1:] {
+				if line = strings.TrimSpace(line); line != "" {
+					parts = append(parts, line)
+				}
+			}
+			return strings.Join(parts, "; ")
+		}
+	}
+	for _, line := range lines {
+		if strings.HasPrefix(line, "panic: ") {
+			return line
+		}
+	}
+	return t.lastLine()
 }
 
 // lastLine returns the last non-empty line written.

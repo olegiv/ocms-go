@@ -322,8 +322,15 @@ func (a *App) Logs(ctx context.Context, site Site, lines int, follow, errorsOnly
 	return a.Exec(ctx, c)
 }
 
+// logTailTimeout bounds showLogTail: a site could swap its log for a FIFO
+// after it was checked, and the deploy must not wait on it. A variable for
+// tests.
+var logTailTimeout = 10 * time.Second
+
 // showLogTail prints why a site failed, as far as its log says.
 func (a *App) showLogTail(ctx context.Context, site Site) {
+	ctx, cancel := context.WithTimeout(ctx, logTailTimeout)
+	defer cancel()
 	if err := a.Logs(ctx, site, 5, false, false); err != nil {
 		a.logf("  (no log: %v)", err)
 	}

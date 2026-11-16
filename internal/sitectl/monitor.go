@@ -61,6 +61,7 @@ type hookCall struct {
 	Site    string `json:"site"`
 	Status  string `json:"status"`
 	Message string `json:"message"`
+	Mailed  bool   `json:"mailed,omitempty"` // printed where cron mails it (by a check)
 }
 
 // monitorState is what the checks remember between runs.
@@ -98,7 +99,7 @@ func (a *App) Check(ctx context.Context, pick func() ([]Site, error)) error {
 		return a.checkFailed(ctx, nil, s, err)
 	}
 	defer unlock()
-	st, err := a.loadMonitor()
+	st, err := a.loadMonitor(true)
 	if err != nil {
 		return a.checkFailed(ctx, nil, s, err)
 	}
@@ -213,15 +214,16 @@ type sender struct {
 	mailed    bool       // what this run prints reaches cron mail (check, not backup)
 	failed    error      // why the hook failed in this run
 	delivered bool       // the hook took an event in this run
+	noHook    bool       // there was no hook to try
 	pending   []hookCall // events the hook has not taken
-	earlier   []hookCall // of those, the ones earlier runs left (retry)
 }
 
-// send prints the event and passes it to the hook. Without a hook, an event
-// printed where nobody reads it (a backup's log) waits for the next check,
-// which prints it for cron mail.
+// send prints the event and passes it to the hook. An event the hook does
+// not take, or that has no hook to go to, waits for the next check, unless
+// this run's output already reaches cron mail and there is no hook.
 func (s *sender) send(ctx context.Context, c hookCall) {
 	s.a.announce(c)
+	c.Mailed = s.mailed
 	switch err := s.deliver(ctx, c); {
 	case errors.Is(err, errNoHook) && !s.mailed:
 		s.pending = append(s.pending, c)
@@ -231,15 +233,18 @@ func (s *sender) send(ctx context.Context, c hookCall) {
 	}
 }
 
-// retry passes events an earlier run could not deliver to the hook again,
-// without printing them a second time; without a hook, it prints them.
+// retry, in a check, passes the events earlier runs left to the hook again.
+// An event not yet printed where cron mails it (a backup's) is printed now,
+// whatever the hook does; one already printed is not printed again.
 func (s *sender) retry(ctx context.Context, calls []hookCall) {
 	for _, c := range calls {
-		switch err := s.deliver(ctx, c); {
-		case errors.Is(err, errNoHook):
-			s.a.announce(c)
-		case err != nil:
-			s.earlier = append(s.earlier, c)
+		err := s.deliver(ctx, c)
+		if err == nil || c.Mailed {
+			continue
+		}
+		s.a.announce(c)
+		if !errors.Is(err, errNoHook) {
+			s.pending[len(s.pending)-1].Mailed = true
 		}
 	}
 }
@@ -255,27 +260,28 @@ func (s *sender) deliver(ctx context.Context, c hookCall) error {
 	switch {
 	case err == nil:
 		s.delivered = true
-	case !errors.Is(err, errNoHook):
+	case errors.Is(err, errNoHook):
+		s.noHook = true
+	default:
 		s.failed = err
 		s.pending = append(s.pending, c)
 	}
 	return err
 }
 
-// reportHook says once, for cron mail, that the hook fails, with the alerts
-// from earlier runs that wait for it (a backup's were printed only to its
-// log), and once that it delivers again; the retries in between are quiet.
+// reportHook says once, for cron mail, that the hook fails and how many
+// alerts wait for it, and once that it delivers again; the tries in between
+// are quiet. A removed hook ends the failure without a word.
 func (a *App) reportHook(st *monitorState, s *sender) {
 	switch {
 	case s.failed != nil && st.HookFailed != s.failed.Error():
 		st.HookFailed = s.failed.Error()
 		a.logf("alert hook: %v; %d alerts wait for it", s.failed, len(st.Pending))
-		for _, c := range s.earlier {
-			a.announce(c)
-		}
 	case s.failed == nil && s.delivered && st.HookFailed != "":
 		st.HookFailed = ""
 		a.logf("alert hook: delivers again")
+	case s.failed == nil && s.noHook:
+		st.HookFailed = ""
 	}
 }
 
@@ -306,11 +312,11 @@ func (a *App) callHook(ctx context.Context, c hookCall) error {
 }
 
 func (a *App) siteEvent(site Site, status, message string) hookCall {
-	return hookCall{site.ID, status, fmt.Sprintf("%s on %s (port %d): %s", a.unit(site.ID), hostname(), site.Port, message)}
+	return hookCall{Site: site.ID, Status: status, Message: fmt.Sprintf("%s on %s (port %d): %s", a.unit(site.ID), hostname(), site.Port, message)}
 }
 
 func (a *App) serverEvent(status, message string) hookCall {
-	return hookCall{ServerSite, status, fmt.Sprintf("%s on %s: %s", filepath.Base(a.ctl()), hostname(), message)}
+	return hookCall{Site: ServerSite, Status: status, Message: fmt.Sprintf("%s on %s: %s", filepath.Base(a.ctl()), hostname(), message)}
 }
 
 func hostname() string {
@@ -321,24 +327,40 @@ func hostname() string {
 	return host
 }
 
-// trimPending keeps maxPending undelivered events. It drops "recovered"
-// events first, oldest first: that something went wrong matters more than
-// that it is over. Then it drops the oldest of the rest.
+// trimPending keeps maxPending undelivered events. A site's newest event is
+// where it stands now, so the older events of a site go first, oldest
+// first; only then the oldest of the rest. The hook then never hears that a
+// site went down without hearing that it recovered.
 func (a *App) trimPending(calls []hookCall) []hookCall {
 	n := len(calls) - maxPending
 	if n <= 0 {
 		return calls
 	}
 	a.logf("alert hook: %d undelivered alerts dropped", n)
-	kept := make([]hookCall, 0, len(calls))
-	for _, c := range calls {
-		if n > 0 && c.Status == "recovered" {
-			n--
-			continue
-		}
-		kept = append(kept, c)
+	newest := map[string]int{} // site -> index of its newest event
+	for i, c := range calls {
+		newest[c.Site] = i
 	}
-	return kept[len(kept)-maxPending:]
+	dropped := map[int]bool{}
+	for i, c := range calls {
+		if n > 0 && newest[c.Site] != i {
+			dropped[i] = true
+			n--
+		}
+	}
+	for i := range calls {
+		if n > 0 && !dropped[i] {
+			dropped[i] = true
+			n--
+		}
+	}
+	kept := make([]hookCall, 0, maxPending)
+	for i, c := range calls {
+		if !dropped[i] {
+			kept = append(kept, c)
+		}
+	}
+	return kept
 }
 
 // keepAlerts hands events the hook did not take to the next check.
@@ -348,7 +370,7 @@ func (a *App) keepAlerts(calls []hookCall) error {
 		return err
 	}
 	defer unlock()
-	st, err := a.loadMonitor()
+	st, err := a.loadMonitor(false)
 	if err != nil {
 		return err
 	}
@@ -404,7 +426,7 @@ func (a *App) stateFile() string { return filepath.Join(a.StateDir, "monitor.jso
 // loadMonitor reads the monitor state. A file that does not parse is moved
 // to monitor.json.corrupt, replacing an earlier one, and reported: what it
 // held is forgotten, so outages already reported are reported again.
-func (a *App) loadMonitor() (*monitorState, error) {
+func (a *App) loadMonitor(mailed bool) (*monitorState, error) {
 	st := &monitorState{}
 	data, err := os.ReadFile(a.stateFile())
 	switch {
@@ -419,6 +441,7 @@ func (a *App) loadMonitor() (*monitorState, error) {
 			}
 			notice := a.serverEvent("MONITOR FAILED", fmt.Sprintf("%s did not parse (%v); moved to %s, so outages already reported will be reported again", a.stateFile(), parseErr, aside))
 			a.announce(notice)
+			notice.Mailed = mailed // a check printed it for cron mail already
 			st = &monitorState{Pending: []hookCall{notice}}
 		}
 	}

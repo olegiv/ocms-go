@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -168,5 +169,16 @@ func TestTheServerRunsOnWhenItsSessionEnds(t *testing.T) {
 	var exit *exec.ExitError
 	if !errors.As(err, &exit) || exit.ExitCode() != 1 {
 		t.Errorf("pull after the answer n = %v, want the refusal (exit 1)", err)
+	}
+}
+
+// Under nohup, SIGHUP is ignored, and the commands ocmsctl runs must keep
+// ignoring it: catching it would give them the default back.
+func TestAnIgnoredHangupStaysIgnored(t *testing.T) {
+	signal.Ignore(syscall.SIGHUP)
+	t.Cleanup(func() { signal.Reset(syscall.SIGHUP) })
+	runOnWhenDetached()
+	if !signal.Ignored(syscall.SIGHUP) {
+		t.Error("runOnWhenDetached caught a hangup that was ignored")
 	}
 }

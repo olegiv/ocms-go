@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/olegiv/ocms-go/internal/sitectl"
@@ -51,6 +52,13 @@ func TestRootPullReadsAsTheSiteUser(t *testing.T) {
 func TestRootBackupAlertsCarryTheCause(t *testing.T) {
 	w, site, _, _ := nobodySite(t)
 	giveTo(t, site, "nobody")
+	// Two parts fail (a joined error, over two lines), and the backup log
+	// is on a full disk: the alert must still carry both causes.
+	writeTree(t, site, map[string]string{"uploads/locked/a.jpg": "x"})
+	if err := os.Chmod(filepath.Join(site, "uploads", "locked"), 0o700); err != nil { // root's, which nobody cannot read
+		t.Fatal(err)
+	}
+	w.server.Stderr = fullDisk{}
 	said := filepath.Join(w.server.ConfDir, "said")
 	writeTree(t, w.server.ConfDir, map[string]string{"alert": "#!/bin/sh\nprintf '%s' \"$3\" > " + said + "\n"})
 	if err := os.Chmod(filepath.Join(w.server.ConfDir, "alert"), 0o755); err != nil {
@@ -59,10 +67,15 @@ func TestRootBackupAlertsCarryTheCause(t *testing.T) {
 	if err := run(context.Background(), w.server, []string{"backup", "site"}, nil); err == nil {
 		t.Fatal("a backup without a database succeeded")
 	}
-	if got := read(t, said); !strings.Contains(got, "database") || !strings.Contains(got, "ocms.db") {
-		t.Errorf("the alert says %q, want why", got)
+	if got := read(t, said); !strings.Contains(got, "database") || !strings.Contains(got, "ocms.db") || !strings.Contains(got, "uploads") {
+		t.Errorf("the alert says %q, want both causes", got)
 	}
 }
+
+// fullDisk fails every write, as a log on a full disk does.
+type fullDisk struct{}
+
+func (fullDisk) Write([]byte) (int, error) { return 0, syscall.ENOSPC }
 
 // logs reads a file the site chose with the site user's rights.
 func TestRootLogsReadAsTheSiteUser(t *testing.T) {

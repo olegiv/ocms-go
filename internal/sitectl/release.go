@@ -164,8 +164,14 @@ func (a *App) PlaceStaged(wantSHA string) (string, error) {
 	}
 	want := strings.ToLower(wantSHA)
 	path := a.stagedPath(want)
-	if sum, err := fileSHA256(path); err != nil || sum != want {
+	sum, err := fileSHA256(path)
+	switch {
+	case errors.Is(err, os.ErrNotExist):
 		return "", fmt.Errorf("no binary with SHA-256 %s was staged", want)
+	case err != nil:
+		return "", fmt.Errorf("staged binary: %w", err)
+	case sum != want:
+		return "", fmt.Errorf("the staged binary %s has SHA-256 %s: damaged, nothing installed", path, sum)
 	}
 	return a.newRelease(path, want)
 }

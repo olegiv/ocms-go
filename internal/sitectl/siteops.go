@@ -76,9 +76,11 @@ func (a *App) asSiteUser(ctx context.Context, site Site, op string, stdin io.Rea
 	// The installed tool, not os.Executable: the site user must be able to
 	// run it, and a copy in root's home would not be. Its error is the last
 	// line it prints; without it, an alert would say only "exit status 1".
+	// The buffer first: io.MultiWriter stops at the first writer that fails,
+	// and a log on a full disk would take the error with it.
 	var stderr tailBuffer
-	err = a.Exec(ctx, Cmd{Name: a.ctl(), Args: []string{SiteOpCommand, op, site.Dir}, Stdin: stdin, Stdout: stdout, Stderr: io.MultiWriter(a.Stderr, &stderr), Cred: cred})
-	if msg := strings.TrimPrefix(stderr.lastLine(), filepath.Base(a.ctl())+": "); err != nil && msg != "" {
+	err = a.Exec(ctx, Cmd{Name: a.ctl(), Args: []string{SiteOpCommand, op, site.Dir}, Stdin: stdin, Stdout: stdout, Stderr: io.MultiWriter(&stderr, a.Stderr), Cred: cred})
+	if msg := stderr.childError(filepath.Base(a.ctl()) + ": "); err != nil && msg != "" {
 		return fmt.Errorf("%s (%w)", msg, err)
 	}
 	return err

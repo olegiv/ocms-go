@@ -333,10 +333,13 @@ func (a *App) Init(ctx context.Context) error {
 		return err
 	}
 	if _, err := os.Stat(a.CronFile); errors.Is(err, os.ErrNotExist) {
+		// A failed backup prints one line, outside its log: cron mails
+		// it whatever the alert hook and the monitor's state do.
 		cron := fmt.Sprintf("# Nightly backups and a health check every five minutes.\n"+
-			"# The check prints only when a site's state changes; set MAILTO to be told.\n"+
+			"# The check prints only when a site's state changes, and a failed backup\n"+
+			"# prints one line; set MAILTO to be told.\n"+
 			"SHELL=/bin/sh\n"+
-			"0 3 * * * root %[1]s backup --all >> /var/log/%[2]s-backup.log 2>&1\n"+
+			"0 3 * * * root %[1]s backup --all >> /var/log/%[2]s-backup.log 2>&1 || echo \"%[1]s backup failed; see /var/log/%[2]s-backup.log\"\n"+
 			"*/5 * * * * root %[1]s check --all\n", a.ctl(), a.Name)
 		if err := writeFileAtomic(a.CronFile, []byte(cron), 0o644); err != nil {
 			return err

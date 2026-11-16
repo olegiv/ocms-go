@@ -124,9 +124,14 @@ func main() {
 // starting the sites must still start them. Without this, the lost terminal
 // (SIGHUP) or the next line printed to it (SIGPIPE) would end the process.
 // The signals are caught, not ignored, so the commands it runs get the usual
-// behaviour back.
+// behaviour back; one already ignored (nohup) stays ignored, for them too.
 func runOnWhenDetached() {
-	signal.Notify(make(chan os.Signal, 1), syscall.SIGHUP, syscall.SIGPIPE)
+	caught := make(chan os.Signal, 1)
+	for _, sig := range []os.Signal{syscall.SIGHUP, syscall.SIGPIPE} {
+		if !signal.Ignored(sig) {
+			signal.Notify(caught, sig)
+		}
+	}
 }
 
 // parse reads flags wherever they appear among the arguments and returns the
