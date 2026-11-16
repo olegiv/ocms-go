@@ -221,6 +221,11 @@ func (env *testEnv) install(t *testing.T, content string, sites ...Site) error {
 	return env.Install(context.Background(), bytes.NewReader(data), sum, sites)
 }
 
+// sitesOf selects the given sites, as a command's site arguments would.
+func sitesOf(sites ...Site) func() ([]Site, error) {
+	return func() ([]Site, error) { return sites, nil }
+}
+
 func readFile(t *testing.T, path string) string {
 	t.Helper()
 	data, err := os.ReadFile(path)

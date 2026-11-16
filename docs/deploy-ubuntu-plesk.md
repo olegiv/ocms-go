@@ -77,9 +77,11 @@ make server-setup HOST=root@server.example.com
 ```
 
 This builds `ocmsctl`, installs it as `/opt/ocms/bin/ocmsctl` and runs
-`ocmsctl init` there: directories, the systemd unit template, the cron file
-(only when there is none) and the logrotate configuration. Run it again to
-update `ocmsctl` on the server after updating oCMS.
+`ocmsctl init` there: directories, the systemd unit template, an empty site
+registry and the cron file (each only when there is none) and the logrotate
+configuration. Run it again to update `ocmsctl` on the server after updating
+oCMS. Without a registry, commands for every site (`--all`, and `status`,
+`backup` and `check` without site names) fail instead of finding no sites.
 
 For an ARM server add `SERVER_ARCH=arm64` to this and the other `make` commands.
 
@@ -222,7 +224,7 @@ On the server, as root:
 
 | Command | Does |
 |---|---|
-| `ocmsctl status [site...]` | unit state and health of the sites (all by default) |
+| `ocmsctl status [site...]` | unit state and health of the sites (all by default), then why each down site is down; exits 1 while one is down (a stopped site is not) |
 | `ocmsctl start\|stop <site>...\|--all` | `systemctl start\|stop ocms@<site>` |
 | `ocmsctl restart <site>...\|--all` | stop, start, require healthy (as a deploy does) |
 | `ocmsctl health <site>` | exit 0 when `/health` answers 200 |
@@ -277,7 +279,9 @@ ocmsctl start example_com
 | `active`, `/health/ready` fails | running but unhealthy | reports it, restarts it at most 3 times per outage |
 | `activating` | exits at startup; systemd keeps restarting it | reports it; a restart adds nothing |
 | `failed` | systemd gave up, or a stop did not end cleanly | reports it; not restarted, it may have been stopped on purpose |
-| `inactive` | stopped or never started | skipped |
+| cannot be read, or unexpected | `systemctl` failed or printed a state the check does not know | reports it with what `systemctl` said; not restarted |
+| `inactive` | stopped or never started | skipped; an outage it was in is forgotten |
+| `deactivating`, `reloading` | changing on request | judged on the next run; an outage it was in is kept |
 
 It prints only when something changes: a site goes down, a restart is tried,
 the restarts run out, the site recovers. Set `MAILTO=you@example.com` in
@@ -285,8 +289,13 @@ the restarts run out, the site recovers. Set `MAILTO=you@example.com` in
 minutes. It exits 1 while any site is down.
 
 For other channels create an executable `/etc/ocms/alert`; it is called with
-the site ID, the status (`DOWN`, `NEEDS ATTENTION`, `recovered`, or
-`BACKUP FAILED` from the nightly backup) and a message:
+the site ID, the status and a message:
+
+| Status | Sent by |
+|---|---|
+| `DOWN`, `NEEDS ATTENTION`, `recovered` | the check, for a site |
+| `BACKUP FAILED` | the nightly backup, for a site, or for `_server` when it cannot select the sites |
+| `MONITOR FAILED`, `recovered` | the check, for `_server`, when the check itself fails: the registry is missing or malformed, its state cannot be read or saved, or it ran out of time (3 minutes) |
 
 ```bash
 #!/bin/sh
@@ -295,9 +304,20 @@ curl -fsS "https://api.telegram.org/bot<your-token>/sendMessage" \
   --data-urlencode "chat_id=<chat-id>" --data-urlencode "text=$2 $3" >/dev/null
 ```
 
-State is kept in `/run/ocms` (root only, cleared on reboot). A site whose unit
-is not enabled does not come back after a reboot, and the check skips it:
-`systemctl enable ocms@<site>` is the safety net.
+The hook gets 30 seconds. When it fails, times out, or is there but not an
+executable file, the event is printed with the reason and kept: each check
+tries the kept events again, oldest first, before its own, and keeps the newest
+20. Once the hook fails in a run, that run's later events wait for the next
+check. A failure of the check itself is reported once, like an outage, while
+its state can be read; when the state is what fails, on every run.
+
+State is kept in `/run/ocms` (root only, cleared on reboot): `monitor.json`
+and the lock that lets one check run at a time; a check that finds another
+running leaves without a word. A `monitor.json` that does not parse is moved to
+`monitor.json.corrupt`, replacing an earlier one, and reported; outages already
+reported are then reported again. A site whose unit is not enabled does not
+come back after a reboot, and the check skips it: `systemctl enable
+ocms@<site>` is the safety net.
 
 ## Copying production to development
 

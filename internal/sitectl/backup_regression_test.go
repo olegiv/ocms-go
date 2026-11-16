@@ -80,7 +80,7 @@ func TestBackupFailsWhenTheDatabaseIsMissing(t *testing.T) {
 	env, site, backups := backupEnv(t)
 	env.DBPathEnv = "OCMS_DB_PATH"
 	writeFiles(t, site.Dir, map[string]string{".env": "OCMS_DB_PATH=./data/typo.db\n"})
-	err := env.Backup(context.Background(), []Site{site})
+	err := env.Backup(context.Background(), sitesOf(site))
 	requireFailedBackup(t, env, site, backups, err, "typo.db")
 }
 
@@ -93,7 +93,7 @@ func TestBackupFailsWhenContentCannotBeRead(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.Chmod(locked, 0o755) })
-	err := env.Backup(context.Background(), []Site{site})
+	err := env.Backup(context.Background(), sitesOf(site))
 	requireFailedBackup(t, env, site, backups, err, "uploads")
 }
 
@@ -106,7 +106,7 @@ func TestBackupLeavesNoPartialArchive(t *testing.T) {
 	if err := os.Chmod(unreadable, 0); err != nil {
 		t.Fatal(err)
 	}
-	err := env.Backup(context.Background(), []Site{site})
+	err := env.Backup(context.Background(), sitesOf(site))
 	requireFailedBackup(t, env, site, backups, err, "uploads")
 	for _, name := range entryNames(t, backups) {
 		if strings.HasPrefix(name, ".partial-") || name == "uploads_20261113_100000.tar.gz" {
@@ -121,7 +121,7 @@ func TestBackupRefusesAMissingSiteDirectory(t *testing.T) {
 	if err := os.RemoveAll(site.Dir); err != nil {
 		t.Fatal(err)
 	}
-	if err := env.Backup(context.Background(), []Site{site}); err == nil {
+	if err := env.Backup(context.Background(), sitesOf(site)); err == nil {
 		t.Error("backup of a missing site directory succeeded")
 	}
 	if _, err := os.Lstat(site.Dir); !errors.Is(err, os.ErrNotExist) {
@@ -136,7 +136,7 @@ func TestBackupArchivesASymlinkedContentDirectory(t *testing.T) {
 	if err := os.Symlink(store, filepath.Join(site.Dir, "uploads")); err != nil {
 		t.Fatal(err)
 	}
-	if err := env.Backup(context.Background(), []Site{site}); err != nil {
+	if err := env.Backup(context.Background(), sitesOf(site)); err != nil {
 		t.Fatal(err)
 	}
 	f, err := os.Open(filepath.Join(backups, "uploads_20261113_100000.tar.gz"))
@@ -168,7 +168,7 @@ func TestBackupArchivesASymlinkedContentDirectory(t *testing.T) {
 func TestBackupExpiresOnlyKindsItWrote(t *testing.T) {
 	env, site, backups := backupEnv(t)
 	// No uploads and no custom content: their old archives are all there is.
-	if err := env.Backup(context.Background(), []Site{site}); err != nil {
+	if err := env.Backup(context.Background(), sitesOf(site)); err != nil {
 		t.Fatal(err)
 	}
 	want := []string{"app_20261113_100000.db.gz", "custom_20261001_030000.tar.gz", "uploads_20261001_030000.tar.gz"}

@@ -8,10 +8,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -207,5 +209,47 @@ func TestSiteMakePullUsesConfiguredDatabase(t *testing.T) {
 				t.Fatalf("missing %s in %s", want, output)
 			}
 		})
+	}
+}
+
+// Cron's check --all reports a broken registry through the alert hook; a
+// site name typed wrong by hand is the caller's mistake, not the monitor's.
+func TestCheckSendsOnlyItsOwnFailuresToTheHook(t *testing.T) {
+	w := newWorld(t)
+	hook := filepath.Join(w.server.ConfDir, "alert")
+	var hooked []string
+	server := w.server.Exec
+	w.server.Exec = func(ctx context.Context, c sitectl.Cmd) error {
+		if c.Name == hook {
+			hooked = append(hooked, strings.Join(c.Args[:2], " "))
+			return nil
+		}
+		return server(ctx, c)
+	}
+	if err := os.MkdirAll(w.server.ConfDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(hook, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := run(context.Background(), w.server, []string{"check", "--all"}, nil); !errors.Is(err, sitectl.ErrReported) {
+		t.Errorf("check --all without a registry: %v", err)
+	}
+	if want := []string{sitectl.ServerSite + " MONITOR FAILED"}; !slices.Equal(hooked, want) {
+		t.Errorf("hook calls = %v, want %v", hooked, want)
+	}
+	w.addSite(t)
+	hooked = nil
+	for _, args := range [][]string{{"check", "typo"}, {"check", "--all", "example_com"}, {"backup", "typo"}} {
+		if err := run(context.Background(), w.server, args, nil); err == nil || errors.Is(err, sitectl.ErrReported) {
+			t.Errorf("%v: err = %v, want a plain error", args, err)
+		}
+	}
+	if err := run(context.Background(), w.server, []string{"check"}, nil); err != nil {
+		t.Errorf("check: %v", err)
+	}
+	if want := []string{sitectl.ServerSite + " recovered"}; !slices.Equal(hooked, want) {
+		t.Errorf("hook calls = %v, want only the recovery from the first failure", hooked)
 	}
 }

@@ -18,6 +18,7 @@ package sitectl
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -97,8 +98,7 @@ func (a *App) run(ctx context.Context, name string, args ...string) error {
 	return nil
 }
 
-// output executes a command and returns its trimmed standard output, even
-// when the command fails: `systemctl is-active` reports through both.
+// output executes a command and returns its trimmed standard output.
 func (a *App) output(ctx context.Context, name string, args ...string) (string, error) {
 	var out bytes.Buffer
 	err := a.Exec(ctx, Cmd{Name: name, Args: args, Stdout: &out, Stderr: a.Stderr})
@@ -132,6 +132,19 @@ func checkArgs(args ...string) error {
 		}
 	}
 	return nil
+}
+
+// createFile writes a new file and leaves one that exists alone.
+func createFile(path string, data []byte, mode os.FileMode) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
+	if errors.Is(err, os.ErrExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(data)
+	return errors.Join(err, f.Chmod(mode), f.Close()) // Chmod: the umask narrowed mode
 }
 
 // writeFileAtomic writes data beside path and renames it into place.

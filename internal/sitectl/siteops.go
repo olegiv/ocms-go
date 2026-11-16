@@ -89,18 +89,31 @@ func (a *App) SiteOp(ctx context.Context, op, dir string, stdin io.Reader, stdou
 	}
 }
 
-// Backup backs up the sites and reports every failure.
-func (a *App) Backup(ctx context.Context, sites []Site) error {
-	return a.each(sites, func(site Site) error {
-		a.logf("Backing up %s", site.ID)
-		err := a.asSiteUser(ctx, site, "backup", nil, a.Stdout)
-		if err != nil {
-			// Cron appends this run to a log nobody reads: the hook is how
-			// a failed backup reaches someone.
-			a.alert(ctx, site, "BACKUP FAILED", err.Error())
+// Backup backs up the sites pick selects and reports every failure. Cron
+// appends the run to a log nobody reads, so each failure, the selection's
+// included (as site ServerSite), also goes to the alert hook as BACKUP
+// FAILED; what the hook does not take waits for the next check.
+func (a *App) Backup(ctx context.Context, pick func() ([]Site, error)) error {
+	s := &sender{a: a}
+	sites, err := pick()
+	if err != nil {
+		s.send(ctx, a.serverEvent("BACKUP FAILED", err.Error()))
+	} else {
+		err = a.each(sites, func(site Site) error {
+			a.logf("Backing up %s", site.ID)
+			err := a.asSiteUser(ctx, site, "backup", nil, a.Stdout)
+			if err != nil {
+				s.send(ctx, a.siteEvent(site, "BACKUP FAILED", err.Error()))
+			}
+			return err
+		})
+	}
+	if len(s.pending) > 0 {
+		if keepErr := a.keepAlerts(s.pending); keepErr != nil {
+			a.logf("alert hook: %d alerts lost: %v", len(s.pending), keepErr)
 		}
-		return err
-	})
+	}
+	return err
 }
 
 var backupStampRe = regexp.MustCompile(`^[0-9]{8}_[0-9]{6}$`)

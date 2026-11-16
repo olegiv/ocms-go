@@ -23,7 +23,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `ocmsctl pull` copies production to development from an online
     snapshot; production is no longer stopped.
   - `ocmsctl check` alerts through cron `MAILTO` or an executable
-    `/etc/ocms/alert` hook.
+    `/etc/ocms/alert` hook. A unit state it cannot read counts as down
+    rather than stopped; its own failures (registry, state, time limit)
+    reach the hook once as `_server MONITOR FAILED`; the hook gets 30
+    seconds, and events it does not take are kept and retried by the next
+    check. One check runs at a time.
+  - `ocmsctl init` creates an empty site registry; without one, commands
+    for every site fail instead of finding none.
+  - `ocmsctl status` exits 1 while a site is down.
   - `ocmsctl backup` fails, keeps the earlier copies and calls the alert
     hook when a site's directory or database is missing or its content
     cannot be read. Archives appear only once complete, and expiry removes

@@ -310,6 +310,11 @@ func (a *App) Init(ctx context.Context) error {
 	if err := writeFileAtomic(filepath.Join(a.SystemdDir, a.Name+"@.service"), a.Unit, 0o644); err != nil {
 		return err
 	}
+	// An empty registry: commands for every site then find none, rather
+	// than no registry, which they report.
+	if err := createFile(a.registry(), []byte(registryHeader), 0o644); err != nil {
+		return err
+	}
 	if err := a.systemctl(ctx, "daemon-reload"); err != nil {
 		return err
 	}

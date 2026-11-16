@@ -48,7 +48,8 @@ On your machine (host is an ssh destination: root@server or an ssh alias):
 On the server, as root:
   ocmsctl site add <domain> <user> [--port N] [--group G] [--dir PATH]
   ocmsctl site remove <site>               unregister; the site's data stays
-  ocmsctl status [site...]                 unit state and health (all sites by default)
+  ocmsctl status [site...]                 unit state and health (all sites by default);
+                                           exits 1 while a site is down
   ocmsctl start|stop <site>...|--all
   ocmsctl restart <site>...|--all          stop, start, require healthy
   ocmsctl health <site>
@@ -101,7 +102,8 @@ func main() {
 	err := run(ctx, newApp(), os.Args[1:], os.Stdin)
 	stop()
 	if err != nil {
-		if !errors.Is(err, sitectl.ErrSitesDown) { // check already reported it
+		// check and status print what they find before they return these.
+		if !errors.Is(err, sitectl.ErrSitesDown) && !errors.Is(err, sitectl.ErrReported) {
 			_, _ = fmt.Fprintln(os.Stderr, "ocmsctl:", err)
 		}
 		os.Exit(1)
@@ -283,17 +285,26 @@ func run(ctx context.Context, app *sitectl.App, args []string, stdin io.Reader) 
 		if err != nil {
 			return err
 		}
-		picked, err := sites(rest, true)
-		if err != nil {
-			return err
+		if command == "check" {
+			if err := needRoot(); err != nil {
+				return err
+			}
+		}
+		// Every site (cron's --all) is selected inside, so that a broken
+		// registry reaches the alert hook. A wrong site name is the
+		// caller's mistake and fails here.
+		pick := func() ([]sitectl.Site, error) { return sites(rest, true) }
+		if len(rest) > 0 {
+			picked, err := sites(rest, false)
+			if err != nil {
+				return err
+			}
+			pick = func() ([]sitectl.Site, error) { return picked, nil }
 		}
 		if command == "backup" {
-			return app.Backup(ctx, picked)
+			return app.Backup(ctx, pick)
 		}
-		if err := needRoot(); err != nil {
-			return err
-		}
-		return app.Check(ctx, picked)
+		return app.Check(ctx, pick)
 
 	case sitectl.SiteOpCommand:
 		// Internal: one site operation, run as the site user by a root

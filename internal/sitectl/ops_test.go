@@ -61,7 +61,7 @@ func TestBackupWritesPrivateVerifiedCopiesAndExpiresOldOnes(t *testing.T) {
 		}
 	}
 
-	if err := env.Backup(context.Background(), []Site{site}); err != nil {
+	if err := env.Backup(context.Background(), sitesOf(site)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -227,7 +227,7 @@ func TestCheckRestartsWithACapAndAlertsOncePerOutage(t *testing.T) {
 	sites := []Site{site, stopped}
 	check := func() (output string, err error) {
 		env.out.Reset()
-		err = env.Check(context.Background(), sites)
+		err = env.Check(context.Background(), sitesOf(sites...))
 		return env.out.String(), err
 	}
 	count := func(prefix string) int {
@@ -302,7 +302,7 @@ func TestCheckRefusesStateOthersCanWrite(t *testing.T) {
 	if err := os.Chmod(env.StateDir, 0o777); err != nil {
 		t.Fatal(err)
 	}
-	if err := env.Check(context.Background(), nil); err == nil {
+	if err := env.Check(context.Background(), sitesOf()); err == nil {
 		t.Error("a world-writable state directory was accepted")
 	}
 }

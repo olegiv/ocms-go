@@ -46,18 +46,24 @@ func parseSite(line string) (Site, error) {
 	return Site{ID: f[0], Dir: filepath.Clean(f[1]), User: f[2], Port: port}, nil
 }
 
-// Sites returns the enabled sites. A missing registry is an empty one; a
-// malformed line is an error, because skipping it would silently leave a site
-// out of every deploy, backup and health check.
+// Sites returns the enabled sites. A missing registry is an empty one, as
+// provisioning starts from none; a malformed line is an error, because
+// skipping it would silently leave a site out of every deploy, backup and
+// health check.
 func (a *App) Sites() ([]Site, error) {
+	sites, _, err := a.readRegistry()
+	return sites, err
+}
+
+// readRegistry returns the enabled sites; found is false without a registry.
+func (a *App) readRegistry() (sites []Site, found bool, err error) {
 	data, err := os.ReadFile(a.registry())
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
+		return nil, false, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	var sites []Site
 	for i, line := range strings.Split(string(data), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -65,22 +71,27 @@ func (a *App) Sites() ([]Site, error) {
 		}
 		site, err := parseSite(line)
 		if err != nil {
-			return nil, fmt.Errorf("%s line %d: %w", a.registry(), i+1, err)
+			return nil, true, fmt.Errorf("%s line %d: %w", a.registry(), i+1, err)
 		}
 		sites = append(sites, site)
 	}
-	return sites, nil
+	return sites, true, nil
 }
 
-// Pick returns the named sites, or every site when all is set.
+// Pick returns the named sites, or every site when all is set. Every site
+// needs a registry, even an empty one: without one, cron's backup --all and
+// check --all would find nothing to do and say nothing.
 func (a *App) Pick(ids []string, all bool) ([]Site, error) {
-	sites, err := a.Sites()
+	sites, found, err := a.readRegistry()
 	if err != nil {
 		return nil, err
 	}
 	if all {
 		if len(ids) > 0 {
 			return nil, errors.New("name sites or use --all, not both")
+		}
+		if !found {
+			return nil, fmt.Errorf("no site registry at %s (`%s init` creates one)", a.registry(), filepath.Base(a.ctl()))
 		}
 		return sites, nil
 	}
