@@ -83,6 +83,7 @@ type Cmd struct {
 	Stdout io.Writer
 	Stderr io.Writer
 	Cred   *syscall.Credential // run as another user (root only)
+	Group  bool                // own process group, all of it ended with ctx
 }
 
 func (c Cmd) String() string { return strings.Join(append([]string{c.Name}, c.Args...), " ") }
@@ -91,8 +92,10 @@ func (c Cmd) String() string { return strings.Join(append([]string{c.Name}, c.Ar
 func RunCmd(ctx context.Context, c Cmd) error {
 	cmd := exec.CommandContext(ctx, c.Name, c.Args...) // #nosec G204 -- argument list, no shell
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = c.Stdin, c.Stdout, c.Stderr
-	if c.Cred != nil {
-		cmd.SysProcAttr = &syscall.SysProcAttr{Credential: c.Cred}
+	cmd.SysProcAttr = &syscall.SysProcAttr{Credential: c.Cred, Setpgid: c.Group}
+	if c.Group {
+		cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+		cmd.WaitDelay = time.Second // for output pipes a stray child still holds
 	}
 	return cmd.Run()
 }
@@ -111,6 +114,26 @@ func (a *App) output(ctx context.Context, name string, args ...string) (string, 
 	var out bytes.Buffer
 	err := a.Exec(ctx, Cmd{Name: name, Args: args, Stdout: &out, Stderr: a.Stderr})
 	return strings.TrimSpace(out.String()), err
+}
+
+// tailBuffer keeps the last bytes written to it.
+type tailBuffer struct{ data []byte }
+
+func (t *tailBuffer) Write(p []byte) (int, error) {
+	t.data = append(t.data, p...)
+	if extra := len(t.data) - 4096; extra > 0 {
+		t.data = t.data[extra:]
+	}
+	return len(p), nil
+}
+
+// lastLine returns the last non-empty line written.
+func (t *tailBuffer) lastLine() string {
+	text := strings.TrimSpace(string(t.data))
+	if i := strings.LastIndexByte(text, '\n'); i >= 0 {
+		text = text[i+1:]
+	}
+	return strings.TrimSpace(text)
 }
 
 func (a *App) logf(format string, args ...any) {

@@ -106,6 +106,7 @@ func newApp() *sitectl.App {
 }
 
 func main() {
+	runOnWhenDetached()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	err := run(ctx, newApp(), os.Args[1:], os.Stdin)
 	stop()
@@ -116,6 +117,16 @@ func main() {
 		}
 		os.Exit(1)
 	}
+}
+
+// runOnWhenDetached keeps a command running when the ssh session that
+// started it ends: a deploy whose connection drops between stopping and
+// starting the sites must still start them. Without this, the lost terminal
+// (SIGHUP) or the next line printed to it (SIGPIPE) would end the process.
+// The signals are caught, not ignored, so the commands it runs get the usual
+// behaviour back.
+func runOnWhenDetached() {
+	signal.Notify(make(chan os.Signal, 1), syscall.SIGHUP, syscall.SIGPIPE)
 }
 
 // parse reads flags wherever they appear among the arguments and returns the
@@ -354,8 +365,7 @@ func runLifecycle(ctx context.Context, app *sitectl.App, command string, fs *fla
 		if len(rest) > 0 || *all || *staged {
 			return errors.New("install --stage takes no site")
 		}
-		_, err := app.Stage(stdin, *sum)
-		return err
+		return app.Stage(stdin, *sum)
 	}
 	// install may name no site: the binary is installed and running
 	// sites keep the old one until they restart.
@@ -379,11 +389,11 @@ func runLifecycle(ctx context.Context, app *sitectl.App, command string, fs *fla
 		return app.Rollback(ctx, *release, picked)
 	}
 	if *staged {
-		kept, err := app.StagedRelease(*sum)
+		release, err := app.PlaceStaged(*sum)
 		if err != nil {
 			return err
 		}
-		return app.Activate(ctx, kept, picked)
+		return app.Activate(ctx, release, picked)
 	}
 	return app.Install(ctx, stdin, *sum, picked)
 }

@@ -380,6 +380,10 @@ func TestInstallAdoptsLegacyBinarySwitchesAndPrunes(t *testing.T) {
 	if len(releases) != keepReleases || releases[len(releases)-1] != env.Current() {
 		t.Errorf("after five installs: releases %v, current %s; want the newest %d", releases, env.Current(), keepReleases)
 	}
+	// What pruning removes, it says.
+	if got := strings.Count(env.out.String(), "Removed release "); got != 3 {
+		t.Errorf("pruning reported %d removals, want 3:\n%s", got, env.out)
+	}
 }
 
 func TestRestartReportsEachFailureAndCarriesOn(t *testing.T) {
@@ -635,7 +639,8 @@ func TestRestartDoesNotWaitForAUnitThatIsGone(t *testing.T) {
 	go func() { done <- env.Restart(context.Background(), []Site{site}) }()
 	select {
 	case err := <-done:
-		if err == nil || !strings.Contains(env.out.String(), "unit is failed") {
+		// The probe's error says why it never answered.
+		if err == nil || !strings.Contains(env.out.String(), "unit is failed: HTTP 503") {
 			t.Errorf("Restart = %v, output:\n%s", err, env.out.String())
 		}
 	case <-time.After(10 * time.Second):

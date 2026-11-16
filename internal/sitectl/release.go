@@ -113,84 +113,123 @@ func (a *App) release(name string) error {
 // where it was built, makes it the current release and restarts the sites on
 // it. Nothing is stopped until the binary is verified and in place.
 func (a *App) Install(ctx context.Context, r io.Reader, wantSHA string, sites []Site) error {
-	release, err := a.Stage(r, wantSHA)
+	tmp, sum, err := a.receive(r, wantSHA)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.Remove(tmp) }()
+	release, err := a.newRelease(tmp, sum)
 	if err != nil {
 		return err
 	}
 	return a.Activate(ctx, release, sites)
 }
 
-// Stage reads a new binary from r, verifies it against the SHA-256 computed
-// where it was built and keeps it as a release without switching to it.
-// deploy --themes stages first, so a binary that does not arrive intact
-// leaves the themes alone too.
-func (a *App) Stage(r io.Reader, wantSHA string) (string, error) {
+// Stage reads and verifies a binary as Install does, and keeps it as
+// <Root>/releases/.staged-<sha256> instead of making it a release. deploy
+// --themes stages first, so a binary that does not arrive intact leaves the
+// themes alone too. A staged binary is no release: rollback and pruning
+// never see one that a failed deploy left behind, and the next Stage
+// replaces it.
+func (a *App) Stage(r io.Reader, wantSHA string) error {
+	tmp, sum, err := a.receive(r, wantSHA)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.Remove(tmp) }()
+	old, err := filepath.Glob(filepath.Join(a.releasesDir(), ".staged-*"))
+	if err != nil {
+		return err
+	}
+	for _, path := range old {
+		if err := os.Remove(path); err != nil {
+			return err
+		}
+	}
+	if err := os.Rename(tmp, a.stagedPath(sum)); err != nil {
+		return err
+	}
+	if err := syncDir(a.releasesDir()); err != nil {
+		return err
+	}
+	a.logf("Received binary %s, kept until it is installed", sum[:8])
+	return nil
+}
+
+// PlaceStaged makes the binary Stage kept with the SHA-256 wantSHA a release
+// and returns its name.
+func (a *App) PlaceStaged(wantSHA string) (string, error) {
 	if !sha256Re.MatchString(wantSHA) {
 		return "", errors.New("--sha256 must be 64 hex digits")
 	}
-	if err := os.MkdirAll(a.releasesDir(), 0o755); err != nil {
-		return "", err
+	want := strings.ToLower(wantSHA)
+	path := a.stagedPath(want)
+	if sum, err := fileSHA256(path); err != nil || sum != want {
+		return "", fmt.Errorf("no binary with SHA-256 %s was staged", want)
 	}
-	// Staged inside releases/: the rename below must not cross filesystems.
+	return a.newRelease(path, want)
+}
+
+func (a *App) stagedPath(sum string) string {
+	return filepath.Join(a.releasesDir(), ".staged-"+sum)
+}
+
+// receive reads a binary from r into a private file in releases/ and checks
+// it against wantSHA and that it is a Linux executable. The file is on disk
+// (synced, mode 0755) when it returns; the caller removes or renames it.
+func (a *App) receive(r io.Reader, wantSHA string) (path, sum string, err error) {
+	if !sha256Re.MatchString(wantSHA) {
+		return "", "", errors.New("--sha256 must be 64 hex digits")
+	}
+	if err := os.MkdirAll(a.releasesDir(), 0o755); err != nil {
+		return "", "", err
+	}
+	// Inside releases/: the rename into place must not cross filesystems.
 	tmp, err := os.CreateTemp(a.releasesDir(), ".upload-*")
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	defer func() { _ = os.Remove(tmp.Name()) }()
+	defer func() {
+		if err != nil {
+			_ = os.Remove(tmp.Name())
+		}
+	}()
 	hash := sha256.New()
 	size, err := io.Copy(io.MultiWriter(tmp, hash), io.LimitReader(r, maxBinaryBytes+1))
-	if closeErr := tmp.Close(); err == nil {
-		err = closeErr
-	}
-	if err != nil {
-		return "", fmt.Errorf("receiving the binary: %w", err)
+	if err = errors.Join(err, tmp.Sync(), tmp.Close()); err != nil {
+		return "", "", fmt.Errorf("receiving the binary: %w", err)
 	}
 	if size > maxBinaryBytes {
-		return "", fmt.Errorf("binary is larger than %d MiB", maxBinaryBytes>>20)
+		return "", "", fmt.Errorf("binary is larger than %d MiB", maxBinaryBytes>>20)
 	}
-	sum := hex.EncodeToString(hash.Sum(nil))
+	sum = hex.EncodeToString(hash.Sum(nil))
 	if sum != strings.ToLower(wantSHA) {
-		return "", fmt.Errorf("received %d bytes with SHA-256 %s, expected %s: nothing installed", size, sum, wantSHA)
+		return "", "", fmt.Errorf("received %d bytes with SHA-256 %s, expected %s: nothing installed", size, sum, wantSHA)
 	}
-	if head, err := readHead(tmp.Name(), 4); err != nil || !bytes.Equal(head, []byte("\x7fELF")) {
-		return "", errors.New("upload is not a Linux executable: nothing installed")
+	if head, headErr := readHead(tmp.Name(), 4); headErr != nil || !bytes.Equal(head, []byte("\x7fELF")) {
+		return "", "", errors.New("upload is not a Linux executable: nothing installed")
 	}
+	if err := os.Chmod(tmp.Name(), 0o755); err != nil {
+		return "", "", err
+	}
+	return tmp.Name(), sum, nil
+}
 
+// newRelease moves the verified binary at path into a new release directory
+// and returns the release's name.
+func (a *App) newRelease(path, sum string) (string, error) {
 	release := a.Now().UTC().Format(releaseStamp) + "-" + sum[:8]
 	dir := filepath.Join(a.releasesDir(), release)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
-	if err := os.Chmod(tmp.Name(), 0o755); err != nil {
+	if err := os.Rename(path, filepath.Join(dir, a.Name)); err != nil {
 		return "", err
 	}
-	if err := os.Rename(tmp.Name(), filepath.Join(dir, a.Name)); err != nil {
+	if err := errors.Join(syncDir(dir), syncDir(a.releasesDir())); err != nil {
 		return "", err
 	}
-	a.logf("Received release %s (%d bytes)", release, size)
 	return release, nil
-}
-
-// StagedRelease returns the newest release whose binary has the SHA-256
-// wantSHA: the one Stage kept.
-func (a *App) StagedRelease(wantSHA string) (string, error) {
-	if !sha256Re.MatchString(wantSHA) {
-		return "", errors.New("--sha256 must be 64 hex digits")
-	}
-	want := strings.ToLower(wantSHA)
-	releases, err := a.Releases()
-	if err != nil {
-		return "", err
-	}
-	for _, name := range slices.Backward(releases) {
-		if !strings.HasSuffix(name, "-"+want[:8]) {
-			continue
-		}
-		if sum, err := fileSHA256(filepath.Join(a.releasesDir(), name, a.Name)); err == nil && sum == want {
-			return name, nil
-		}
-	}
-	return "", fmt.Errorf("no installed release has SHA-256 %s", want)
 }
 
 // Activate makes an installed release current and restarts the sites on it.
@@ -272,7 +311,11 @@ func (a *App) prune() error {
 	var errs []error
 	for i, name := range releases {
 		if i < len(releases)-keepReleases && name != current {
-			errs = append(errs, os.RemoveAll(filepath.Join(a.releasesDir(), name)))
+			if err := os.RemoveAll(filepath.Join(a.releasesDir(), name)); err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			a.logf("Removed release %s (%d are kept)", name, keepReleases)
 		}
 	}
 	return errors.Join(errs...)

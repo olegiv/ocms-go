@@ -126,7 +126,7 @@ func (a *App) waitHealthy(ctx context.Context, site Site) error {
 			return fmt.Errorf("not healthy after %s: %w", a.HealthTimeout, err)
 		}
 		// systemd gave up on the unit: waiting longer changes nothing.
-		if state, err := a.State(ctx, site); err == nil && (state == "failed" || state == "inactive") {
+		if state, stateErr := a.State(ctx, site); stateErr == nil && (state == "failed" || state == "inactive") {
 			return fmt.Errorf("unit is %s: %w", state, err)
 		}
 		if err := sleep(ctx, probeInterval); err != nil {
@@ -301,11 +301,20 @@ func (a *App) Logs(ctx context.Context, site Site, lines int, follow, errorsOnly
 		}
 	}
 	c := Cmd{Name: "tail", Args: []string{"-n", strconv.Itoa(lines), file}, Stdout: a.Stdout, Stderr: a.Stderr}
-	if _, err := os.Stat(file); err != nil {
-		if errorsOnly {
-			return fmt.Errorf("no error log at %s", file)
-		}
+	info, err := os.Stat(file)
+	switch {
+	case err != nil && errorsOnly:
+		return fmt.Errorf("no error log at %s", file)
+	case err != nil:
 		c.Name, c.Args = "journalctl", []string{"-u", a.unit(site.ID), "-n", strconv.Itoa(lines), "--no-pager"}
+	case !info.Mode().IsRegular():
+		return fmt.Errorf("%s is not a regular file", file)
+	default:
+		// The site chose this file, by its .env or a link in its tree:
+		// it is read with the site user's rights.
+		if c.Cred, err = a.siteCred(site); err != nil {
+			return err
+		}
 	}
 	if follow {
 		c.Args = append(c.Args, "-f")

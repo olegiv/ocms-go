@@ -106,8 +106,8 @@ func TestRollbackOnlyToAnInstalledRelease(t *testing.T) {
 	if env.Current() != current || len(env.host.systemctlCalls()) != 0 {
 		t.Errorf("current %s (was %s), systemctl %v", env.Current(), current, env.host.systemctlCalls())
 	}
-	if _, err := env.StagedRelease(strings.Repeat("ab", 32)); err == nil {
-		t.Error("found a staged release nobody uploaded")
+	if _, err := env.PlaceStaged(strings.Repeat("ab", 32)); err == nil {
+		t.Error("placed a staged binary nobody uploaded")
 	}
 }
 
@@ -143,38 +143,67 @@ func TestFirstInstallOffersTheLegacyBinaryBack(t *testing.T) {
 	}
 }
 
-// deploy --themes keeps the binary first (Stage), then switches to it by
-// its digest (StagedRelease, Activate).
-func TestStagedReleaseIsActivatedByDigest(t *testing.T) {
+// deploy --themes keeps the binary first (Stage), then makes it a release
+// by its digest (PlaceStaged) and switches to it (Activate). A binary that
+// was staged but never installed is no release: rollback and pruning never
+// see it.
+func TestStagedBinaryIsNoReleaseUntilInstalled(t *testing.T) {
 	env := newTestEnv(t)
 	site, _ := env.addSite(t, "a")
 	if err := env.install(t, "v1", site); err != nil {
 		t.Fatal(err)
 	}
 	first := env.Current()
-	env.now = env.now.Add(time.Minute)
-	data, sum := binaryFixture("v2")
-	// A newer release whose name has the same digest prefix and another binary.
-	writeFiles(t, env.releasesDir(), map[string]string{"29991231T235959Z-" + sum[:8] + "/app": "\x7fELFother"})
+	stage := func(content string) string {
+		t.Helper()
+		env.now = env.now.Add(time.Minute)
+		data, sum := binaryFixture(content)
+		if err := env.Stage(bytes.NewReader(data), sum); err != nil {
+			t.Fatal(err)
+		}
+		return sum
+	}
+
+	// A deploy --themes whose themes failed after staging, then a plain
+	// deploy: rollback must offer v1, the last release that ran.
 	env.host.calls = nil
-	staged, err := env.Stage(bytes.NewReader(data), sum)
+	stage("abandoned")
+	if releases, _ := env.Releases(); len(releases) != 1 || env.Current() != first || len(env.host.systemctlCalls()) != 0 {
+		t.Fatalf("staging made releases %v, current %s, systemctl %v", releases, env.Current(), env.host.systemctlCalls())
+	}
+	env.now = env.now.Add(time.Minute)
+	if err := env.install(t, "v2", site); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.Rollback(context.Background(), "", []Site{site}); err != nil {
+		t.Fatal(err)
+	}
+	if env.Current() != first {
+		t.Errorf("rollback went to %s, want %s", env.Current(), first)
+	}
+
+	sum := stage("v3")
+	release, err := env.PlaceStaged(strings.ToUpper(sum))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if env.Current() != first || len(env.host.systemctlCalls()) != 0 {
-		t.Errorf("staging switched to %s or restarted %v", env.Current(), env.host.systemctlCalls())
-	}
-	found, err := env.StagedRelease(strings.ToUpper(sum))
-	if err != nil || found != staged {
-		t.Fatalf("StagedRelease = %s, %v; want %s", found, err, staged)
-	}
-	if err := env.Activate(context.Background(), found, []Site{site}); err != nil {
+	if err := env.Activate(context.Background(), release, []Site{site}); err != nil {
 		t.Fatal(err)
 	}
-	if env.Current() != staged || readFile(t, env.binary()) != "\x7fELFv2" {
-		t.Errorf("current %s, want %s", env.Current(), staged)
+	if env.Current() != release || readFile(t, env.binary()) != "\x7fELFv3" {
+		t.Errorf("current %s, want %s", env.Current(), release)
 	}
-	if _, err := env.Stage(bytes.NewReader([]byte("\x7fELFdamaged")), sum); err == nil {
+	if _, err := env.PlaceStaged(sum); err == nil {
+		t.Error("the staged binary was placed twice")
+	}
+	data, sum := binaryFixture("v4")
+	if err := env.Stage(bytes.NewReader([]byte("\x7fELFdamaged")), sum); err == nil {
 		t.Error("a damaged upload was staged")
+	}
+	if err := env.Stage(bytes.NewReader(data), sum); err != nil {
+		t.Fatal(err)
+	}
+	if staged, _ := filepath.Glob(filepath.Join(env.releasesDir(), ".staged-*")); len(staged) != 1 {
+		t.Errorf("staged binaries %v, want only the newest", staged)
 	}
 }

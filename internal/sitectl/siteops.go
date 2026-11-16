@@ -74,8 +74,14 @@ func (a *App) asSiteUser(ctx context.Context, site Site, op string, stdin io.Rea
 		return a.SiteOp(ctx, op, site.Dir, stdin, stdout)
 	}
 	// The installed tool, not os.Executable: the site user must be able to
-	// run it, and a copy in root's home would not be.
-	return a.Exec(ctx, Cmd{Name: a.ctl(), Args: []string{SiteOpCommand, op, site.Dir}, Stdin: stdin, Stdout: stdout, Stderr: a.Stderr, Cred: cred})
+	// run it, and a copy in root's home would not be. Its error is the last
+	// line it prints; without it, an alert would say only "exit status 1".
+	var stderr tailBuffer
+	err = a.Exec(ctx, Cmd{Name: a.ctl(), Args: []string{SiteOpCommand, op, site.Dir}, Stdin: stdin, Stdout: stdout, Stderr: io.MultiWriter(a.Stderr, &stderr), Cred: cred})
+	if msg := strings.TrimPrefix(stderr.lastLine(), filepath.Base(a.ctl())+": "); err != nil && msg != "" {
+		return fmt.Errorf("%s (%w)", msg, err)
+	}
+	return err
 }
 
 // SendCommand is the internal command pull's rsync runs on the server
@@ -431,11 +437,25 @@ func writeNew(path string, fill func(io.Writer) error) error {
 		return err
 	}
 	defer func() { _ = os.Remove(tmp.Name()) }()
-	if err := errors.Join(fill(tmp), tmp.Close()); err != nil {
+	// On disk before it gets its name: a backup reported as written must
+	// survive a power cut.
+	if err := errors.Join(fill(tmp), tmp.Sync(), tmp.Close()); err != nil {
 		return err
 	}
 	// A link, unlike a rename, fails when path already exists.
-	return os.Link(tmp.Name(), path)
+	if err := os.Link(tmp.Name(), path); err != nil {
+		return err
+	}
+	return syncDir(filepath.Dir(path))
+}
+
+// syncDir makes the entries just created or renamed in dir durable.
+func syncDir(dir string) error {
+	d, err := os.Open(dir) // #nosec G304 -- a directory this tool writes
+	if err != nil {
+		return err
+	}
+	return errors.Join(d.Sync(), d.Close())
 }
 
 // writeTarGz writes the tree at root to w as a gzipped tar whose entries

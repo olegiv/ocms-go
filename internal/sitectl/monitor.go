@@ -44,12 +44,16 @@ var (
 	ErrReported = errors.New("already reported")
 
 	errCheckRunning = errors.New("another check is running")
+	// errNoHook is a delivery without a hook to deliver to: what the run
+	// prints is all there is (check's output reaches cron mail).
+	errNoHook = errors.New("no alert hook")
 )
 
 // outage is what the monitor remembers about a site that is down.
 type outage struct {
-	Restarts int  `json:"restarts"`
-	GaveUp   bool `json:"gave_up"`
+	Restarts  int    `json:"restarts"`
+	GaveUp    bool   `json:"gave_up"`
+	LastError string `json:"last_error,omitempty"` // why the last restart failed
 }
 
 // hookCall is one event for the alert hook.
@@ -61,9 +65,10 @@ type hookCall struct {
 
 // monitorState is what the checks remember between runs.
 type monitorState struct {
-	Outages map[string]outage `json:"outages"`
-	Failed  string            `json:"failed,omitempty"`  // the check's own failure, already reported
-	Pending []hookCall        `json:"pending,omitempty"` // alerts the hook has not taken, oldest first
+	Outages    map[string]outage `json:"outages"`
+	Failed     string            `json:"failed,omitempty"`      // the check's own failure, already reported
+	HookFailed string            `json:"hook_failed,omitempty"` // why the hook fails, already reported
+	Pending    []hookCall        `json:"pending,omitempty"`     // alerts the hook has not taken, oldest first
 }
 
 // Check is the cron monitor. pick selects the sites; for every one it looks
@@ -80,9 +85,11 @@ type monitorState struct {
 // It prints, and calls the alert hook, only when a site goes down, when its
 // restarts run out and when it recovers, so cron mail stays quiet during a
 // long outage. A failure of the check itself is reported the same way, once,
-// as site ServerSite. It returns ErrSitesDown while any site is down.
+// as site ServerSite. Without a hook it prints the alerts backups left for
+// it; with one that keeps failing it says so once. It returns ErrSitesDown
+// while any site is down.
 func (a *App) Check(ctx context.Context, pick func() ([]Site, error)) error {
-	s := &sender{a: a}
+	s := &sender{a: a, mailed: true}
 	unlock, err := a.lockMonitor(false)
 	if errors.Is(err, errCheckRunning) {
 		return nil // that run reports what it finds, and checkBudget ends it
@@ -104,6 +111,7 @@ func (a *App) Check(ctx context.Context, pick func() ([]Site, error)) error {
 		s.send(ctx, a.serverEvent("recovered", "the check runs again"))
 	}
 	st.Pending = a.trimPending(s.pending)
+	a.reportHook(st, s)
 	if saveErr := a.saveMonitor(st); saveErr != nil {
 		return a.checkFailed(ctx, nil, s, saveErr)
 	}
@@ -164,12 +172,18 @@ func (a *App) checkSites(ctx context.Context, pick func() ([]Site, error), st *m
 		if l.restart && out.Restarts < maxRestarts {
 			out.Restarts++
 			a.logf("%s: restarting (%d/%d)", site.ID, out.Restarts, maxRestarts)
+			out.LastError = ""
 			if err := a.systemctl(lookCtx, "restart", a.unit(site.ID)); err != nil {
 				a.logf("%s: %v", site.ID, err)
+				out.LastError = err.Error()
 			}
 		} else if l.restart && !out.GaveUp {
 			out.GaveUp = true
-			s.send(ctx, a.siteEvent(site, "NEEDS ATTENTION", fmt.Sprintf("still down after %d restarts", maxRestarts)))
+			message := fmt.Sprintf("still down after %d restart attempts", maxRestarts)
+			if out.LastError != "" {
+				message += "; the last one failed: " + out.LastError
+			}
+			s.send(ctx, a.siteEvent(site, "NEEDS ATTENTION", message))
 		}
 		st.Outages[site.ID] = out
 		down = append(down, site.ID)
@@ -195,46 +209,87 @@ func (a *App) checkFailed(ctx context.Context, st *monitorState, s *sender, caus
 // events wait for the next check without trying it, so a hook that hangs
 // costs one hookTimeout per run.
 type sender struct {
-	a       *App
-	failed  error      // why the hook failed in this run
-	pending []hookCall // events the hook has not taken
+	a         *App
+	mailed    bool       // what this run prints reaches cron mail (check, not backup)
+	failed    error      // why the hook failed in this run
+	delivered bool       // the hook took an event in this run
+	pending   []hookCall // events the hook has not taken
+	earlier   []hookCall // of those, the ones earlier runs left (retry)
 }
 
-// send prints the event and passes it to the hook.
+// send prints the event and passes it to the hook. Without a hook, an event
+// printed where nobody reads it (a backup's log) waits for the next check,
+// which prints it for cron mail.
 func (s *sender) send(ctx context.Context, c hookCall) {
 	s.a.announce(c)
-	if !s.deliver(ctx, c) {
-		s.a.logf("  alert hook: %v; the next check tries again", s.failed)
+	switch err := s.deliver(ctx, c); {
+	case errors.Is(err, errNoHook) && !s.mailed:
+		s.pending = append(s.pending, c)
+		s.a.logf("  no alert hook: the next check prints this for cron mail")
+	case err != nil && !errors.Is(err, errNoHook):
+		s.a.logf("  alert hook: %v; the next check tries again", err)
 	}
 }
 
 // retry passes events an earlier run could not deliver to the hook again,
-// without printing them a second time.
+// without printing them a second time; without a hook, it prints them.
 func (s *sender) retry(ctx context.Context, calls []hookCall) {
 	for _, c := range calls {
-		s.deliver(ctx, c)
+		switch err := s.deliver(ctx, c); {
+		case errors.Is(err, errNoHook):
+			s.a.announce(c)
+		case err != nil:
+			s.earlier = append(s.earlier, c)
+		}
 	}
 }
 
-func (s *sender) deliver(ctx context.Context, c hookCall) bool {
-	if s.failed == nil {
-		if s.failed = s.a.callHook(ctx, c); s.failed == nil {
-			return true
-		}
+// deliver passes c to the hook. What a failing hook does not take waits in
+// pending; errNoHook leaves c to the caller.
+func (s *sender) deliver(ctx context.Context, c hookCall) error {
+	if s.failed != nil {
+		s.pending = append(s.pending, c)
+		return s.failed
 	}
-	s.pending = append(s.pending, c)
-	return false
+	err := s.a.callHook(ctx, c)
+	switch {
+	case err == nil:
+		s.delivered = true
+	case !errors.Is(err, errNoHook):
+		s.failed = err
+		s.pending = append(s.pending, c)
+	}
+	return err
+}
+
+// reportHook says once, for cron mail, that the hook fails, with the alerts
+// from earlier runs that wait for it (a backup's were printed only to its
+// log), and once that it delivers again; the retries in between are quiet.
+func (a *App) reportHook(st *monitorState, s *sender) {
+	switch {
+	case s.failed != nil && st.HookFailed != s.failed.Error():
+		st.HookFailed = s.failed.Error()
+		a.logf("alert hook: %v; %d alerts wait for it", s.failed, len(st.Pending))
+		for _, c := range s.earlier {
+			a.announce(c)
+		}
+	case s.failed == nil && s.delivered && st.HookFailed != "":
+		st.HookFailed = ""
+		a.logf("alert hook: delivers again")
+	}
 }
 
 func (a *App) announce(c hookCall) { a.logf("%s %s", c.Status, c.Message) }
 
-// callHook runs the hook for one event. Without a hook there is nothing to
-// deliver; a hook that is there but cannot run is a failed delivery.
+// callHook runs the hook for one event: errNoHook without one, and a
+// failed delivery when it is there but cannot run. The hook gets its own
+// process group, all of it ended at hookTimeout: a hung curl it started
+// must not outlive it.
 func (a *App) callHook(ctx context.Context, c hookCall) error {
 	hook := filepath.Join(a.ConfDir, "alert")
 	info, err := os.Stat(hook)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil
+		return errNoHook
 	}
 	if err != nil {
 		return err
@@ -244,7 +299,7 @@ func (a *App) callHook(ctx context.Context, c hookCall) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, hookTimeout)
 	defer cancel()
-	if err := a.Exec(ctx, Cmd{Name: hook, Args: []string{c.Site, c.Status, c.Message}, Stdout: a.Stdout, Stderr: a.Stderr}); err != nil {
+	if err := a.Exec(ctx, Cmd{Name: hook, Args: []string{c.Site, c.Status, c.Message}, Stdout: a.Stdout, Stderr: a.Stderr, Group: true}); err != nil {
 		return fmt.Errorf("%s: %w", hook, err)
 	}
 	return nil
@@ -266,13 +321,24 @@ func hostname() string {
 	return host
 }
 
-// trimPending keeps the newest maxPending undelivered events.
+// trimPending keeps maxPending undelivered events. It drops "recovered"
+// events first, oldest first: that something went wrong matters more than
+// that it is over. Then it drops the oldest of the rest.
 func (a *App) trimPending(calls []hookCall) []hookCall {
-	if n := len(calls) - maxPending; n > 0 {
-		a.logf("alert hook: %d undelivered alerts dropped", n)
-		calls = calls[n:]
+	n := len(calls) - maxPending
+	if n <= 0 {
+		return calls
 	}
-	return calls
+	a.logf("alert hook: %d undelivered alerts dropped", n)
+	kept := make([]hookCall, 0, len(calls))
+	for _, c := range calls {
+		if n > 0 && c.Status == "recovered" {
+			n--
+			continue
+		}
+		kept = append(kept, c)
+	}
+	return kept[len(kept)-maxPending:]
 }
 
 // keepAlerts hands events the hook did not take to the next check.

@@ -35,6 +35,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A site user must not be root, and `rollback --to` takes only an
     installed release. The first deploy over a legacy binary names it as
     the release to roll back to.
+  - Without an alert hook, `check` prints failed backups for cron mail; a
+    hook that keeps failing is reported once; a failed backup's alert says
+    why. `pull` prints the local paths it writes and their source.
   - `ocmsctl check` alerts through cron `MAILTO` or an executable
     `/etc/ocms/alert` hook. A unit state it cannot read counts as down
     rather than stopped; its own failures (registry, state, time limit)

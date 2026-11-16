@@ -402,7 +402,9 @@ func giveTo(t *testing.T, dir, name string) {
 // TestMain lets the test binary stand in for ocmsctl when a root ocmsctl
 // re-executes itself as a site user (sitectl.SiteOpCommand).
 func TestMain(m *testing.M) {
-	if len(os.Args) > 1 && os.Args[1] == sitectl.SiteOpCommand {
+	// OCMSCTL_TEST_MAIN runs main() itself, as the installed tool would
+	// (TestTheServerRunsOnWhenItsSessionEnds).
+	if len(os.Args) > 1 && (os.Args[1] == sitectl.SiteOpCommand || os.Getenv("OCMSCTL_TEST_MAIN") != "") {
 		main()
 		return
 	}

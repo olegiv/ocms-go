@@ -181,8 +181,9 @@ func (a *App) SitePaths(ctx context.Context, site Site) error {
 // localConfig is a development checkout's configuration, absolute.
 type localConfig struct {
 	sitePaths
-	Port int
-	Dir  string
+	Port    int
+	Dir     string
+	Sources map[string]string // setting name -> where its value came from
 }
 
 // readLocalConfig resolves the configuration of the checkout in dir as its
@@ -215,14 +216,24 @@ func (a *App) readLocalConfig(dir string) (localConfig, error) {
 	if err != nil && (named || !errors.Is(err, os.ErrNotExist)) {
 		return localConfig{}, fmt.Errorf("local configuration: %w", err)
 	}
+	label := "the environment"
+	from := map[string]string{} // key -> label of the value lookup returned
 	lookup := func(key string) (string, bool) {
 		if v, ok := lookupEnv(key); ok {
+			from[key] = label
 			return v, true
 		}
 		v, ok := values[key]
+		from[key] = filepath.Base(file)
 		return v, ok
 	}
-	c := localConfig{sitePaths: a.resolvePaths(dir, lookup), Dir: dir}
+	c := localConfig{sitePaths: a.resolvePaths(dir, lookup), Dir: dir, Sources: map[string]string{}}
+	for _, s := range []Setting{a.DB, a.Uploads, a.Custom, a.Port} {
+		c.Sources[s.Name] = "default"
+		if v, ok := lookup(s.Env); s.Env != "" && ok && v != "" {
+			c.Sources[s.Name] = from[s.Env]
+		}
+	}
 	if value := a.Port.value(lookup); value != "" {
 		if c.Port, err = strconv.Atoi(value); err != nil || c.Port < 1 || c.Port > 65535 {
 			return localConfig{}, fmt.Errorf("local configuration: %s=%q is not a port", a.Port.Env, value)

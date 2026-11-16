@@ -46,6 +46,39 @@ func TestRootPullReadsAsTheSiteUser(t *testing.T) {
 	}
 }
 
+// As root, backups run as the site user in a child process; the alert must
+// still carry why the backup failed, not just the child's exit status.
+func TestRootBackupAlertsCarryTheCause(t *testing.T) {
+	w, site, _, _ := nobodySite(t)
+	giveTo(t, site, "nobody")
+	said := filepath.Join(w.server.ConfDir, "said")
+	writeTree(t, w.server.ConfDir, map[string]string{"alert": "#!/bin/sh\nprintf '%s' \"$3\" > " + said + "\n"})
+	if err := os.Chmod(filepath.Join(w.server.ConfDir, "alert"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := run(context.Background(), w.server, []string{"backup", "site"}, nil); err == nil {
+		t.Fatal("a backup without a database succeeded")
+	}
+	if got := read(t, said); !strings.Contains(got, "database") || !strings.Contains(got, "ocms.db") {
+		t.Errorf("the alert says %q, want why", got)
+	}
+}
+
+// logs reads a file the site chose with the site user's rights.
+func TestRootLogsReadAsTheSiteUser(t *testing.T) {
+	w, site, rootOnly, _ := nobodySite(t)
+	writeTree(t, rootOnly, map[string]string{"secret.log": "root's secret"})
+	writeTree(t, site, map[string]string{".env": "OCMS_ERROR_LOG_PATH=" + filepath.Join(rootOnly, "secret.log") + "\n"})
+	giveTo(t, site, "nobody")
+	w.out.Reset()
+	if err := run(context.Background(), w.server, []string{"logs", "site", "--errors"}, nil); err == nil {
+		t.Error("logs read a file only root may read")
+	}
+	if strings.Contains(w.out.String(), "root's secret") {
+		t.Errorf("logs printed it:\n%s", w.out)
+	}
+}
+
 // deploy --themes changes no theme until the server holds the binary
 // intact, and restarts the sites once.
 func TestDeployThemesWaitForAVerifiedBinary(t *testing.T) {
@@ -127,9 +160,16 @@ func TestTestsThatNeedRootRunInCI(t *testing.T) {
 		}
 	}
 	workflow := read(t, filepath.Join("..", "..", ".github", "workflows", "go.yml"))
-	for _, want := range []string{"OCMS_REQUIRE_ROOT_TESTS=1", "-run '^TestRoot' ./cmd/ocmsctl/"} {
-		if !strings.Contains(workflow, want) {
-			t.Errorf("CI runs no root tests: %q is not in go.yml", want)
+	step, _, _ := strings.Cut(workflow[strings.Index(workflow, "name: Root tests"):], "\n    - name:")
+	for _, want := range []string{
+		"shell: bash", // pipefail: the default shell would let tee hide a failure
+		"OCMS_REQUIRE_ROOT_TESTS=1",
+		"-run '^TestRoot' ./cmd/ocmsctl/",
+		"grep '^--- PASS: TestRoot'",
+		"'--- (FAIL|SKIP)'",
+	} {
+		if !strings.Contains(step, want) {
+			t.Errorf("the CI root step lacks %q:\n%s", want, step)
 		}
 	}
 	source := read(t, "main_test.go")

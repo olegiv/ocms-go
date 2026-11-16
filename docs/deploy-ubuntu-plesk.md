@@ -33,7 +33,8 @@ installer line over SSH to install the server tool. Your `~/.ssh/config`, agent 
    pass.
 7. Reports each site `OK` or `FAILED` with the last lines of its log, and exits 1
    if any failed. A site that did not stop is not started (its old process may
-   still hold the port); the other sites carry on.
+   still hold the port); the other sites carry on. If the ssh connection drops,
+   the server's ocmsctl carries on to the end.
 
 There is no automatic rollback: the new binary may already have migrated a
 database. The failed release stays installed and the output names the command
@@ -205,9 +206,11 @@ To deploy a published release instead of a local build, download and verify it
 are followed and arrive as real files when their targets stay inside the
 custom directory, outside its `modules/`. Links to developer configuration or
 other files outside that tree abort deployment before upload. With a binary,
-the server verifies and keeps the binary first, then replaces the themes, then
-switches to the binary and restarts the sites once: a binary that does not
-arrive intact leaves the themes alone too. The themes upload is
+the server verifies and keeps the binary first (as
+`/opt/ocms/releases/.staged-<sha256>`, which is not a release), then replaces
+the themes, then makes the binary a release and restarts the sites once: a
+binary that does not arrive intact leaves the themes alone too, and a deploy
+that stops after staging leaves nothing `rollback` would pick. The themes upload is
 unpacked beside the old themes and swapped in, so a broken upload leaves the old
 set in place; themes you deleted locally disappear from the server. It refuses
 to run when the local themes directory holds no theme (a directory with
@@ -228,7 +231,9 @@ ocmsctl rollback example_com --to 20261113T101500Z-3728df6f
 ```
 
 Rollback switches the symlink and restarts the named sites behind the same
-health check. `--to` takes only a release `ocmsctl releases` lists. An older binary is not guaranteed to run on a database a newer one
+health check. `--to` takes only a release `ocmsctl releases` lists. A deploy
+that passes the health check keeps the newest three releases and names each one
+it removes. An older binary is not guaranteed to run on a database a newer one
 migrated; restore the database from a backup if it does not.
 
 ## Operating sites
@@ -241,7 +246,7 @@ On the server, as root:
 | `ocmsctl start\|stop <site>...\|--all` | `systemctl start\|stop ocms@<site>` |
 | `ocmsctl restart <site>...\|--all` | stop, start, require healthy (as a deploy does) |
 | `ocmsctl health <site>` | exit 0 when `/health` answers 200 |
-| `ocmsctl logs <site> [-f] [--errors]` | the site's log file, or the journal when it has none; `--errors`: the file `OCMS_ERROR_LOG_PATH` names |
+| `ocmsctl logs <site> [-f] [--errors]` | the site's log file, or the journal when it has none; `--errors`: the file `OCMS_ERROR_LOG_PATH` names. A file is read as the site user, and only a regular file |
 
 Sites run only under systemd. To debug one in the foreground, stop its unit and
 run `/opt/ocms/bin/ocms` as the site user from the site directory.
@@ -300,7 +305,9 @@ ocmsctl start example_com
 It prints only when something changes: a site goes down, a restart is tried,
 the restarts run out, the site recovers. Set `MAILTO=you@example.com` in
 `/etc/cron.d/ocms` to get those by mail; a long outage does not mail every five
-minutes. It exits 1 while any site is down.
+minutes. It exits 1 while any site is down. Without a hook (below), the check
+also prints a failed backup, whose own output goes only to its log, so cron
+mails that too.
 
 For other channels create an executable `/etc/ocms/alert`; it is called with
 the site ID, the status and a message:
@@ -318,12 +325,17 @@ curl -fsS "https://api.telegram.org/bot<your-token>/sendMessage" \
   --data-urlencode "chat_id=<chat-id>" --data-urlencode "text=$2 $3" >/dev/null
 ```
 
-The hook gets 30 seconds. When it fails, times out, or is there but not an
-executable file, the event is printed with the reason and kept: each check
-tries the kept events again, oldest first, before its own, and keeps the newest
-20. Once the hook fails in a run, that run's later events wait for the next
-check. A failure of the check itself is reported once, like an outage, while
-its state can be read; when the state is what fails, on every run.
+The hook gets 30 seconds, and at the end of them its whole process group is
+stopped (a `curl` it started included). When it fails, times out, or is there
+but not an executable file, the event is printed with the reason and kept: each
+check tries the kept events again, oldest first, before its own. A hook that
+keeps failing is said once, with the events earlier runs left for it, and once
+more when it delivers again; the tries in between are quiet. 20 events are
+kept; past that, `recovered` events go first, then the oldest. Once the hook
+fails in a run, that run's later events wait for the next check. When the
+restarts run out, `NEEDS ATTENTION` says why the last one failed, if it did. A
+failure of the check itself is reported once, like an outage, while its state
+can be read; when the state is what fails, on every run.
 
 State is kept in `/run/ocms` (root only, cleared on reboot): `monitor.json`
 and the lock that lets one check run at a time; a check that finds another
@@ -362,9 +374,11 @@ missing from the database copy or the reverse.
 
 Only directories and regular files arrive: a symlink or special file on the
 server is skipped, and the mirror removes any already in the local uploads.
-`pull` refuses an uploads directory that is the checkout, one above it, or one
-holding the local database or custom directory, as the mirror would delete
-them. The server's paths must be absolute and made of letters, digits and
+`pull` refuses an uploads directory configured outside the checkout, and one
+that is the checkout, one above it, or one holding the local database or
+custom directory, as the mirror would delete them. Before it changes anything,
+also with `--yes`, it prints each local path it will write and where the path
+came from (the environment, the env file, a flag or the default). The server's paths must be absolute and made of letters, digits and
 `._@:/=-`, since they cross ssh.
 
 Stop the local server first: the command refuses to replace the database while

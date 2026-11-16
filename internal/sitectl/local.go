@@ -267,14 +267,15 @@ func (a *App) Pull(ctx context.Context, o PullOpts) error {
 	if err != nil {
 		return err
 	}
+	dbFrom, portFrom := "--db", "--port"
 	if o.LocalDB == "" {
-		o.LocalDB = local.DB
+		o.LocalDB, dbFrom = local.DB, local.Sources[a.DB.Name]
 	}
 	if o.LocalDB, err = filepath.Abs(o.LocalDB); err != nil {
 		return err
 	}
 	if o.LocalPort == 0 {
-		o.LocalPort = local.Port
+		o.LocalPort, portFrom = local.Port, local.Sources[a.Port.Name]
 	}
 	if o.Uploads {
 		if err := mirrorTarget(local.Uploads, local.Dir, o.LocalDB, local.Custom); err != nil {
@@ -283,6 +284,24 @@ func (a *App) Pull(ctx context.Context, o PullOpts) error {
 	}
 	if o.Themes && local.Custom == "" {
 		return errors.New("the local configuration names no custom directory for themes")
+	}
+	// Said before anything happens, also with --yes: these come from the
+	// environment and files, which may not say what the caller expects.
+	a.logf("Pulling %s from %s into:", o.Site, o.Host)
+	if o.DB {
+		a.logf("  database  %s (%s)", o.LocalDB, dbFrom)
+		if !o.NoPortCheck && o.LocalPort != 0 {
+			a.logf("  port      %d must be free (%s)", o.LocalPort, portFrom)
+		}
+	}
+	if o.Uploads {
+		a.logf("  uploads   %s (%s), mirrored: what production lacks is deleted", local.Uploads, local.Sources[a.Uploads.Name])
+	}
+	if o.Logs {
+		a.logf("  logs      %s", filepath.Join(local.Dir, a.LogsPath))
+	}
+	if o.Themes {
+		a.logf("  themes    %s (%s)", local.themes(a), local.Sources[a.Custom.Name])
 	}
 	if !o.Yes && !o.DryRun {
 		_, _ = fmt.Fprintf(a.Stdout, "This overwrites local data with production data from %s. Continue? [y/N] ", o.Site)
@@ -312,14 +331,22 @@ func (a *App) Pull(ctx context.Context, o PullOpts) error {
 			return err
 		}
 	}
-	remote := sitePaths{Uploads: "<uploads-dir>", Custom: "<custom-dir>"}
+	served := sitePaths{Uploads: "<uploads-dir>", Custom: "<custom-dir>"} // the server's paths
 	if o.Uploads || o.Themes {
 		var out bytes.Buffer
-		if err := r.ctl(ctx, "", &out, "site", "paths", o.Site); err != nil {
-			return fmt.Errorf("%w (an ocmsctl on the server that predates `site paths` needs updating: make server-setup)", err)
+		var said tailBuffer // what the server prints about a failure
+		app := *a
+		app.Stderr = io.MultiWriter(a.Stderr, &said)
+		asked := remote{app: &app, host: r.host, dryRun: r.dryRun}
+		if err := asked.ctl(ctx, "", &out, "site", "paths", o.Site); err != nil {
+			// An older ocmsctl answers with a usage line that lacks it.
+			if usage := said.lastLine(); strings.Contains(usage, "usage:") && !strings.Contains(usage, "site paths") {
+				return fmt.Errorf("%w: the server's ocmsctl predates `site paths`; update it (make server-setup)", err)
+			}
+			return err
 		}
 		if !o.DryRun {
-			if remote, err = a.parsePaths(out.String()); err != nil {
+			if served, err = a.parsePaths(out.String()); err != nil {
 				return err
 			}
 		}
@@ -344,7 +371,7 @@ func (a *App) Pull(ctx context.Context, o PullOpts) error {
 		if err := a.dropSpecialFiles(local.Uploads, o.DryRun); err != nil {
 			return err
 		}
-		if err := rsync(remote.Uploads, local.Uploads, true); err != nil {
+		if err := rsync(served.Uploads, local.Uploads, true); err != nil {
 			return err
 		}
 	}
@@ -354,7 +381,7 @@ func (a *App) Pull(ctx context.Context, o PullOpts) error {
 		}
 	}
 	if o.Themes {
-		if err := rsync(remote.Custom+"/"+filepath.ToSlash(a.ThemesPath), local.themes(a), false); err != nil {
+		if err := rsync(served.Custom+"/"+filepath.ToSlash(a.ThemesPath), local.themes(a), false); err != nil {
 			return err
 		}
 	}
@@ -380,15 +407,20 @@ func pullFlags(mirror bool) []string {
 // mirrorTarget refuses an uploads directory that the mirror's --delete
 // would turn against the checkout: the checkout itself or a directory above
 // it, or one that holds the database or the custom directory, also when a
-// symlink leads there.
-func mirrorTarget(uploads string, keep ...string) error {
+// symlink leads there. It must be configured inside the checkout: a value
+// left in the environment by another project would otherwise aim the
+// deletions there. A link the developer made inside is followed.
+func mirrorTarget(uploads, checkout string, keep ...string) error {
 	if uploads == "" {
 		return errors.New("the local configuration names no uploads directory")
 	}
-	for _, kept := range keep {
+	for _, kept := range append([]string{checkout}, keep...) {
 		if within(resolved(kept), resolved(uploads)) {
 			return fmt.Errorf("the uploads directory %s holds %s, which mirroring production's uploads would delete", uploads, kept)
 		}
+	}
+	if !within(uploads, checkout) {
+		return fmt.Errorf("the uploads directory %s is outside this checkout (%s): pull mirrors uploads, deleting what production lacks, only inside it (--no-uploads skips them)", uploads, checkout)
 	}
 	return nil
 }

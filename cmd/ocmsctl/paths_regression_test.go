@@ -167,6 +167,9 @@ func TestPullUsesEachSidesConfiguredPaths(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "OCMS_UPLOADS_DIR") || len(w.rsync) != 0 {
 		t.Errorf("unsafe server path: err = %v, rsync %v", err, w.rsync)
 	}
+	if strings.Contains(err.Error(), "server-setup") {
+		t.Errorf("an unsafe path is no reason to update the server: %v", err)
+	}
 }
 
 // The uploads mirror deletes what production lacks, so it must not be aimed
