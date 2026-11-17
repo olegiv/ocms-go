@@ -235,7 +235,7 @@ func (s *sender) send(ctx context.Context, c hookCall) {
 
 // retry, in a check, passes the events earlier runs left to the hook again.
 // An event not yet printed where cron mails it (a backup's) is printed now,
-// whatever the hook does; one already printed is not printed again.
+// unless the hook takes it; one already printed is not printed again.
 func (s *sender) retry(ctx context.Context, calls []hookCall) {
 	for _, c := range calls {
 		err := s.deliver(ctx, c)
@@ -293,10 +293,12 @@ func (a *App) announce(c hookCall) { a.logf("%s %s", c.Status, c.Message) }
 // must not outlive it.
 func (a *App) callHook(ctx context.Context, c hookCall) error {
 	hook := filepath.Join(a.ConfDir, "alert")
-	info, err := os.Stat(hook)
-	if errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Lstat(hook); errors.Is(err, os.ErrNotExist) {
 		return errNoHook
+	} else if err != nil {
+		return err
 	}
+	info, err := os.Stat(hook) // a link that leads nowhere is a failed hook
 	if err != nil {
 		return err
 	}
@@ -327,34 +329,43 @@ func hostname() string {
 	return host
 }
 
-// trimPending keeps maxPending undelivered events. A site's newest event is
-// where it stands now, so the older events of a site go first, oldest
-// first; only then the oldest of the rest. The hook then never hears that a
-// site went down without hearing that it recovered.
+// trimPending keeps the undelivered events to about maxPending. Only events
+// a check already printed (Mailed) are dropped: one nobody has seen yet, a
+// backup's, waits for the next check, which prints it. Of a site, the newest
+// event of its state (DOWN, NEEDS ATTENTION, recovered, MONITOR FAILED) is
+// where it stands, so the older state events go first, oldest first, then
+// the oldest of the rest; a backup failure does not count as a state.
 func (a *App) trimPending(calls []hookCall) []hookCall {
 	n := len(calls) - maxPending
 	if n <= 0 {
 		return calls
 	}
-	a.logf("alert hook: %d undelivered alerts dropped", n)
-	newest := map[string]int{} // site -> index of its newest event
+	kind := func(c hookCall) string {
+		switch c.Status {
+		case "DOWN", "NEEDS ATTENTION", "recovered", "MONITOR FAILED":
+			return c.Site + " state"
+		}
+		return c.Site + " " + c.Status
+	}
+	newest := map[string]int{} // site and kind -> index of the newest such event
 	for i, c := range calls {
-		newest[c.Site] = i
+		newest[kind(c)] = i
 	}
 	dropped := map[int]bool{}
-	for i, c := range calls {
-		if n > 0 && newest[c.Site] != i {
-			dropped[i] = true
-			n--
+	drop := func(older bool) {
+		for i, c := range calls {
+			if n > 0 && c.Mailed && !dropped[i] && (!older || newest[kind(c)] != i) {
+				dropped[i] = true
+				n--
+			}
 		}
 	}
-	for i := range calls {
-		if n > 0 && !dropped[i] {
-			dropped[i] = true
-			n--
-		}
+	drop(true)
+	drop(false)
+	if len(dropped) > 0 {
+		a.logf("alert hook: %d undelivered alerts dropped", len(dropped))
 	}
-	kept := make([]hookCall, 0, maxPending)
+	kept := make([]hookCall, 0, len(calls)-len(dropped))
 	for i, c := range calls {
 		if !dropped[i] {
 			kept = append(kept, c)

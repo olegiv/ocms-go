@@ -333,8 +333,10 @@ but not an executable file, the event is printed with the reason and kept: each
 check tries the kept events again, oldest first, before its own. A hook that
 keeps failing is said once, and once more when it delivers again; the tries in
 between are quiet. An event that reached only a backup's log is printed by the
-next check, whatever the hook does. 20 events are
-kept; past that, each site keeps its newest event, and older ones go first. Once the hook
+next check, unless the hook takes it. About 20 events are
+kept: past that, events a check already printed go, a site's older ones first
+(its newest outage event stays), while one nobody has seen yet stays until a
+check prints it. Once the hook
 fails in a run, that run's later events wait for the next check. When the
 restarts run out, `NEEDS ATTENTION` says why the last one failed, if it did. A
 failure of the check itself is reported once, like an outage, while its state
@@ -450,7 +452,7 @@ updating the source checkout alone does not perform them.
    missing. Review an existing cron file: initialization preserves it. Its
    backup line should end with
    `|| echo "/opt/ocms/bin/ocmsctl backup failed; see /var/log/ocms-backup.log"`,
-   so cron mails a failed backup.
+   so cron mails a failed backup; `server-setup` warns when it does not.
    Retire the old `/etc/cron.d/ocms-multi` and any other old deployment cron
    entries after checking the new backup and monitor jobs, so they do not run
    twice. Remove former deployment scripts in `/opt/ocms` once nothing refers

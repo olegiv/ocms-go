@@ -344,11 +344,28 @@ func (a *App) Init(ctx context.Context) error {
 		if err := writeFileAtomic(a.CronFile, []byte(cron), 0o644); err != nil {
 			return err
 		}
+	} else if err := a.checkCron(); err != nil {
+		return err
 	}
 	if err := a.writeLogrotate(); err != nil {
 		return err
 	}
 	a.logf("Server ready: %s, unit %s@.service, %s, %s", a.Root, a.Name, a.CronFile, a.LogrotateFile)
+	return nil
+}
+
+// checkCron warns when the cron file, which Init leaves as it is, runs the
+// backup without the fallback that has cron mail a failed one.
+func (a *App) checkCron() error {
+	data, err := os.ReadFile(a.CronFile)
+	if err != nil {
+		return err
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.Contains(line, a.ctl()+" backup") && !strings.HasPrefix(strings.TrimSpace(line), "#") && !strings.Contains(line, "||") {
+			a.logf("warning: %s runs the backup without `|| echo ...`: cron will not mail a failed backup (see the deploy guide)", a.CronFile)
+		}
+	}
 	return nil
 }
 

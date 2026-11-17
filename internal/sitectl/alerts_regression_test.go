@@ -96,25 +96,83 @@ func TestNeedsAttentionSaysWhyRestartsFailed(t *testing.T) {
 	}
 }
 
-// Trimming keeps each site's newest event, where the site stands now: the
-// hook must not hear that a site went down and never that it recovered, nor
-// lose a site whose only event is the oldest.
-func TestTrimmingKeepsEachSitesNewestEvent(t *testing.T) {
+// Trimming drops only events a check already printed. Of a site it keeps
+// the newest state event, where the site stands, also when a backup failure
+// came after it; it drops older state events first, then the oldest.
+func TestTrimmingKeepsWhereEachSiteStands(t *testing.T) {
 	env := newTestEnv(t)
-	calls := []hookCall{{Site: "first", Status: "DOWN"}, {Site: "a", Status: "DOWN"}}
-	for i := range maxPending - 2 {
-		calls = append(calls, hookCall{Site: "s" + strconv.Itoa(i), Status: "DOWN"})
+	mailed := func(site, status string) hookCall { return hookCall{Site: site, Status: status, Mailed: true} }
+	calls := []hookCall{mailed("x", "DOWN"), mailed("y", "DOWN"), mailed("y", "recovered")}
+	for i := range maxPending - 4 {
+		calls = append(calls, mailed("s"+strconv.Itoa(i), "DOWN"))
 	}
-	calls = append(calls, hookCall{Site: "a", Status: "recovered"}) // maxPending + 1 in all
+	calls = append(calls, mailed("x", "BACKUP FAILED"), mailed("first", "DOWN")) // maxPending + 1 in all
 	kept := env.trimPending(calls)
 	has := func(site, status string) bool {
 		return slices.ContainsFunc(kept, func(c hookCall) bool { return c.Site == site && c.Status == status })
 	}
-	if len(kept) != maxPending || !has("first", "DOWN") || !has("a", "recovered") || has("a", "DOWN") {
+	if len(kept) != maxPending || !has("x", "DOWN") || !has("x", "BACKUP FAILED") || has("y", "DOWN") || !has("y", "recovered") {
 		t.Errorf("kept %v", kept)
 	}
-	if kept[0].Site != "first" || kept[len(kept)-1].Status != "recovered" {
-		t.Errorf("order changed: %v", kept)
+
+	// What no check printed yet is never dropped: the next check prints it.
+	var unseen []hookCall
+	for i := range maxPending + 5 {
+		unseen = append(unseen, hookCall{Site: "b" + strconv.Itoa(i), Status: "BACKUP FAILED"})
+	}
+	if kept := env.trimPending(unseen); len(kept) != len(unseen) {
+		t.Errorf("dropped %d unseen backup failures", len(unseen)-len(kept))
+	}
+}
+
+// A hook that is a link to nothing is a hook that fails, not an absent one:
+// absent would end a reported failure without a word.
+func TestABrokenHookLinkIsAFailingHook(t *testing.T) {
+	env := newTestEnv(t)
+	site, health := env.addSite(t, "a")
+	if err := os.MkdirAll(env.ConfDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(env.ConfDir, "gone"), filepath.Join(env.ConfDir, "alert")); err != nil {
+		t.Fatal(err)
+	}
+	health.set(false)
+	out, _ := runCheck(env, sitesOf(site))
+	if !strings.Contains(out, "alert hook:") || !strings.Contains(out, "next check tries again") {
+		t.Errorf("a broken hook link passed for no hook:\n%s", out)
+	}
+}
+
+// killGroup counts a group that ended as its time ran out as done, not as a
+// failure that would send the alert again.
+func TestKillingAGroupThatEndedIsDone(t *testing.T) {
+	cmd := exec.Command("true")
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if err := cmd.Run(); err != nil {
+		t.Fatal(err)
+	}
+	if err := killGroup(cmd.Process.Pid); !errors.Is(err, os.ErrProcessDone) {
+		t.Errorf("killGroup of an ended group = %v", err)
+	}
+}
+
+// Init leaves an existing cron file alone, but says when its backup line
+// lacks the fallback that has cron mail a failed backup.
+func TestInitWarnsAboutACronLineWithoutFallback(t *testing.T) {
+	env := newTestEnv(t)
+	for line, warn := range map[string]bool{
+		"0 3 * * * root " + env.ctl() + " backup --all >> /var/log/app-backup.log 2>&1\n":                   true,
+		"0 3 * * * root " + env.ctl() + " backup --all >> /var/log/app-backup.log 2>&1 || echo failed\n":    false,
+		"# 0 3 * * * root " + env.ctl() + " backup --all\n*/5 * * * * root " + env.ctl() + " check --all\n": false,
+	} {
+		writeFiles(t, filepath.Dir(env.CronFile), map[string]string{filepath.Base(env.CronFile): line})
+		env.out.Reset()
+		if err := env.Init(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Contains(env.out.String(), "will not mail a failed backup"); got != warn {
+			t.Errorf("cron %q: warned %v, want %v", line, got, warn)
+		}
 	}
 }
 
@@ -177,10 +235,15 @@ func TestCorruptStateIsReportedOnce(t *testing.T) {
 // A child ocmsctl's error is its last "ocmsctl: " line and the lines a
 // joined error continues on; without one, a panic's message.
 func TestChildErrorKeepsTheWholeError(t *testing.T) {
+	longTrace := "panic: index out of range\n\ngoroutine 1 [running]:\n" + strings.Repeat("main.f()\n\t/src/main.go:12 +0x1d\n", 300)
 	for printed, want := range map[string]string{
 		"Backing up a\nocmsctl: database: stat x.db: no such file\nuploads: open y: permission denied\n": "database: stat x.db: no such file; uploads: open y: permission denied",
 		"panic: nil map\n\ngoroutine 1 [running]:\nmain.main()\n\t/src/main.go:12 +0x1d\n":               "panic: nil map",
-		"something else\nlast words\n": "last words",
+		longTrace: "panic: index out of range",
+		"fatal error: concurrent map writes\n\ngoroutine 7 [running]:\nmain.g()\n\t/src/main.go:40 +0x2\n": "fatal error: concurrent map writes",
+		// A file name the site chose, with a line break, does not start the error.
+		"ocmsctl: uploads: open /s/uploads/x\nocmsctl: fine: permission denied\n": "uploads: open /s/uploads/x; ocmsctl: fine: permission denied",
+		"something else\nlast words\n":                                            "last words",
 	} {
 		var stderr tailBuffer
 		_, _ = stderr.Write([]byte(printed))
@@ -230,6 +293,9 @@ func TestShowingAFailedSitesLogHasATimeLimit(t *testing.T) {
 	case <-done:
 	case <-time.After(5 * time.Second):
 		t.Fatal("showing the log waited on it")
+	}
+	if !strings.Contains(env.out.String(), "gave up reading it after") {
+		t.Errorf("output:\n%s", env.out)
 	}
 }
 

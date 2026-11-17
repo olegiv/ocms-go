@@ -94,16 +94,20 @@ func RunCmd(ctx context.Context, c Cmd) error {
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = c.Stdin, c.Stdout, c.Stderr
 	cmd.SysProcAttr = &syscall.SysProcAttr{Credential: c.Cred, Setpgid: c.Group}
 	if c.Group {
-		cmd.Cancel = func() error {
-			err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-			if errors.Is(err, syscall.ESRCH) {
-				return os.ErrProcessDone // it ended as its time ran out
-			}
-			return err
-		}
+		cmd.Cancel = func() error { return killGroup(cmd.Process.Pid) }
 		cmd.WaitDelay = time.Second // for output pipes a stray child still holds
 	}
 	return cmd.Run()
+}
+
+// killGroup ends the process group pid leads. A group that is gone already
+// ended as its time ran out: that is no failure of the command.
+func killGroup(pid int) error {
+	err := syscall.Kill(-pid, syscall.SIGKILL)
+	if errors.Is(err, syscall.ESRCH) {
+		return os.ErrProcessDone
+	}
+	return err
 }
 
 // run executes a command with the app's output streams.
@@ -122,36 +126,54 @@ func (a *App) output(ctx context.Context, name string, args ...string) (string, 
 	return strings.TrimSpace(out.String()), err
 }
 
-// tailBuffer keeps the last bytes written to it.
-type tailBuffer struct{ data []byte }
+// tailBuffer keeps the first KiB and the last 4 KiB written to it: an
+// error is at the end, a panic's message at the start of a long trace.
+type tailBuffer struct {
+	head, tail []byte
+	total      int
+}
 
 func (t *tailBuffer) Write(p []byte) (int, error) {
-	t.data = append(t.data, p...)
-	if extra := len(t.data) - 4096; extra > 0 {
-		t.data = t.data[extra:]
+	t.total += len(p)
+	if room := 1024 - len(t.head); room > 0 {
+		t.head = append(t.head, p[:min(room, len(p))]...)
+	}
+	t.tail = append(t.tail, p...)
+	if extra := len(t.tail) - 4096; extra > 0 {
+		t.tail = t.tail[extra:]
 	}
 	return len(p), nil
 }
 
-// childError returns the error a child ocmsctl printed: from its last line
-// that starts with prefix ("ocmsctl: "; a joined error goes on over the
-// lines after it) to the end, joined with "; ". Without one, a panic's first
-// line; otherwise the last line.
+// text returns what was kept, in order.
+func (t *tailBuffer) text() string {
+	if overlap := len(t.head) + len(t.tail) - t.total; overlap >= 0 {
+		return string(t.head) + string(t.tail[overlap:])
+	}
+	return string(t.head) + "\n...\n" + string(t.tail)
+}
+
+// childError returns the error a child ocmsctl printed: from its first line
+// that starts with prefix ("ocmsctl: ") to the end, joined with "; " (a
+// joined error goes on over several lines). The first, not the last: a file
+// name a site chose, inside the error, must not pass for its start. Without
+// such a line, the message of a panic or a runtime fatal error; otherwise
+// the last line.
 func (t *tailBuffer) childError(prefix string) string {
-	lines := strings.Split(strings.TrimSpace(string(t.data)), "\n")
-	for i := len(lines) - 1; i >= 0; i-- {
-		if rest, ok := strings.CutPrefix(lines[i], prefix); ok {
+	lines := strings.Split(strings.TrimSpace(t.text()), "\n")
+	for i, line := range lines {
+		if rest, ok := strings.CutPrefix(line, prefix); ok {
 			parts := []string{strings.TrimSpace(rest)}
-			for _, line := range lines[i+1:] {
-				if line = strings.TrimSpace(line); line != "" {
-					parts = append(parts, line)
+			for _, more := range lines[i+1:] {
+				if more = strings.TrimSpace(more); more != "" {
+					parts = append(parts, more)
 				}
 			}
 			return strings.Join(parts, "; ")
 		}
 	}
 	for _, line := range lines {
-		if strings.HasPrefix(line, "panic: ") {
+		if strings.HasPrefix(line, "panic: ") || strings.HasPrefix(line, "fatal error: ") {
 			return line
 		}
 	}
@@ -160,7 +182,7 @@ func (t *tailBuffer) childError(prefix string) string {
 
 // lastLine returns the last non-empty line written.
 func (t *tailBuffer) lastLine() string {
-	text := strings.TrimSpace(string(t.data))
+	text := strings.TrimSpace(t.text())
 	if i := strings.LastIndexByte(text, '\n'); i >= 0 {
 		text = text[i+1:]
 	}

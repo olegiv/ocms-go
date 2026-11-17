@@ -331,7 +331,9 @@ var logTailTimeout = 10 * time.Second
 func (a *App) showLogTail(ctx context.Context, site Site) {
 	ctx, cancel := context.WithTimeout(ctx, logTailTimeout)
 	defer cancel()
-	if err := a.Logs(ctx, site, 5, false, false); err != nil {
+	if err := a.Logs(ctx, site, 5, false, false); err != nil && ctx.Err() != nil {
+		a.logf("  (no log: gave up reading it after %s)", logTailTimeout)
+	} else if err != nil {
 		a.logf("  (no log: %v)", err)
 	}
 }
