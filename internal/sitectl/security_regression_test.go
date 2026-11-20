@@ -240,17 +240,25 @@ func TestThemePackingAcceptsWorkingDirectoryBehindSymlink(t *testing.T) {
 	t.Error("the archive omits mine/theme.json")
 }
 
-func TestBackupArchivePreservesLinksWithoutReadingTargets(t *testing.T) {
-	work := t.TempDir()
-	writeFiles(t, work, map[string]string{"custom/theme.json": "{}", "private": "private-fixture"})
-	if err := os.Symlink("../private", filepath.Join(work, "custom", "link")); err != nil {
+func TestBackupArchivesSymlinkOnlyUploadsWithoutReadingTargets(t *testing.T) {
+	env, site, backups := backupEnv(t)
+	writeFiles(t, site.Dir, map[string]string{"shared/photo.jpg": "shared-fixture"})
+	uploads := filepath.Join(site.Dir, "uploads")
+	if err := os.Mkdir(uploads, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	var packed bytes.Buffer
-	if err := writeTarGz(&packed, filepath.Join(work, "custom"), "custom", false); err != nil {
+	if err := os.Symlink("../shared", filepath.Join(uploads, "2026")); err != nil {
 		t.Fatal(err)
 	}
-	zr, err := gzip.NewReader(&packed)
+	if err := env.Backup(t.Context(), sitesOf(site)); err != nil {
+		t.Fatal(err)
+	}
+	archive, err := os.Open(filepath.Join(backups, "uploads_20261113_100000.tar.gz"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = archive.Close() }()
+	zr, err := gzip.NewReader(archive)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -265,9 +273,9 @@ func TestBackupArchivePreservesLinksWithoutReadingTargets(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if header.Name == "custom/link" {
+		if header.Name == "uploads/2026" {
 			found = true
-			if header.Typeflag != tar.TypeSymlink || header.Linkname != "../private" {
+			if header.Typeflag != tar.TypeSymlink || header.Linkname != "../shared" {
 				t.Errorf("backup changed the symlink: %+v", header)
 			}
 		}
@@ -275,7 +283,7 @@ func TestBackupArchivePreservesLinksWithoutReadingTargets(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if bytes.Contains(data, []byte("private-fixture")) {
+		if bytes.Contains(data, []byte("shared-fixture")) {
 			t.Error("backup dereferenced a stored symlink")
 		}
 	}

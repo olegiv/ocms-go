@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/url"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -351,10 +352,12 @@ func snapshotSite(ctx context.Context, dir, db string, w io.Writer) error {
 }
 
 func openDB(path, mode string) (*sql.DB, error) {
-	if strings.ContainsAny(path, "?#") {
-		return nil, fmt.Errorf("unsupported database path %q", path)
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
 	}
-	db, err := sql.Open("sqlite", "file:"+path+"?mode="+mode+"&_pragma=busy_timeout(5000)")
+	dsn := url.URL{Scheme: "file", Path: absolute, RawQuery: "mode=" + mode + "&_pragma=busy_timeout(5000)"}
+	db, err := sql.Open("sqlite", dsn.String())
 	if err != nil {
 		return nil, err
 	}
@@ -391,8 +394,8 @@ func checkIntegrity(ctx context.Context, path string) error {
 	return nil
 }
 
-// hasFiles reports whether dir holds at least one regular file. An entry it
-// cannot read is an error: skipping it would back up nothing and succeed.
+// hasFiles reports whether dir holds a regular file or a symlink that can be
+// archived. An unreadable entry is an error.
 func hasFiles(dir string) (bool, error) {
 	info, err := os.Stat(dir)
 	if err != nil {
@@ -406,7 +409,7 @@ func hasFiles(dir string) (bool, error) {
 		if err != nil {
 			return err
 		}
-		if entry.Type().IsRegular() {
+		if kind := entry.Type(); kind.IsRegular() || kind&fs.ModeSymlink != 0 {
 			found = true
 			return fs.SkipAll
 		}

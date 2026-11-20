@@ -100,7 +100,7 @@ func Lock(path string, exclusive bool) (io.Closer, error) {
 		return nil, err
 	}
 
-	f, err := os.OpenFile(target+".ocms-lock", os.O_CREATE|os.O_RDWR|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0o600)
+	f, err := openLockFile(target)
 	if err != nil {
 		return nil, err
 	}
@@ -121,4 +121,49 @@ func Lock(path string, exclusive bool) (io.Closer, error) {
 		return nil, err
 	}
 	return f, nil
+}
+
+func openLockFile(target string) (*os.File, error) {
+	name := target + ".ocms-lock"
+	flags := os.O_RDWR | syscall.O_NOFOLLOW | syscall.O_NONBLOCK
+	if os.Geteuid() != 0 {
+		return os.OpenFile(name, flags|os.O_CREATE, 0o600)
+	}
+	f, err := os.OpenFile(name, flags, 0)
+	if !errors.Is(err, os.ErrNotExist) {
+		return f, err
+	}
+	info, err := os.Stat(target)
+	if errors.Is(err, os.ErrNotExist) {
+		return os.OpenFile(name, flags|os.O_CREATE, 0o600)
+	}
+	if err != nil {
+		return nil, err
+	}
+	owner := info.Sys().(*syscall.Stat_t)
+	if owner.Uid == 0 {
+		return os.OpenFile(name, flags|os.O_CREATE, 0o600)
+	}
+
+	// Publish the lock with the database owner's permissions already set.
+	// A concurrent creator keeps its inode, and ownership changes apply
+	// only to this new file's descriptor.
+	staged, err := os.CreateTemp(filepath.Dir(name), ".ocms-lock-*")
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = staged.Close()
+		_ = os.Remove(staged.Name())
+	}()
+	if err := staged.Chmod(0o600); err != nil {
+		return nil, fmt.Errorf("setting database lock permissions: %w", err)
+	}
+	if err := staged.Chown(int(owner.Uid), int(owner.Gid)); err != nil {
+		return nil, fmt.Errorf("setting database lock ownership: %w", err)
+	}
+	if err := os.Link(staged.Name(), name); err != nil && !errors.Is(err, os.ErrExist) {
+		return nil, fmt.Errorf("publishing database lock: %w", err)
+	}
+	return os.OpenFile(name, flags, 0)
 }

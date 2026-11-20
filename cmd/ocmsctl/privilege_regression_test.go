@@ -10,12 +10,14 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 	"syscall"
 	"testing"
 
+	"github.com/olegiv/ocms-go/internal/dbfile"
 	"github.com/olegiv/ocms-go/internal/sitectl"
 )
 
@@ -92,6 +94,40 @@ func TestRootLogsReadAsTheSiteUser(t *testing.T) {
 	}
 }
 
+func TestRootMaintenanceLockAllowsSiteUserAccess(t *testing.T) {
+	const dbEnv = "OCMS_TEST_MAINTENANCE_LOCK_DB"
+	if path := os.Getenv(dbEnv); path != "" {
+		lock, err := dbfile.LockDSN(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = lock.Close() }()
+		return
+	}
+
+	w, site, _, uid := nobodySite(t)
+	db := filepath.Join(site, "data", "ocms.db")
+	serverDB(t, db, "existing")
+	giveToNobody(t, site)
+	info, err := os.Stat(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lock, err := dbfile.LockDSN(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = lock.Close() }()
+
+	program := filepath.Join(w.server.Root, "bin", "ocmsctl")
+	cmd := exec.CommandContext(t.Context(), program, "-test.run=^TestRootMaintenanceLockAllowsSiteUserAccess$")
+	cmd.Env = append(os.Environ(), dbEnv+"="+db)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: uint32(uid), Gid: info.Sys().(*syscall.Stat_t).Gid}}
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("the site user could not acquire the maintenance lock: %v\n%s", err, output)
+	}
+}
+
 // deploy --themes changes no theme until the server holds the binary
 // intact, and restarts the sites once.
 func TestDeployThemesWaitForAVerifiedBinary(t *testing.T) {
@@ -109,12 +145,12 @@ func TestDeployThemesWaitForAVerifiedBinary(t *testing.T) {
 
 	writeTree(t, ".", map[string]string{"bin/ocms-linux-amd64": "\x7fELFv2", "custom/themes/new/theme.json": "{}"})
 	w.systemctl = nil
-	exec := w.local.Exec
+	remoteExec := w.local.Exec
 	w.local.Exec = func(ctx context.Context, c sitectl.Cmd) error {
 		if c.Stdin != nil && slices.Contains(c.Args, "install") {
 			c.Stdin = strings.NewReader("\x7fELFdamaged in transit")
 		}
-		return exec(ctx, c)
+		return remoteExec(ctx, c)
 	}
 	if err := run(context.Background(), w.local, []string{"deploy", "root@server", "example_com", "--no-build", "--themes"}, nil); err == nil {
 		t.Fatal("a damaged binary was deployed")

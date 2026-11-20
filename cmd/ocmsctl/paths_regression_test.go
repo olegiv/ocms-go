@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"io/fs"
 	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,7 +27,7 @@ import (
 // serverDB gives the site a database holding one page titled title.
 func serverDB(t *testing.T, path, title string) {
 	t.Helper()
-	db, err := sql.Open("sqlite", "file:"+path)
+	db, err := sql.Open("sqlite", "file:"+url.PathEscape(path))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,6 +64,23 @@ func writeTree(t *testing.T, base string, files map[string]string) {
 		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+func TestPullSnapshotsTheLiteralDatabaseFilename(t *testing.T) {
+	w := newWorld(t)
+	dir := w.addSite(t)
+	serverDB(t, filepath.Join(dir, "data", "site%20.db"), "configured")
+	serverDB(t, filepath.Join(dir, "data", "site .db"), "other database")
+	writeTree(t, dir, map[string]string{".env": "OCMS_DB_PATH=file:./data/site%2520.db\n"})
+
+	t.Chdir(t.TempDir())
+	args := []string{"pull", "root@server", "example_com", "--yes", "--port", "0", "--no-uploads", "--no-logs"}
+	if err := run(t.Context(), w.local, args, nil); err != nil {
+		t.Fatalf("%v\n%s", err, w.out)
+	}
+	if got := pageTitle(t, "data/ocms.db"); got != "configured" {
+		t.Errorf("snapshot title = %q, want the configured database", got)
 	}
 }
 
