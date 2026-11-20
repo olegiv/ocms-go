@@ -103,7 +103,7 @@ func (a *App) Probe(ctx context.Context, site Site, path string) error {
 	if err != nil {
 		return err
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := probeClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -112,6 +112,11 @@ func (a *App) Probe(ctx context.Context, site Site, path string) error {
 		return fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 	return nil
+}
+
+// Keep the request and the status check on the registered loopback endpoint.
+var probeClient = &http.Client{
+	CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 }
 
 // waitHealthy polls the site until it answers or HealthTimeout passes.
@@ -284,11 +289,10 @@ func (a *App) Logs(ctx context.Context, site Site, lines int, follow, errorsOnly
 		}
 		file = paths.ErrorLog
 	} else {
-		target, err := a.output(ctx, "systemctl", "show", "-p", "StandardOutput", "--value", a.unit(site.ID))
+		kind, path, err := a.logDestination(ctx, site)
 		if err != nil {
-			return fmt.Errorf("log destination for %s: %w", site.ID, err)
+			return err
 		}
-		kind, path, _ := strings.Cut(target, ":")
 		switch kind {
 		case "append", "file", "truncate":
 			file = path
@@ -320,6 +324,55 @@ func (a *App) Logs(ctx context.Context, site Site, lines int, follow, errorsOnly
 		c.Args = append(c.Args, "-f")
 	}
 	return a.Exec(ctx, c)
+}
+
+func (a *App) logDestination(ctx context.Context, site Site) (kind, path string, err error) {
+	unit := a.unit(site.ID)
+	target, err := a.output(ctx, "systemctl", "show", "-p", "StandardOutput", "--value", unit)
+	if err != nil {
+		return "", "", fmt.Errorf("log destination for %s: %w", site.ID, err)
+	}
+	kind, path, _ = strings.Cut(target, ":")
+	if path != "" || (kind != "append" && kind != "file" && kind != "truncate") {
+		return kind, path, nil
+	}
+
+	// The D-Bus property reports only the mode. Read the unit and its
+	// drop-ins in systemd's order to find the file named by StandardOutput.
+	config, err := a.output(ctx, "systemctl", "cat", "--no-pager", unit)
+	if err != nil {
+		return "", "", fmt.Errorf("reading log destination for %s: %w", site.ID, err)
+	}
+	mode, path, _ := strings.Cut(unitStandardOutput(config), ":")
+	if mode != kind || !filepath.IsAbs(path) {
+		return "", "", fmt.Errorf("cannot find the %s log file for %s in its unit configuration", kind, unit)
+	}
+	path = strings.NewReplacer("%%", "%", "%n", unit+".service", "%N", unit,
+		"%i", site.ID, "%I", site.ID, "%p", a.Name, "%P", a.Name).Replace(path)
+	return kind, path, nil
+}
+
+func unitStandardOutput(config string) string {
+	var section, output, pending string
+	for line := range strings.SplitSeq(config, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") {
+			continue
+		}
+		if part, continued := strings.CutSuffix(line, "\\"); continued {
+			pending += part + " "
+			continue
+		}
+		line, pending = pending+line, ""
+		if strings.HasPrefix(line, "[") {
+			section = line
+		}
+		key, value, found := strings.Cut(line, "=")
+		if section == "[Service]" && found && strings.TrimSpace(key) == "StandardOutput" {
+			output = strings.TrimSpace(value)
+		}
+	}
+	return output
 }
 
 // logTailTimeout bounds showLogTail: a site could swap its log for a FIFO

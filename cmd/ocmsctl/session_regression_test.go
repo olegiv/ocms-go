@@ -61,13 +61,13 @@ func TestPullAdvisesUpdatingOnlyAnOldServer(t *testing.T) {
 	w := newWorld(t)
 	w.addSite(t)
 	t.Chdir(t.TempDir())
-	exec := w.local.Exec
+	originalExec := w.local.Exec
 	w.local.Exec = func(ctx context.Context, c sitectl.Cmd) error {
 		if c.Name == "ssh" && strings.Contains(strings.Join(c.Args, " "), "site paths") {
 			_, _ = fmt.Fprintln(c.Stderr, "ocmsctl: usage: ocmsctl site add <domain> <user> | site remove <site> | site show <site>")
 			return errors.New("exit status 1")
 		}
-		return exec(ctx, c)
+		return originalExec(ctx, c)
 	}
 	err := run(context.Background(), w.local, []string{"pull", "root@server", "example_com", "--yes", "--no-db", "--no-logs"}, nil)
 	if err == nil || !strings.Contains(err.Error(), "make server-setup") {

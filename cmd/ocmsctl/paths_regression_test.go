@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/config"
+	"github.com/olegiv/ocms-go/internal/dbfile"
 	"github.com/olegiv/ocms-go/internal/sitectl"
 )
 
@@ -195,6 +196,97 @@ func TestPullRefusesAnUploadsMirrorOverTheCheckout(t *testing.T) {
 				t.Errorf("OCMS_UPLOADS_DIR=%s: err = %v, contacted the server: %v", uploads, err, contacted)
 			}
 		})
+	}
+}
+
+func TestPullUsesOnlyUploadsDestinationsInsideTheCheckout(t *testing.T) {
+	w := newWorld(t)
+	w.addSite(t)
+	t.Chdir(t.TempDir())
+	if err := os.Symlink(t.TempDir(), "outside"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir("media", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("media", "inside"); err != nil {
+		t.Fatal(err)
+	}
+	args := []string{"pull", "root@server", "example_com", "--yes", "--no-db", "--no-logs"}
+	for _, path := range []string{"outside", "outside/missing"} {
+		w.environ["OCMS_UPLOADS_DIR"] = path
+		if err := run(t.Context(), w.local, args, nil); err == nil || !strings.Contains(err.Error(), "outside this checkout") {
+			t.Fatalf("%s: expected an error for the resolved destination, got %v", path, err)
+		}
+		if len(w.rsync) != 0 {
+			t.Fatalf("rsync ran for %s: %v", path, w.rsync)
+		}
+	}
+	w.environ["OCMS_UPLOADS_DIR"] = "inside"
+	if err := run(t.Context(), w.local, args, nil); err != nil {
+		t.Fatal(err)
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, err := filepath.EvalSymlinks(filepath.Join(cwd, "media"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(w.rsync) != 1 || !strings.HasSuffix(w.rsync[0], " "+path+"/") {
+		t.Errorf("expected rsync to use the validated path %s, got %v", path, w.rsync)
+	}
+}
+
+func TestPullRespectsTheDatabaseLockWithThePortCheckDisabled(t *testing.T) {
+	w := newWorld(t)
+	site := w.addSite(t)
+	serverDB(t, filepath.Join(site, "data", "ocms.db"), "production")
+	t.Chdir(t.TempDir())
+	if err := os.Mkdir("data", 0o700); err != nil {
+		t.Fatal(err)
+	}
+	serverDB(t, "data/local.db", "local")
+	if err := os.Symlink("data", "alias"); err != nil {
+		t.Fatal(err)
+	}
+	w.environ["OCMS_DB_PATH"] = "file:alias/local.db"
+	lock, err := dbfile.Lock("data/local.db", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = lock.Close() })
+	args := []string{"pull", "root@server", "example_com", "--yes", "--port", "0", "--no-uploads", "--no-logs"}
+	if err := run(t.Context(), w.local, args, nil); err == nil || !strings.Contains(err.Error(), "database for replacement") {
+		t.Fatalf("pull with an active database: %v", err)
+	}
+	if got := pageTitle(t, "data/local.db"); got != "local" {
+		t.Fatalf("local title = %q", got)
+	}
+	if err := lock.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := run(t.Context(), w.local, args, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := pageTitle(t, "data/local.db"); got != "production" {
+		t.Fatalf("local title after pull = %q", got)
+	}
+}
+
+func TestPullDetectsAnIPv6OnlyDevelopmentListener(t *testing.T) {
+	listener, err := net.Listen("tcp6", "[::1]:0")
+	if err != nil {
+		t.Skipf("IPv6 loopback: %v", err)
+	}
+	defer func() { _ = listener.Close() }()
+	port := strconv.Itoa(listener.Addr().(*net.TCPAddr).Port)
+	w := newWorld(t)
+	t.Chdir(t.TempDir())
+	args := []string{"pull", "root@server", "example_com", "--yes", "--port", port, "--no-uploads", "--no-logs"}
+	if err := run(t.Context(), w.local, args, nil); err == nil || !strings.Contains(err.Error(), "listening on port "+port) {
+		t.Fatalf("pull with an IPv6 listener on port %s: %v", port, err)
 	}
 }
 

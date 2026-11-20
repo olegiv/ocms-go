@@ -31,6 +31,7 @@ type fakeHost struct {
 	mu     sync.Mutex
 	calls  []string
 	stdout string            // configured systemd StandardOutput
+	config string            // unit and drop-ins returned by systemctl cat
 	state  map[string]string // unit -> what `systemctl is-active` prints
 	fail   map[string]bool   // exact command line -> fails
 }
@@ -56,6 +57,8 @@ func (h *fakeHost) exec(_ context.Context, c Cmd) error {
 		h.state[unit] = "inactive"
 	case "show":
 		_, _ = fmt.Fprintln(c.Stdout, h.stdout)
+	case "cat":
+		_, _ = fmt.Fprintln(c.Stdout, h.config)
 	case "is-active":
 		state := h.state[unit]
 		if state == "" {
@@ -529,6 +532,8 @@ func TestAddSiteProvisionsAPrivateSite(t *testing.T) {
 	for name, bad := range map[string]SiteSpec{
 		"registered twice":       spec,
 		"port in use":            {Domain: "third.com", User: spec.User, Port: 8082},
+		"negative port":          {Domain: "third.com", User: spec.User, Port: -1},
+		"port too large":         {Domain: "third.com", User: spec.User, Port: 65536},
 		"directory outside base": {Domain: "third.com", User: spec.User, Dir: filepath.Join(env.SitesBase, "third.com", "..", "elsewhere")},
 		"unknown user":           {Domain: "third.com", User: "no-such-user-here"},
 		"bad domain":             {Domain: "Third.com;x", User: spec.User},
@@ -539,6 +544,9 @@ func TestAddSiteProvisionsAPrivateSite(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(env.SitesBase, "third.com", "app")); err == nil {
 		t.Error("a refused site left a directory behind")
+	}
+	if sites, err := env.Sites(); err != nil || len(sites) != 2 {
+		t.Errorf("after refused sites, registry = %v, %v", sites, err)
 	}
 }
 

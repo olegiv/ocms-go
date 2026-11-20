@@ -271,14 +271,19 @@ func (a *App) Pull(ctx context.Context, o PullOpts) error {
 	if o.LocalDB == "" {
 		o.LocalDB, dbFrom = local.DB, local.Sources[a.DB.Name]
 	}
-	if o.LocalDB, err = filepath.Abs(o.LocalDB); err != nil {
-		return err
+	if o.LocalDB != "" {
+		if o.LocalDB, err = filepath.Abs(o.LocalDB); err != nil {
+			return err
+		}
+		o.LocalDB = resolved(o.LocalDB)
+	} else if o.DB {
+		return errors.New("the local configuration names no database file; specify --db FILE or --no-db")
 	}
 	if o.LocalPort == 0 {
 		o.LocalPort, portFrom = local.Port, local.Sources[a.Port.Name]
 	}
 	if o.Uploads {
-		if err := mirrorTarget(local.Uploads, local.Dir, o.LocalDB, local.Custom); err != nil {
+		if local.Uploads, err = mirrorTarget(local.Uploads, local.Dir, o.LocalDB, local.Custom); err != nil {
 			return err
 		}
 	}
@@ -310,11 +315,13 @@ func (a *App) Pull(ctx context.Context, o PullOpts) error {
 			return errors.New("aborted")
 		}
 	}
-	if o.DB && !o.NoPortCheck && o.LocalPort != 0 {
-		conn, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(o.LocalPort)), time.Second)
-		if err == nil {
-			_ = conn.Close()
-			return fmt.Errorf("something is listening on port %d: stop the local server first (--port 0 skips this check)", o.LocalPort)
+	if o.DB {
+		lock, err := a.lockLocalDatabase(ctx, o)
+		if err != nil {
+			return err
+		}
+		if lock != nil {
+			defer func() { _ = lock.Close() }()
 		}
 	}
 
@@ -391,6 +398,30 @@ func (a *App) Pull(ctx context.Context, o PullOpts) error {
 	return nil
 }
 
+func (a *App) lockLocalDatabase(ctx context.Context, o PullOpts) (io.Closer, error) {
+	if !o.NoPortCheck && o.LocalPort != 0 {
+		dialer := net.Dialer{Timeout: time.Second}
+		for _, ip := range []string{"127.0.0.1", "::1"} {
+			conn, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(ip, strconv.Itoa(o.LocalPort)))
+			if err == nil {
+				_ = conn.Close()
+				return nil, fmt.Errorf("something is listening on port %d: stop the local server first (--port 0 skips the port check)", o.LocalPort)
+			}
+		}
+	}
+	if o.DryRun || a.LockDatabase == nil {
+		return nil, nil
+	}
+	if err := os.MkdirAll(filepath.Dir(o.LocalDB), 0o700); err != nil {
+		return nil, err
+	}
+	lock, err := a.LockDatabase(o.LocalDB)
+	if err != nil {
+		return nil, fmt.Errorf("cannot lock the local database for replacement: %w", err)
+	}
+	return lock, nil
+}
+
 // pullFlags copies directories and regular files with their times: no
 // symlinks, devices or special files, and no owners or modes from the
 // server. A mirror also compares content, as a local file can differ from
@@ -410,19 +441,21 @@ func pullFlags(mirror bool) []string {
 // symlink leads there. It must be configured inside the checkout: a value
 // left in the environment by another project would otherwise aim the
 // deletions there. A link the developer made inside is followed.
-func mirrorTarget(uploads, checkout string, keep ...string) error {
+func mirrorTarget(uploads, checkout string, keep ...string) (string, error) {
 	if uploads == "" {
-		return errors.New("the local configuration names no uploads directory")
+		return "", errors.New("the local configuration names no uploads directory")
 	}
+	target := resolved(uploads)
+	root := resolved(checkout)
 	for _, kept := range append([]string{checkout}, keep...) {
-		if within(resolved(kept), resolved(uploads)) {
-			return fmt.Errorf("the uploads directory %s holds %s, which mirroring production's uploads would delete", uploads, kept)
+		if kept != "" && within(resolved(kept), target) {
+			return "", fmt.Errorf("the uploads directory %s holds %s, which mirroring production's uploads would delete", uploads, kept)
 		}
 	}
-	if !within(uploads, checkout) {
-		return fmt.Errorf("the uploads directory %s is outside this checkout (%s): pull mirrors uploads, deleting what production lacks, only inside it (--no-uploads skips them)", uploads, checkout)
+	if !within(uploads, checkout) || !within(target, root) {
+		return "", fmt.Errorf("the uploads directory %s resolves to %s outside this checkout (%s): pull mirrors uploads only inside it (--no-uploads skips them)", uploads, target, checkout)
 	}
-	return nil
+	return target, nil
 }
 
 // dropSpecialFiles removes what is neither a directory nor a regular file
@@ -451,7 +484,7 @@ func (a *App) dropSpecialFiles(dir string, dryRun bool) error {
 
 // pullDB downloads a snapshot beside the local database, scrubs it and only
 // then moves it into place.
-func (a *App) pullDB(ctx context.Context, r *remote, o PullOpts) error {
+func (a *App) pullDB(ctx context.Context, r *remote, o PullOpts) (result error) {
 	if o.DryRun {
 		if err := r.ctl(ctx, "", nil, "snapshot", o.Site); err != nil {
 			return err
@@ -466,7 +499,11 @@ func (a *App) pullDB(ctx context.Context, r *remote, o PullOpts) error {
 	if err != nil {
 		return err
 	}
-	defer func() { _ = os.RemoveAll(tmp) }()
+	defer func() {
+		if !errors.Is(result, errRestoreDatabase) {
+			_ = os.RemoveAll(tmp)
+		}
+	}()
 
 	packed, err := os.Create(filepath.Join(tmp, "snapshot.db.gz")) // #nosec G304 -- inside the private directory above
 	if err != nil {
@@ -483,12 +520,44 @@ func (a *App) pullDB(ctx context.Context, r *remote, o PullOpts) error {
 	if err := a.Scrub(ctx, snapshot); err != nil {
 		return fmt.Errorf("scrubbing the snapshot (nothing was replaced): %w", err)
 	}
-	for _, sidecar := range []string{"-wal", "-shm", "-journal"} {
-		if err := os.Remove(o.LocalDB + sidecar); err != nil && !errors.Is(err, os.ErrNotExist) {
+	return publishDatabase(snapshot, o.LocalDB)
+}
+
+var errRestoreDatabase = errors.New("restoring local database sidecars")
+
+// Stage the previous database's sidecars in the private pull directory. If
+// publishing the snapshot fails, put the sidecars back with the original DB.
+func publishDatabase(snapshot, local string) (result error) {
+	previous := filepath.Join(filepath.Dir(snapshot), "previous")
+	var moved []string
+	defer func() {
+		if result == nil {
+			return
+		}
+		for _, suffix := range moved {
+			if err := os.Rename(previous+suffix, local+suffix); err != nil {
+				result = errors.Join(result, fmt.Errorf("%w (files kept in %s): %w",
+					errRestoreDatabase, filepath.Dir(previous), err))
+			}
+		}
+	}()
+	for _, suffix := range []string{"-wal", "-shm", "-journal"} {
+		info, err := os.Lstat(local + suffix)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
 			return err
 		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("database sidecar %s is not a regular file", local+suffix)
+		}
+		if err := os.Rename(local+suffix, previous+suffix); err != nil {
+			return err
+		}
+		moved = append(moved, suffix)
 	}
-	return os.Rename(snapshot, o.LocalDB)
+	return os.Rename(snapshot, local)
 }
 
 func gunzipFile(src, dst string) error {

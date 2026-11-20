@@ -179,8 +179,7 @@ func TestSiteConfigurationIsReadAsTheSiteUser(t *testing.T) {
 				if !ok {
 					return true
 				}
-				switch callee := call.Fun.(type) {
-				case *ast.SelectorExpr:
+				if callee, ok := call.Fun.(*ast.SelectorExpr); ok {
 					if x, ok := callee.X.(*ast.Ident); ok && x.Name == "godotenv" {
 						readers[fn.Name.Name] += " godotenv." + callee.Sel.Name
 					}

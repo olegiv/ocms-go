@@ -351,7 +351,7 @@ func rootAndNobody(t *testing.T) (uid, gid int) {
 }
 
 // nobodySite is a server whose ocmsctl is this test binary (see TestMain),
-// with a registered site "site" of user nobody (call giveTo once its files
+// with a registered site "site" of user nobody (call giveToNobody once its files
 // are in place) and a directory only root may enter.
 func nobodySite(t *testing.T) (w *world, site, rootOnly string, uid int) {
 	t.Helper()
@@ -379,10 +379,10 @@ func nobodySite(t *testing.T) (w *world, site, rootOnly string, uid int) {
 	return w, site, rootOnly, uid
 }
 
-// giveTo hands the tree at dir to the named user.
-func giveTo(t *testing.T, dir, name string) {
+// giveToNobody hands the tree at dir to the site user.
+func giveToNobody(t *testing.T, dir string) {
 	t.Helper()
-	u, err := user.Lookup(name)
+	u, err := user.Lookup("nobody")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -436,7 +436,7 @@ func TestRootSiteOperationsRunAsTheSiteUser(t *testing.T) {
 	if err := db.Close(); err != nil {
 		t.Fatal(err)
 	}
-	giveTo(t, site, "nobody")
+	giveToNobody(t, site)
 
 	if err := run(context.Background(), w.server, []string{"backup", "site"}, nil); err != nil {
 		t.Fatalf("%v\n%s", err, w.out.String())

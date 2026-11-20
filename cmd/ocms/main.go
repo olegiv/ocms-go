@@ -38,6 +38,7 @@ import (
 	apiv2taxonomy "github.com/olegiv/ocms-go/internal/api/v2/taxonomy"
 	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/config"
+	"github.com/olegiv/ocms-go/internal/dbfile"
 	"github.com/olegiv/ocms-go/internal/demo"
 	"github.com/olegiv/ocms-go/internal/handler"
 	"github.com/olegiv/ocms-go/internal/i18n"
@@ -589,40 +590,6 @@ func parseLogLevel(level string) slog.Level {
 	default:
 		return slog.LevelInfo
 	}
-}
-
-func sqliteFilePathFromDSN(dsn string) (string, bool) {
-	trimmed := strings.TrimSpace(dsn)
-	if trimmed == "" || trimmed == ":memory:" {
-		return "", false
-	}
-
-	if !strings.HasPrefix(strings.ToLower(trimmed), "file:") {
-		return trimmed, true
-	}
-
-	parsed, err := url.Parse(trimmed)
-	if err != nil || !strings.EqualFold(parsed.Scheme, "file") {
-		return "", false
-	}
-	if strings.EqualFold(parsed.Query().Get("mode"), "memory") {
-		return "", false
-	}
-
-	candidate := parsed.Path
-	if candidate == "" {
-		candidate = parsed.Opaque
-	}
-	candidate = strings.TrimSpace(candidate)
-	if candidate == "" || candidate == ":memory:" || candidate == "::memory:" {
-		return "", false
-	}
-
-	if unescaped, unescapeErr := url.PathUnescape(candidate); unescapeErr == nil {
-		candidate = unescaped
-	}
-
-	return candidate, true
 }
 
 func auditRequiredFormCaptchaPosture(ctx context.Context, db *sql.DB, hooks *module.HookRegistry, verifierEnabled bool) error {
@@ -1742,7 +1709,7 @@ func openDatabase(dsn string) (*sql.DB, error) {
 	// readable too, and the WAL holds recent writes. Files SQLite creates
 	// later take the database file's (now owner-only) mode. Skip non-file
 	// DSNs such as ":memory:" where no real file exists on disk.
-	if dbFilePath, isFileDSN := sqliteFilePathFromDSN(dsn); isFileDSN {
+	if dbFilePath, isFileDSN := dbfile.Path(dsn); isFileDSN {
 		for _, file := range []string{dbFilePath, dbFilePath + "-wal", dbFilePath + "-shm"} {
 			if info, statErr := os.Stat(file); statErr == nil && info.Mode().IsRegular() {
 				if err := os.Chmod(file, 0600); err != nil {
@@ -1869,10 +1836,18 @@ func run(inspectRouter func(chi.Router) error) (runErr error) {
 	}
 	slog.Info("i18n system initialized", "languages", i18n.SupportedLanguages)
 
-	// Ensure data directory exists with restricted permissions.
 	dbDir := filepath.Dir(cfg.DBPath)
-	if err := os.MkdirAll(dbDir, 0700); err != nil {
-		return fmt.Errorf("creating data directory: %w", err)
+	if dbPath, ok := dbfile.Path(cfg.DBPath); ok {
+		dbDir = filepath.Dir(dbPath)
+		if err := os.MkdirAll(dbDir, 0o700); err != nil {
+			return fmt.Errorf("creating data directory: %w", err)
+		}
+		lock, err := dbfile.Lock(dbPath, false)
+		if err != nil {
+			return fmt.Errorf("locking database: %w", err)
+		}
+		// Registered before opening SQLite so the lock outlives the connection.
+		defer func() { _ = lock.Close() }()
 	}
 
 	// Reset demo data if overdue (only in demo mode)

@@ -13,6 +13,7 @@ import (
 	"os"
 
 	"github.com/olegiv/ocms-go/internal/config"
+	"github.com/olegiv/ocms-go/internal/dbfile"
 	"github.com/olegiv/ocms-go/internal/mfa"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
@@ -76,6 +77,13 @@ func runMFAReset(args []string) error {
 		return err
 	}
 
+	lock, err := dbfile.LockDSN(*dbPath)
+	if err != nil {
+		return fmt.Errorf("locking database: %w", err)
+	}
+	if lock != nil {
+		defer func() { _ = lock.Close() }()
+	}
 	db, err := store.NewDB(*dbPath)
 	if err != nil {
 		return fmt.Errorf("opening %s: %w", *dbPath, err)

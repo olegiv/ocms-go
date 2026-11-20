@@ -12,6 +12,9 @@ import (
 	"go/parser"
 	"go/token"
 	"io"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -20,6 +23,45 @@ import (
 	"testing"
 	"time"
 )
+
+func TestProbeRequiresSuccessFromTheRequestedEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/ready" {
+			http.Redirect(w, r, "/ok", http.StatusFound)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+	u, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	port, err := strconv.Atoi(u.Port())
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := newTestEnv(t)
+	site := Site{Port: port}
+	if err := env.Probe(t.Context(), site, "/ready"); err == nil || !strings.Contains(err.Error(), "302") {
+		t.Errorf("redirect check = %v, want HTTP 302", err)
+	}
+	if err := env.Probe(t.Context(), site, "/ok"); err != nil {
+		t.Errorf("direct health check: %v", err)
+	}
+}
+
+func TestFailedDatabasePublicationRestoresSidecars(t *testing.T) {
+	dir := t.TempDir()
+	local := filepath.Join(dir, "local.db")
+	writeFiles(t, dir, map[string]string{"local.db": "original", "local.db-wal": "recent writes"})
+	if err := publishDatabase(filepath.Join(t.TempDir(), "missing.db"), local); err == nil {
+		t.Fatal("missing snapshot was accepted")
+	}
+	if got := readFile(t, local+"-wal"); got != "recent writes" {
+		t.Errorf("original WAL = %q", got)
+	}
+}
 
 func writeFiles(t *testing.T, base string, files map[string]string) {
 	t.Helper()

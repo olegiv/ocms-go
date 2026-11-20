@@ -65,10 +65,11 @@ type App struct {
 	ProxyTemplate  string // reverse-proxy snippet printed for a new site
 	ScrubSQL       string // query returning the statements that scrub a pulled database
 
-	Stdout    io.Writer
-	Stderr    io.Writer
-	Exec      func(ctx context.Context, c Cmd) error // runs external commands
-	LookupEnv func(key string) (string, bool)        // the process environment (pull); nil: none
+	Stdout       io.Writer
+	Stderr       io.Writer
+	Exec         func(ctx context.Context, c Cmd) error // runs external commands
+	LookupEnv    func(key string) (string, bool)        // the process environment (pull); nil: none
+	LockDatabase func(path string) (io.Closer, error)   // excludes local application use during pull
 
 	HealthTimeout time.Duration // how long a restarted site gets to answer
 	Settle        time.Duration // pause before a healthy site is asked again

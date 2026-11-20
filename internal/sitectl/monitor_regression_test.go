@@ -343,7 +343,9 @@ func TestOnlyOneCheckRunsAtATime(t *testing.T) {
 func TestCheckStopsLookingWhenItsTimeRunsOut(t *testing.T) {
 	env := newTestEnv(t)
 	slow, health := env.addSite(t, "slow")
-	later, _ := env.addSite(t, "later")
+	later, laterHealth := env.addSite(t, "later")
+	seen := make(chan struct{}, 1)
+	laterHealth.onProbe = func() { seen <- struct{}{} }
 	health.onProbe = func() { time.Sleep(time.Second) }
 	defer func(old time.Duration) { checkBudget = old }(checkBudget)
 	checkBudget = 100 * time.Millisecond
@@ -354,6 +356,12 @@ func TestCheckStopsLookingWhenItsTimeRunsOut(t *testing.T) {
 	}
 	if strings.Contains(out, " DOWN ") || slices.Contains(env.host.systemctlCalls(), "restart app@slow") {
 		t.Errorf("the deadline was taken for an outage:\n%s", out)
+	}
+	_, _ = runCheck(env, sitesOf(slow, later))
+	select {
+	case <-seen:
+	default:
+		t.Fatal("the next check skipped the later site")
 	}
 }
 

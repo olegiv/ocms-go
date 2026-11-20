@@ -23,9 +23,10 @@ import (
 // Name identifies the setting in what the server reports (`site paths`) and
 // in backup archive names.
 type Setting struct {
-	Name    string // e.g. uploads
-	Env     string // e.g. OCMS_UPLOADS_DIR; empty: always Default
-	Default string // e.g. uploads
+	Name     string                      // e.g. uploads
+	Env      string                      // e.g. OCMS_UPLOADS_DIR; empty: always Default
+	Default  string                      // e.g. uploads
+	FilePath func(string) (string, bool) // optional parser for a database DSN
 }
 
 // value returns the setting from lookup, or its default.
@@ -42,6 +43,13 @@ func (s Setting) value(lookup func(string) (string, bool)) string {
 // "" when it is unset and has no default.
 func (s Setting) path(dir string, lookup func(string) (string, bool)) string {
 	value := s.value(lookup)
+	if s.FilePath != nil {
+		var ok bool
+		value, ok = s.FilePath(value)
+		if !ok {
+			return ""
+		}
+	}
 	if value == "" {
 		return ""
 	}

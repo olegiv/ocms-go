@@ -84,17 +84,29 @@ make server-setup HOST=root@server.example.com
 ```
 
 This builds `ocmsctl`, installs it as `/opt/ocms/bin/ocmsctl` and runs
-`ocmsctl init` there: directories, the systemd unit template, an empty site
-registry and the cron file (each only when there is none) and the logrotate
-configuration. Run it again to update `ocmsctl` on the server after updating
-oCMS. Without a registry, commands for every site (`--all`, and `status`,
+`ocmsctl init` on the server. It installs the systemd unit template and
+generates the logrotate configuration. It creates the site registry and cron
+file if they are missing. Run it again to update `ocmsctl` on the server
+after updating oCMS. Without a registry, commands for every site (`--all`, and `status`,
 `backup` and `check` without site names) fail instead of finding no sites.
 
 For an ARM server add `SERVER_ARCH=arm64` to this and the other `make` commands.
 
+On a fresh server, install the CMS binary while the site registry is still
+empty. Build the frontend assets first:
+
+```bash
+make assets
+make deploy HOST=root@server.example.com SITES=--all
+```
+
+With an empty registry this installs `/opt/ocms/bin/ocms` without starting any units.
+
 ## Adding a site
 
 On the server, as root. The domain must exist as a Plesk vhost.
+Use `/opt/ocms/bin/ocmsctl` for the examples if `/opt/ocms/bin` is outside
+root's `PATH`.
 
 ```bash
 ocmsctl site add example.com example_com
@@ -311,6 +323,10 @@ minutes. It exits 1 while any site is down. Without a hook (below), the check
 also prints a failed backup, whose own output goes only to its log, so cron
 mails that too.
 
+If the three-minute check budget runs out, the next run resumes at the site
+it reached. If that site consumed the whole budget on its own, the next
+site gets a turn first.
+
 For other channels create an executable `/etc/ocms/alert`; it is called with
 the site ID, the status and a message:
 
@@ -379,16 +395,18 @@ missing from the database copy or the reverse.
 
 Only directories and regular files arrive: a symlink or special file on the
 server is skipped, and the mirror removes any already in the local uploads.
-`pull` refuses an uploads directory configured outside the checkout, and one
-that is the checkout, one above it, or one holding the local database or
-custom directory, as the mirror would delete them. Before it changes anything,
+`pull` checks both the configured uploads path and its resolved destination.
+Both must stay inside the checkout, and the destination must not contain the
+local database or custom directory. Before it changes anything,
 also with `--yes`, it prints each local path it will write and where the path
 came from (the environment, the env file, a flag or the default). The server's paths must be absolute and made of letters, digits and
 `._@:/=-`, since they cross ssh.
 
-Stop the local server first: the command refuses to replace the database while
-something listens on the checkout's port (`--port N` names another port,
-`--port 0` skips the check).
+Stop the local server first. oCMS and `pull` share a lock next to the database,
+which protects it while the server runs or `pull` replaces it. The port check
+also detects older servers listening on either loopback address. Use `--port N`
+to check another port or `--port 0` to skip the port check. The database lock
+still applies with either option.
 
 The scrub ([sync-db-policy.sql](../cmd/ocmsctl/templates/sync-db-policy.sql)) deletes sessions, OAuth
 tokens and codes and preview links; clears webhook URLs, secrets and headers and

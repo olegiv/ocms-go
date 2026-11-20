@@ -38,7 +38,9 @@ func TestLogsUsesConfiguredFileDestination(t *testing.T) {
 			site, _ := env.addSite(t, "a")
 			writeFiles(t, site.Dir, map[string]string{"logs/custom.log": "current", "logs/app.log": "stale"})
 			path := filepath.Join(site.Dir, "logs", "custom.log")
-			env.host.stdout = kind + ":" + path
+			env.host.stdout = kind
+			env.host.config = "[Service]\nStandardOutput=journal\n\n# drop-in\n[Service]\nStandardOutput=" + kind + ":" + path +
+				"\n[Unit]\nStandardOutput=ignore\n"
 			if err := env.Logs(context.Background(), site, 5, true, false); err != nil {
 				t.Fatal(err)
 			}

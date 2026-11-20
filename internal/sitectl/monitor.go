@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -67,6 +68,7 @@ type hookCall struct {
 // monitorState is what the checks remember between runs.
 type monitorState struct {
 	Outages    map[string]outage `json:"outages"`
+	NextSite   string            `json:"next_site,omitempty"`   // resume after an incomplete check
 	Failed     string            `json:"failed,omitempty"`      // the check's own failure, already reported
 	HookFailed string            `json:"hook_failed,omitempty"` // why the hook fails, already reported
 	Pending    []hookCall        `json:"pending,omitempty"`     // alerts the hook has not taken, oldest first
@@ -135,19 +137,23 @@ func (a *App) checkSites(ctx context.Context, pick func() ([]Site, error), st *m
 	lookCtx, cancel := context.WithTimeout(ctx, checkBudget)
 	defer cancel()
 	var down []string
-	for i, site := range sites {
+	resume := slices.IndexFunc(sites, func(site Site) bool { return site.ID == st.NextSite })
+	start := max(0, resume)
+	for offset := range len(sites) {
+		i := (start + offset) % len(sites)
+		site := sites[i]
 		l := a.lookAt(lookCtx, site, a.ReadyPath)
 		if lookCtx.Err() != nil {
-			// The deadline may be what this look saw: keep what is known
-			// about this site and the rest.
-			for _, rest := range sites[i:] {
-				if _, ok := st.Outages[rest.ID]; ok {
-					down = append(down, rest.ID)
-				}
-			}
 			if ctx.Err() != nil {
 				return down, ctx.Err()
 			}
+			// Revisit this site next time. If it used the full budget on
+			// its own, give the next site a turn before retrying it.
+			next := i
+			if offset == 0 {
+				next = (i + 1) % len(sites)
+			}
+			st.NextSite = sites[next].ID
 			return down, fmt.Errorf("the check ran out of time (%s) at %s", checkBudget, site.ID)
 		}
 		out, wasDown := st.Outages[site.ID]
@@ -188,6 +194,9 @@ func (a *App) checkSites(ctx context.Context, pick func() ([]Site, error), st *m
 		}
 		st.Outages[site.ID] = out
 		down = append(down, site.ID)
+	}
+	if resume >= 0 {
+		st.NextSite = ""
 	}
 	return down, nil
 }
@@ -448,7 +457,7 @@ func (a *App) loadMonitor(mailed bool) (*monitorState, error) {
 		if parseErr := json.Unmarshal(data, st); parseErr != nil {
 			aside := a.stateFile() + ".corrupt"
 			if err := os.Rename(a.stateFile(), aside); err != nil {
-				return nil, fmt.Errorf("%s does not parse (%v) and cannot be moved aside: %w", a.stateFile(), parseErr, err)
+				return nil, fmt.Errorf("%s does not parse (%w) and cannot be moved aside: %w", a.stateFile(), parseErr, err)
 			}
 			notice := a.serverEvent("MONITOR FAILED", fmt.Sprintf("%s did not parse (%v); moved to %s, so outages already reported will be reported again", a.stateFile(), parseErr, aside))
 			a.announce(notice)

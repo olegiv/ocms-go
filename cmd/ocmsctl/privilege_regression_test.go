@@ -25,7 +25,7 @@ func TestRootPullReadsAsTheSiteUser(t *testing.T) {
 	w, site, rootOnly, _ := nobodySite(t)
 	writeTree(t, site, map[string]string{"uploads/a.jpg": "public", ".env": "OCMS_UPLOADS_DIR=" + rootOnly + "\n"})
 	writeTree(t, rootOnly, map[string]string{"secret.txt": "root's"})
-	giveTo(t, site, "nobody")
+	giveToNobody(t, site)
 	w.realRsync(t)
 	t.Chdir(t.TempDir())
 
@@ -38,7 +38,7 @@ func TestRootPullReadsAsTheSiteUser(t *testing.T) {
 	}
 
 	writeTree(t, site, map[string]string{".env": "OCMS_DB_PATH=./data/ocms.db\n"})
-	giveTo(t, site, "nobody")
+	giveToNobody(t, site)
 	if err := run(context.Background(), w.local, []string{"pull", "root@server", "site", "--yes", "--no-db", "--no-logs"}, nil); err != nil {
 		t.Fatalf("%v\n%s", err, w.out)
 	}
@@ -51,7 +51,7 @@ func TestRootPullReadsAsTheSiteUser(t *testing.T) {
 // still carry why the backup failed, not just the child's exit status.
 func TestRootBackupAlertsCarryTheCause(t *testing.T) {
 	w, site, _, _ := nobodySite(t)
-	giveTo(t, site, "nobody")
+	giveToNobody(t, site)
 	// Two parts fail (a joined error, over two lines), and the backup log
 	// is on a full disk: the alert must still carry both causes.
 	writeTree(t, site, map[string]string{"uploads/locked/a.jpg": "x"})
@@ -82,7 +82,7 @@ func TestRootLogsReadAsTheSiteUser(t *testing.T) {
 	w, site, rootOnly, _ := nobodySite(t)
 	writeTree(t, rootOnly, map[string]string{"secret.log": "root's secret"})
 	writeTree(t, site, map[string]string{".env": "OCMS_ERROR_LOG_PATH=" + filepath.Join(rootOnly, "secret.log") + "\n"})
-	giveTo(t, site, "nobody")
+	giveToNobody(t, site)
 	w.out.Reset()
 	if err := run(context.Background(), w.server, []string{"logs", "site", "--errors"}, nil); err == nil {
 		t.Error("logs read a file only root may read")
@@ -173,7 +173,11 @@ func TestTestsThatNeedRootRunInCI(t *testing.T) {
 		}
 	}
 	workflow := read(t, filepath.Join("..", "..", ".github", "workflows", "go.yml"))
-	step, _, _ := strings.Cut(workflow[strings.Index(workflow, "name: Root tests"):], "\n    - name:")
+	_, rootStep, found := strings.Cut(workflow, "name: Root tests")
+	if !found {
+		t.Fatal("the CI root test step is missing")
+	}
+	step, _, _ := strings.Cut(rootStep, "\n    - name:")
 	for _, want := range []string{
 		"shell: bash", // pipefail: the default shell would let tee hide a failure
 		"OCMS_REQUIRE_ROOT_TESTS=1",
@@ -186,8 +190,14 @@ func TestTestsThatNeedRootRunInCI(t *testing.T) {
 		}
 	}
 	source := read(t, "main_test.go")
-	body := source[strings.Index(source, "func rootAndNobody("):]
-	body = body[:strings.Index(body, "\n}\n")]
+	_, helper, found := strings.Cut(source, "func rootAndNobody(")
+	if !found {
+		t.Fatal("rootAndNobody is missing")
+	}
+	body, _, found := strings.Cut(helper, "\n}\n")
+	if !found {
+		t.Fatal("rootAndNobody has no closing brace")
+	}
 	if len(checks) != 1 || !strings.Contains(body, check) {
 		t.Errorf("root checks at %v: want one, in rootAndNobody", checks)
 	}

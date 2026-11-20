@@ -19,6 +19,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/olegiv/ocms-go/internal/dbfile"
 	"github.com/olegiv/ocms-go/internal/sitectl"
 )
 
@@ -81,7 +82,7 @@ func newApp() *sitectl.App {
 		HealthPath:    "/health",
 		ReadyPath:     "/health/ready",
 		// internal/config's keys and defaults (TestSettingsFollowTheServerConfig).
-		DB:             sitectl.Setting{Name: "db", Env: "OCMS_DB_PATH", Default: "data/ocms.db"},
+		DB:             sitectl.Setting{Name: "db", Env: "OCMS_DB_PATH", Default: "data/ocms.db", FilePath: dbfile.Path},
 		Uploads:        sitectl.Setting{Name: "uploads", Env: "OCMS_UPLOADS_DIR", Default: "uploads"},
 		Custom:         sitectl.Setting{Name: "custom", Env: "OCMS_CUSTOM_DIR", Default: "custom"},
 		ErrorLog:       sitectl.Setting{Name: "errorlog", Env: "OCMS_ERROR_LOG_PATH"},
@@ -99,6 +100,7 @@ func newApp() *sitectl.App {
 		Stderr:         os.Stderr,
 		Exec:           sitectl.RunCmd,
 		LookupEnv:      os.LookupEnv,
+		LockDatabase:   func(path string) (io.Closer, error) { return dbfile.Lock(path, true) },
 		HealthTimeout:  30 * time.Second,
 		Settle:         3 * time.Second,
 		Now:            time.Now,
@@ -205,32 +207,7 @@ func run(ctx context.Context, app *sitectl.App, args []string, stdin io.Reader) 
 		return app.Bootstrap(ctx, rest[0], *ctlBinary, *dryRun)
 
 	case "deploy":
-		o := sitectl.DeployOpts{}
-		arch := fs.String("arch", "amd64", "server architecture")
-		build := fs.String("build", "", "build command (default: make build-linux-<arch>)")
-		noBuild := fs.Bool("no-build", false, "upload the binary as it is")
-		fs.StringVar(&o.Binary, "binary", "", "Linux binary to upload (default bin/ocms-linux-<arch>)")
-		fs.BoolVar(&o.Themes, "themes", false, "also replace the sites' themes with this checkout's")
-		fs.BoolVar(&o.ThemesOnly, "themes-only", false, "replace themes and restart; leave the binary alone")
-		timeout := app.HealthTimeout
-		rest, err := parse(fs, args[1:])
-		if err != nil || len(rest) == 0 {
-			return errors.Join(err, errors.New("usage: ocmsctl deploy <host> <site>...|--all [--themes|--themes-only] [--no-build]"))
-		}
-		if o.Binary == "" {
-			o.Binary = "bin/ocms-linux-" + *arch
-		}
-		if *build == "" {
-			*build = "make build-linux-" + *arch
-		}
-		if !*noBuild {
-			o.Build = strings.Fields(*build)
-		}
-		o.Host, o.Sites, o.All, o.DryRun = rest[0], rest[1:], *all, *dryRun
-		if app.HealthTimeout != timeout {
-			o.HealthTimeout = app.HealthTimeout
-		}
-		return app.Deploy(ctx, o)
+		return runDeploy(ctx, app, fs, args[1:], all, dryRun)
 
 	case "pull":
 		o := sitectl.PullOpts{Confirm: stdin}
@@ -351,6 +328,35 @@ func run(ctx context.Context, app *sitectl.App, args []string, stdin io.Reader) 
 		return app.Send(ctx, site, args[2:], stdin)
 	}
 	return fmt.Errorf("unknown command %q (see ocmsctl help)", command)
+}
+
+func runDeploy(ctx context.Context, app *sitectl.App, fs *flag.FlagSet, args []string, all, dryRun *bool) error {
+	o := sitectl.DeployOpts{}
+	arch := fs.String("arch", "amd64", "server architecture")
+	build := fs.String("build", "", "build command (default: make build-linux-<arch>)")
+	noBuild := fs.Bool("no-build", false, "upload the binary as it is")
+	fs.StringVar(&o.Binary, "binary", "", "Linux binary to upload (default bin/ocms-linux-<arch>)")
+	fs.BoolVar(&o.Themes, "themes", false, "also replace the sites' themes with this checkout's")
+	fs.BoolVar(&o.ThemesOnly, "themes-only", false, "replace themes and restart; leave the binary alone")
+	timeout := app.HealthTimeout
+	rest, err := parse(fs, args)
+	if err != nil || len(rest) == 0 {
+		return errors.Join(err, errors.New("usage: ocmsctl deploy <host> <site>...|--all [--themes|--themes-only] [--no-build]"))
+	}
+	if o.Binary == "" {
+		o.Binary = "bin/ocms-linux-" + *arch
+	}
+	if *build == "" {
+		*build = "make build-linux-" + *arch
+	}
+	if !*noBuild {
+		o.Build = strings.Fields(*build)
+	}
+	o.Host, o.Sites, o.All, o.DryRun = rest[0], rest[1:], *all, *dryRun
+	if app.HealthTimeout != timeout {
+		o.HealthTimeout = app.HealthTimeout
+	}
+	return app.Deploy(ctx, o)
 }
 
 // runLifecycle handles server commands that install or switch running binaries.

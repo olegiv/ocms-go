@@ -172,10 +172,13 @@ func (a *App) AddSite(ctx context.Context, spec SiteSpec) error {
 		used[other.Port] = true
 	}
 	if site.Port == 0 {
-		for site.Port = a.BasePort; used[site.Port]; site.Port++ {
+		for site.Port = a.BasePort; site.Port <= 65535 && used[site.Port]; site.Port++ {
 		}
 	} else if used[site.Port] {
 		return fmt.Errorf("port %d belongs to another site", site.Port)
+	}
+	if site.Port < 1 || site.Port > 65535 {
+		return fmt.Errorf("no usable port for site %s: %d is outside 1–65535", site.ID, site.Port)
 	}
 
 	vars := siteVars{Site: site, Domain: spec.Domain, Group: spec.Group, Unit: a.unit(site.ID), Date: a.Now().UTC().Format("2006-01-02T15:04:05Z")}
@@ -256,24 +259,25 @@ func (a *App) createSiteTree(vhost *os.Root, dir string, env []byte, uid, gid in
 		return errors.New("new site directory is not empty")
 	}
 	// The defaults: a new site's .env comes from EnvTemplate.
-	for sub, mode := range map[string]os.FileMode{
+	modes := map[string]os.FileMode{
 		filepath.Dir(a.DB.Default):                    0o755,
 		a.Uploads.Default:                             0o755,
 		filepath.Join(a.Custom.Default, a.ThemesPath): 0o755,
 		a.LogsPath: 0o755,
 		"backups":  0o700,
-	} {
-		if sub == "" {
+	}
+	for sub := range modes {
+		if sub == "" || sub == "." {
 			continue
 		}
-		if err := root.MkdirAll(sub, mode); err != nil {
+		if err := root.MkdirAll(sub, 0o700); err != nil {
 			return err
 		}
 	}
 	if err := root.WriteFile(".env", env, 0o600); err != nil {
 		return err
 	}
-	if err := fs.WalkDir(root.FS(), ".", func(path string, _ fs.DirEntry, err error) error {
+	if err := fs.WalkDir(root.FS(), ".", func(path string, entry fs.DirEntry, err error) error {
 		if err != nil || path == "." {
 			return err
 		}
@@ -281,7 +285,14 @@ func (a *App) createSiteTree(vhost *os.Root, dir string, env []byte, uid, gid in
 		if err != nil {
 			return err
 		}
-		return errors.Join(file.Chown(uid, gid), file.Close())
+		mode := os.FileMode(0o600)
+		if entry.IsDir() {
+			mode = modes[path]
+			if mode == 0 {
+				mode = 0o755 // intermediate directory
+			}
+		}
+		return errors.Join(file.Chmod(mode), file.Chown(uid, gid), file.Close())
 	}); err != nil {
 		return err
 	}

@@ -21,10 +21,12 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/config"
+	"github.com/olegiv/ocms-go/internal/dbfile"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/service"
@@ -41,12 +43,17 @@ func TestSQLiteFilePathFromDSN(t *testing.T) {
 		ok   bool
 	}{
 		{name: "plain path", dsn: "./data/ocms.db", want: "./data/ocms.db", ok: true},
+		{name: "plain path with whitespace", dsn: "data/db ", want: "data/db ", ok: true},
+		{name: "plain path with options", dsn: "./data/ocms.db?_pragma=busy_timeout(1000)", want: "./data/ocms.db", ok: true},
 		{name: "memory dsn", dsn: ":memory:", want: "", ok: false},
 		{name: "file memory uri", dsn: "file::memory:?cache=shared", want: "", ok: false},
 		{name: "file memory mode uri", dsn: "file:ignored.db?mode=memory&cache=shared", want: "", ok: false},
 		{name: "file absolute uri", dsn: "file:/var/db/ocms.db", want: "/var/db/ocms.db", ok: true},
 		{name: "file relative uri", dsn: "file:./data/ocms.db", want: "./data/ocms.db", ok: true},
 		{name: "file escaped uri", dsn: "file:/tmp/ocms%20prod.db", want: "/tmp/ocms prod.db", ok: true},
+		{name: "file escaped percent", dsn: "file:/tmp/ocms%2520prod.db", want: "/tmp/ocms%20prod.db", ok: true},
+		{name: "file literal percent", dsn: "file:/tmp/ocms%zz%20prod.db", want: "/tmp/ocms%zz prod.db", ok: true},
+		{name: "file terminating escape", dsn: "file:/tmp/ocms.db%00ignored", want: "/tmp/ocms.db", ok: true},
 	}
 
 	for _, tc := range tests {
@@ -54,7 +61,7 @@ func TestSQLiteFilePathFromDSN(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, ok := sqliteFilePathFromDSN(tc.dsn)
+			got, ok := dbfile.Path(tc.dsn)
 			if ok != tc.ok {
 				t.Fatalf("ok mismatch: got %v want %v", ok, tc.ok)
 			}
@@ -62,6 +69,28 @@ func TestSQLiteFilePathFromDSN(t *testing.T) {
 				t.Fatalf("path mismatch: got %q want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestRunHonorsDatabaseReplacementLock(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("OCMS_ENV", "development")
+	t.Setenv("OCMS_ENV_FILE", "")
+	t.Setenv("OCMS_DB_PATH", "file:local.db")
+	t.Setenv("OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	logger := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(logger) })
+
+	lock, err := dbfile.Lock("local.db", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = lock.Close() }()
+	if err := run(nil); !errors.Is(err, syscall.EWOULDBLOCK) {
+		t.Fatalf("startup with a database replacement in progress: %v", err)
+	}
+	if _, err := os.Stat("local.db"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("startup opened the database before acquiring the lock: %v", err)
 	}
 }
 
