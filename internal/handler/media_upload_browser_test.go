@@ -109,8 +109,11 @@ func TestMediaPickerInlineUploadChrome(t *testing.T) {
                 return 'oCMS browser step passed';
             }`, strconv.Quote(base), kind, kind, strconv.Quote(kind), strconv.Quote(imagePath), kind, kind, strconv.Quote(base)))
 			stored, err := h.queries.GetPageBySlug(t.Context(), "inline-"+kind)
-			if err != nil || stored.PageType != kind || stored.Title != "Inline "+kind || stored.Summary != "Unsaved summary" || !strings.Contains(stored.Body, "Unsaved body.") || !stored.FeaturedImageID.Valid {
-				t.Fatalf("saved draft: %+v %v", stored, err)
+			if err != nil {
+				t.Fatalf("saved draft: %v", err)
+			}
+			if stored.PageType != kind || stored.Title != "Inline "+kind || stored.Summary != "Unsaved summary" || !strings.Contains(stored.Body, "Unsaved body.") || !stored.FeaturedImageID.Valid {
+				t.Fatalf("saved draft: %+v", stored)
 			}
 		})
 	}
@@ -119,6 +122,10 @@ func TestMediaPickerInlineUploadChrome(t *testing.T) {
 		user, err := h.queries.GetUserByEmail(t.Context(), "picker@example.test")
 		if err != nil {
 			t.Fatal(err)
+		}
+		smallPath := filepath.Join(t.TempDir(), "small.png")
+		if writeErr := os.WriteFile(smallPath, pickerPNG(t, 320, 200), 0o600); writeErr != nil {
+			t.Fatal(writeErr)
 		}
 		w := httptest.NewRecorder()
 		h.Upload(w, withUser(pickerUploadRequest(t, "file", []string{"existing.png"}, pickerPNG(t, 1200, 800)), user))
@@ -171,18 +178,48 @@ func TestMediaPickerInlineUploadChrome(t *testing.T) {
             await page.locator('#editor-image-search').fill('no-match');
             const inserted = page.waitForResponse(r => r.url().endsWith('/admin/media/upload') && r.status() === 201);
             await editor.locator('[data-upload-file]').setInputFiles(%s);
-            await inserted;
+            const large = (await (await inserted).json()).item;
             await editor.locator('.is-selected').waitFor();
             if (await page.locator('#editor-image-search').inputValue()) throw new Error('Editor search was not reset');
             await page.locator('#editor-image-alt').fill('Uploaded illustration');
             await page.locator('#editor-image-insert-btn').click();
             if (!await page.evaluate(() => {const body = tinymce.get('editor').getContent(); return body.includes('Uploaded illustration') && body.includes('Unsaved body.');})) throw new Error('Image insert lost content or alt');
+            // The default Medium size inserts the medium variant the API lists;
+            // an image without one (under 400x300) keeps its original.
+            const srcOf = alt => page.evaluate(alt => tinymce.get('editor').getBody().querySelector('img[alt="' + alt + '"]')?.getAttribute('src'), alt);
+            if (!large.medium || await srcOf('Uploaded illustration') !== large.medium) throw new Error('Default medium did not insert the medium variant: ' + JSON.stringify(large));
+            if (!await imageButton.isVisible()) await page.getByRole('button', {name:'Reveal or hide additional toolbar items'}).click();
+            await imageButton.click();
+            const smallUpload = page.waitForResponse(r => r.url().endsWith('/admin/media/upload'));
+            await editor.locator('[data-upload-file]').setInputFiles(%s);
+            const smallResponse = await smallUpload;
+            if (smallResponse.status() !== 201) throw new Error('Small upload failed: ' + smallResponse.status() + ' ' + await smallResponse.text());
+            const small = (await smallResponse.json()).item;
+            await editor.locator('.is-selected').waitFor();
+            await page.locator('#editor-image-alt').fill('Small illustration');
+            if (await page.locator('#editor-image-size input[data-tui-selectbox-hidden-input]').inputValue() !== 'medium') throw new Error('Size is no longer the default Medium');
+            await page.locator('#editor-image-insert-btn').click();
+            if (!small.thumbnail || 'medium' in small || await srcOf('Small illustration') !== small.filepath) throw new Error('Small image did not fall back to its original: ' + JSON.stringify(small));
+            // The Small size inserts the small variant (fit within 400x300),
+            // not the cropped thumbnail.
+            if (!await imageButton.isVisible()) await page.getByRole('button', {name:'Reveal or hide additional toolbar items'}).click();
+            await imageButton.click();
+            await editor.locator('.editor-image-item[data-id="' + large.id + '"]').click();
+            await editor.locator('.editor-image-item.is-selected[data-id="' + large.id + '"]').waitFor();
+            await page.locator('#editor-image-alt').fill('Small size illustration');
+            await editor.locator('#editor-image-size button').first().click();
+            await page.locator('[role=option][data-tui-selectbox-value="small"]').click();
+            await page.locator('#editor-image-insert-btn').click();
+            if (!large.small || large.small === large.thumbnail || await srcOf('Small size illustration') !== large.small) throw new Error('Small did not insert the small variant: ' + JSON.stringify(large));
             await Promise.all([page.waitForURL(%s + '/admin/pages'), page.locator('form:has(#editor) button[type=submit]').click()]);
             return 'oCMS browser step passed';
-        }`, strconv.Quote(base), stored.ID, strconv.Quote(imagePath), strconv.Quote(imagePath), strconv.Quote(imagePath), strconv.Quote(base)))
+        }`, strconv.Quote(base), stored.ID, strconv.Quote(imagePath), strconv.Quote(imagePath), strconv.Quote(imagePath), strconv.Quote(smallPath), strconv.Quote(base)))
 		fresh, loadErr := h.queries.GetPageByID(t.Context(), stored.ID)
-		if loadErr != nil || fresh.FeaturedImageID == stored.FeaturedImageID || !fresh.OgImageID.Valid || fresh.OgImageID == fresh.FeaturedImageID || !strings.Contains(fresh.Body, "Uploaded illustration") || fresh.Summary != "Edited summary" {
-			t.Fatalf("saved edited images: %+v %v", fresh, loadErr)
+		if loadErr != nil {
+			t.Fatalf("saved edited images: %v", loadErr)
+		}
+		if fresh.FeaturedImageID == stored.FeaturedImageID || !fresh.OgImageID.Valid || fresh.OgImageID == fresh.FeaturedImageID || !strings.Contains(fresh.Body, "Uploaded illustration") || fresh.Summary != "Edited summary" {
+			t.Fatalf("saved edited images: %+v", fresh)
 		}
 	})
 	t.Run("theme settings", func(t *testing.T) {
@@ -202,8 +239,11 @@ func TestMediaPickerInlineUploadChrome(t *testing.T) {
             return 'oCMS browser step passed';
         }`, strconv.Quote(base), strconv.Quote(imagePath), strconv.Quote(base)))
 		config, loadErr := h.queries.GetConfig(t.Context(), "theme_settings_starter")
-		if loadErr != nil || !strings.Contains(config.Value, "Unsaved theme text") || !strings.Contains(config.Value, "/uploads/originals/") {
-			t.Fatalf("saved theme settings: %+v %v", config, loadErr)
+		if loadErr != nil {
+			t.Fatalf("saved theme settings: %v", loadErr)
+		}
+		if !strings.Contains(config.Value, "Unsaved theme text") || !strings.Contains(config.Value, "/uploads/originals/") {
+			t.Fatalf("saved theme settings: %+v", config)
 		}
 	})
 	t.Run("small featured image still fails validation", func(t *testing.T) {

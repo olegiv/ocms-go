@@ -101,9 +101,9 @@ type GenerateResult struct {
 	PageIDs  []int64
 }
 
-// cryptoRandIntn returns a cryptographically secure random number in [0, max).
-func cryptoRandIntn(max int) int {
-	n, err := rand.Int(rand.Reader, big.NewInt(int64(max)))
+// cryptoRandIntn returns a cryptographically secure random number in [0, limit).
+func cryptoRandIntn(limit int) int {
+	n, err := rand.Int(rand.Reader, big.NewInt(int64(limit)))
 	if err != nil {
 		// Fallback should never happen; rand.Reader is always available
 		return 0
@@ -619,15 +619,25 @@ func (m *Module) generateMedia(ctx context.Context, uploaderID int64, defaultLan
 			{name: "og", width: 1200, height: 630, crop: false},
 		}
 
+		// Only variants whose file was written get a record: the media picker
+		// and the API hand out URLs for recorded variants.
+		type writtenVariant struct {
+			name          string
+			width, height int
+			size          int64
+		}
+		var written []writtenVariant
 		for _, v := range variants {
 			variantData, err := createPlaceholderImage(v.width, v.height, placeholderColor.R, placeholderColor.G, placeholderColor.B)
 			if err != nil {
-				continue // Skip variant on error
-			}
-
-			if _, err := processor.SaveMediaImage(v.name, mediaUUID, filename, variantData); err != nil {
+				m.ctx.Logger.Warn("failed to create placeholder variant", "variant", v.name, "uuid", mediaUUID, "error", err)
 				continue
 			}
+			if _, err := processor.SaveMediaImage(v.name, mediaUUID, filename, variantData); err != nil {
+				m.ctx.Logger.Warn("failed to save placeholder variant", "variant", v.name, "uuid", mediaUUID, "error", err)
+				continue
+			}
+			written = append(written, writtenVariant{name: v.name, width: v.width, height: v.height, size: int64(len(variantData))})
 		}
 
 		// Generate alt and caption
@@ -661,17 +671,17 @@ func (m *Module) generateMedia(ctx context.Context, uploaderID int64, defaultLan
 		mediaIDs = append(mediaIDs, media.ID)
 
 		// Create variant records
-		for _, v := range variants {
+		for _, v := range written {
 			_, err := queries.CreateMediaVariant(ctx, store.CreateMediaVariantParams{
 				MediaID:   media.ID,
 				Type:      v.name,
 				Width:     int64(v.width),
 				Height:    int64(v.height),
-				Size:      int64(len(imgData) / 2), // Approximate
+				Size:      v.size,
 				CreatedAt: now,
 			})
 			if err != nil {
-				m.ctx.Logger.Warn("failed to create media variant", "error", err)
+				m.ctx.Logger.Warn("failed to create media variant", "variant", v.name, "media_id", media.ID, "error", err)
 			}
 		}
 	}

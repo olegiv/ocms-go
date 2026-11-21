@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"mime/multipart"
 	"os"
 	"path/filepath"
@@ -771,5 +772,70 @@ func TestUploadImageProcessingFailureClassification(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// TestPartialVariantFailuresAreRecordedAndReported blocks the medium variant
+// directory. Upload must keep the other variants and log the failure at error
+// level; regeneration, which deletes the old variants first, must record the
+// new ones it created and still return the error.
+func TestPartialVariantFailuresAreRecordedAndReported(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	t.Cleanup(cleanup)
+	q := store.New(db)
+	now := time.Now()
+	user, err := q.CreateUser(t.Context(), store.CreateUserParams{Email: "variants@example.test", PasswordHash: "unused", Name: "Editor", Role: model.RoleEditor, CreatedAt: now, UpdatedAt: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	uploadDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(uploadDir, model.VariantMedium), []byte("blocked"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	logs := new(strings.Builder)
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	recorded := func(mediaID int64) map[string]bool {
+		t.Helper()
+		variants, variantsErr := q.GetMediaVariants(t.Context(), mediaID)
+		if variantsErr != nil {
+			t.Fatal(variantsErr)
+		}
+		types := map[string]bool{}
+		for _, v := range variants {
+			types[v.Type] = true
+		}
+		return types
+	}
+
+	svc := NewMediaService(db, uploadDir)
+	data := testutil.PNGImage(t, 1200, 800)
+	file := tempMultipartFile(t, data)
+	t.Cleanup(func() {
+		if closeErr := file.Close(); closeErr != nil {
+			t.Error(closeErr)
+		}
+	})
+	result, err := svc.Upload(t.Context(), file, &multipart.FileHeader{Filename: "large.png", Size: int64(len(data))}, user.ID, nil, "en")
+	if err != nil {
+		t.Fatalf("upload with one failing variant must succeed: %v", err)
+	}
+	if types := recorded(result.Media.ID); !types[model.VariantThumbnail] || types[model.VariantMedium] {
+		t.Fatalf("upload recorded %v, want the thumbnail and no medium", types)
+	}
+	if !strings.Contains(logs.String(), "level=ERROR") || !strings.Contains(logs.String(), "failed to create media variants") || !strings.Contains(logs.String(), model.VariantMedium+":") {
+		t.Fatalf("partial upload failure not reported: %s", logs.String())
+	}
+
+	regenerated, err := svc.RegenerateVariants(t.Context(), result.Media.ID)
+	if err == nil || !strings.Contains(err.Error(), model.VariantMedium+":") {
+		t.Fatalf("regeneration error = %v, want the medium failure", err)
+	}
+	if len(regenerated) == 0 {
+		t.Fatal("regeneration returned none of the variants it created")
+	}
+	if types := recorded(result.Media.ID); !types[model.VariantThumbnail] || types[model.VariantMedium] {
+		t.Fatalf("regeneration recorded %v, want the thumbnail and no medium", types)
 	}
 }

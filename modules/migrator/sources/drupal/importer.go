@@ -1135,14 +1135,13 @@ func (s *Source) importOneFile(ctx context.Context, st *importState, source medi
 	}
 
 	if variantSource != "" {
-		// Variants are best-effort: a partial failure costs a thumbnail, not the
-		// file. But CreateAllVariants returns an error ONLY when every variant
-		// failed, so discarding it hid the one case that matters — a full disk
-		// or an unwritable variant directory leaving the entire library with no
-		// thumbnails and the job still reporting a clean import.
+		// Variants are best-effort: a failure costs a resized copy, not the
+		// file. CreateAllVariants returns the variants it created with an error
+		// naming each that failed ("all variants failed" when none was made, as
+		// with a full disk), so record what exists and report the rest.
 		variants, varErr := processor.CreateAllVariants(variantSource, fileUUID, f.Filename)
 		if varErr != nil {
-			st.result.AddError("%s: no resized variants could be created: %v", f.Filename, varErr)
+			st.result.AddError("%s: resized variants: %v", f.Filename, varErr)
 		}
 		for _, v := range variants {
 			if _, err := st.queries.CreateMediaVariant(ctx, store.CreateMediaVariantParams{

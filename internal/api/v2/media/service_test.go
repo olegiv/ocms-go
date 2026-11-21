@@ -235,3 +235,67 @@ func TestUploadImageFailuresReachRESTValidation(t *testing.T) {
 		})
 	}
 }
+
+// TestMediaURLsListOnlyRecordedVariants uploads real images: every thumbnail,
+// medium and large URL in upload, get and list responses must name a variant
+// file that exists. A 320x200 source has no medium (under 400x300) or large
+// (under 960x540) variant, so those URLs must be absent.
+func TestMediaURLsListOnlyRecordedVariants(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	t.Cleanup(cleanup)
+	q := store.New(db)
+	now := time.Now()
+	owner, err := q.CreateUser(t.Context(), store.CreateUserParams{Email: "variant-urls@example.test", PasswordHash: "unused", Name: "Editor", Role: model.RoleEditor, CreatedAt: now, UpdatedAt: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	uploadDir := t.TempDir()
+	svc := media.NewService(db, q, nil, uploadDir)
+	actor := v2.Actor{APIKey: &store.ApiKey{ID: 1, CreatedBy: owner.ID}, Permissions: []string{model.PermissionMediaWrite}}
+	upload := func(name string, width, height int) *media.Media {
+		t.Helper()
+		data := testutil.PNGImage(t, width, height)
+		dto, uploadErr := svc.Upload(t.Context(), actor, media.UploadMediaMetadata{}, media.UploadedFile{Reader: memoryFile{bytes.NewReader(data)}, Filename: name, Size: int64(len(data))})
+		if uploadErr != nil {
+			t.Fatalf("upload %s: %v", name, uploadErr)
+		}
+		return dto
+	}
+	check := func(source string, dto media.Media, wantMediumAndLarge bool) {
+		t.Helper()
+		urls := dto.URLs
+		if urls == nil || urls.Thumbnail == "" || (urls.Medium != "") != wantMediumAndLarge || (urls.Large != "") != wantMediumAndLarge {
+			t.Fatalf("%s %s URLs = %+v, want medium and large present: %v", source, dto.Filename, urls, wantMediumAndLarge)
+		}
+		for _, url := range []string{urls.Thumbnail, urls.Medium, urls.Large} {
+			if url == "" {
+				continue
+			}
+			if _, statErr := os.Stat(filepath.Join(uploadDir, filepath.FromSlash(url[len("/uploads/"):]))); statErr != nil {
+				t.Fatalf("%s %s lists %s, which does not exist: %v", source, dto.Filename, url, statErr)
+			}
+		}
+	}
+
+	large := upload("large.png", 1200, 800)
+	small := upload("small.png", 320, 200)
+	want := map[int64]bool{large.ID: true, small.ID: false}
+	for _, dto := range []*media.Media{large, small} {
+		check("upload", *dto, want[dto.ID])
+		got, getErr := svc.Get(t.Context(), actor, dto.ID, media.ListFilter{})
+		if getErr != nil {
+			t.Fatal(getErr)
+		}
+		check("get", *got, want[dto.ID])
+	}
+	listed, err := svc.List(t.Context(), actor, media.ListFilter{Page: 1, PerPage: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listed.Media) != 2 {
+		t.Fatalf("listed %d media, want 2", len(listed.Media))
+	}
+	for _, dto := range listed.Media {
+		check("list", dto, want[dto.ID])
+	}
+}

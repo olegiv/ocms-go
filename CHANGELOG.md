@@ -103,6 +103,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as the admin editor does, so the page's canonical link is not blocked.
 - Log failed admin page renders and failed site logo or custom CSS
   lookups instead of dropping the error.
+- The media picker opened from a TinyMCE dialog (Insert → Image… or
+  Insert → Media… → Advanced) now appears above that dialog, so its images
+  can be selected (#233).
+- The editor's media picker keeps its Insert button on screen on short
+  displays: the picker scrolls and its footer stays put.
+- Inserting a small image (under 400 wide and under 300 high) at the
+  default **Medium** size uses the original instead of a missing medium
+  variant, which showed as a broken image. The picker's API
+  (`/admin/media/api` and the picker upload response) now reports a
+  `medium` URL when that variant exists.
+- The editor's **Small** size inserts the `small` variant (fit within
+  400x300) instead of the 150x150 cropped thumbnail, and the original when
+  the image has no `small` variant. The picker's API also reports `small`.
+- REST v2 media responses (and the MCP tools built on them) list the
+  `thumbnail`, `medium` and `large` URLs only for variants that exist. They
+  were listed for every image, so a small source or an ICO returned URLs
+  that 404; API clients must treat these fields as optional.
+- A partially failed variant generation is reported instead of dropped:
+  uploads log it as an error, regeneration records the variants it created
+  before returning the error, and imports report it per file.
+- The developer module's test data records only the image variants whose
+  files were written.
+- Admin pages, the login page, core page layouts and the API docs load their
+  `/static/dist` stylesheets with a per-build version, as scripts already
+  did. `/static/dist` is cached for a year, so a stylesheet change (such as
+  the media picker fixes above) did not reach browsers holding the old file.
 
 ### Security
 

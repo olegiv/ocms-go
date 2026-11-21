@@ -1024,11 +1024,11 @@ func (s *Source) importOneFile(ctx context.Context, queries *store.Queries, medi
 		return "", mediaFailed
 	}
 
-	// CreateAllVariants errors only when every variant failed — the signal
-	// that the whole library will have no thumbnails.
+	// CreateAllVariants returns the variants it created with an error naming
+	// each that failed; record what exists and report the rest.
 	variants, varErr := processor.CreateAllVariants(processResult.FilePath, fileUUID, filename)
 	if varErr != nil {
-		result.AddError("%s: no resized variants could be created: %v", filename, varErr)
+		result.AddError("%s: resized variants: %v", filename, varErr)
 	}
 	now := time.Now()
 	var unrecorded []string

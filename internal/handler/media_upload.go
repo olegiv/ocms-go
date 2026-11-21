@@ -5,7 +5,6 @@ package handler
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -20,11 +19,19 @@ import (
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
+// mediaAPIItem is one media picker entry. Thumbnail, Small and Medium are set
+// only when that variant is recorded. Imaging skips a fit (non-crop) variant
+// when the source is under half its target in both dimensions, so a source
+// under 200x150 has no small variant and one under 400x300 no medium variant;
+// ICO files have no variants, and a failed lookup leaves only Filepath. The
+// picker must use these fields and never build variant URLs itself.
 type mediaAPIItem struct {
 	ID        int64  `json:"id"`
 	Filename  string `json:"filename"`
 	Filepath  string `json:"filepath"`
 	Thumbnail string `json:"thumbnail,omitempty"`
+	Small     string `json:"small,omitempty"`
+	Medium    string `json:"medium,omitempty"`
 	Mimetype  string `json:"mimetype"`
 	Size      int64  `json:"size"`
 }
@@ -34,12 +41,24 @@ func (h *MediaHandler) pickerItem(ctx context.Context, m store.Medium) mediaAPII
 		ID: m.ID, Filename: m.Filename, Mimetype: m.MimeType, Size: m.Size,
 		Filepath: model.MediaURL(model.VariantOriginal, m.Uuid, m.Filename),
 	}
-	if IsImageMime(m.MimeType) {
-		// Icons and uploads with incomplete variant generation still have an original.
-		if _, err := h.queries.GetMediaVariant(ctx, store.GetMediaVariantParams{MediaID: m.ID, Type: "thumbnail"}); err == nil {
-			item.Thumbnail = model.MediaURL("thumbnail", m.Uuid, m.Filename)
-		} else if !errors.Is(err, sql.ErrNoRows) && !errors.Is(err, context.Canceled) {
-			slog.ErrorContext(ctx, "failed to get picker thumbnail", "error", err, "media_id", m.ID)
+	if !IsImageMime(m.MimeType) {
+		return item
+	}
+	variants, err := h.queries.GetMediaVariants(ctx, m.ID)
+	if err != nil { // the original still works without variants
+		if !errors.Is(err, context.Canceled) {
+			slog.ErrorContext(ctx, "failed to get picker variants", "error", err, "media_id", m.ID)
+		}
+		return item
+	}
+	for _, variant := range variants {
+		switch variant.Type {
+		case model.VariantThumbnail:
+			item.Thumbnail = model.MediaURL(variant.Type, m.Uuid, m.Filename)
+		case model.VariantSmall:
+			item.Small = model.MediaURL(variant.Type, m.Uuid, m.Filename)
+		case model.VariantMedium:
+			item.Medium = model.MediaURL(variant.Type, m.Uuid, m.Filename)
 		}
 	}
 	return item

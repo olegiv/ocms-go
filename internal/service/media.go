@@ -215,8 +215,9 @@ func (s *MediaService) upload(ctx context.Context, file multipart.File, header *
 		// Create variants
 		variants, err := s.processor.CreateAllVariants(processResult.FilePath, fileUUID, filename)
 		if err != nil {
-			// Log error but don't fail - we still have the original
-			slog.Warn("failed to create some media variants", "error", err, "media_id", media.ID, "uuid", fileUUID)
+			// The upload still succeeds on the original; record the variants
+			// that were created and report the ones that were not.
+			slog.Error("failed to create media variants", "error", err, "media_id", media.ID, "uuid", fileUUID, "created", len(variants))
 		}
 
 		// Store variant records
@@ -429,6 +430,8 @@ func (s *MediaService) pathForVariant(media store.Medium, variant string) string
 
 // RegenerateVariants regenerates all image variants for a media item.
 // It deletes existing variants and creates new ones from the original image.
+// When some variants fail it records the ones it created and returns them
+// with the error.
 func (s *MediaService) RegenerateVariants(ctx context.Context, mediaID int64) ([]store.MediaVariant, error) {
 	queries := store.New(s.db)
 
@@ -465,11 +468,9 @@ func (s *MediaService) RegenerateVariants(ctx context.Context, mediaID int64) ([
 		return nil, fmt.Errorf("failed to delete variant records: %w", err)
 	}
 
-	// Regenerate variants
-	variants, err := s.processor.CreateAllVariants(originalPath, media.Uuid, safeFilename)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create variants: %w", err)
-	}
+	// Regenerate variants. The old ones are gone, so record every variant that
+	// was created before reporting the ones that failed.
+	variants, createErr := s.processor.CreateAllVariants(originalPath, media.Uuid, safeFilename)
 
 	// Store new variant records
 	now := time.Now()
@@ -488,6 +489,9 @@ func (s *MediaService) RegenerateVariants(ctx context.Context, mediaID int64) ([
 			continue
 		}
 		result = append(result, variant)
+	}
+	if createErr != nil {
+		return result, fmt.Errorf("failed to create variants: %w", createErr)
 	}
 
 	return result, nil

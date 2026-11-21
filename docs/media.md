@@ -11,8 +11,11 @@ accept ICO. The upload runs inside the picker and shows progress; errors can be
 retried by choosing the image again.
 
 Theme settings, including favicons, accept ICO, and the content editor inserts
-the original file when an image has no size variants. A Featured Image cannot be
-set to an ICO; choose JPEG, PNG, GIF or WebP instead.
+the original file when an image has no size variants. The editor's **Medium**
+and **Small** sizes insert the `medium` and `small` variants, and likewise the
+original when the image lacks that variant (a source under 400 wide and under
+300 high gets no `medium`; under 200 wide and under 150 high, no `small`). A
+Featured Image cannot be set to an ICO; choose JPEG, PNG, GIF or WebP instead.
 
 After upload, the picker highlights the new image. Confirm with **Select Image**
 or **Insert Image**, then save the page or theme settings normally. Uploading
@@ -93,12 +96,13 @@ Different contexts use different image variants for optimal performance:
 | Search results | `thumbnail` | Fast loading, small previews |
 | Admin media library grid | `grid` | Quick grid view (falls back to `thumbnail`, then the original) |
 | Admin media picker | `thumbnail` | Quick selection |
+| Content editor insert | `medium` (Medium), `small` (Small), original (Full) | Falls back to the original when the variant is missing |
 
 OG image variant selection priority: `og` > `large` > `medium` > `thumbnail`.
 
 ## API Response
 
-The REST API returns the URLs of the original, `thumbnail`, `medium` and `large` variants (the last three for every `image/*` file, even an ICO, which gets no variants, so those URLs 404). Add `?include=variants` to list every generated variant with its own URL, including `small`, `grid` and `og`:
+The REST API returns the URL of the original and, for an image, the URLs of its `thumbnail`, `medium` and `large` variants. A variant that was not generated is omitted: an ICO gets none, a source under 400x300 has no `medium` and one under 960x540 no `large`. Add `?include=variants` to list every generated variant with its own URL, including `small`, `grid` and `og`:
 
 ```json
 {
