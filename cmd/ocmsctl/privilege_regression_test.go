@@ -29,7 +29,7 @@ func TestRootPullReadsAsTheSiteUser(t *testing.T) {
 	writeTree(t, rootOnly, map[string]string{"secret.txt": "root's"})
 	giveToNobody(t, site)
 	w.realRsync(t)
-	t.Chdir(t.TempDir())
+	chdirTemp(t)
 
 	err := run(context.Background(), w.local, []string{"pull", "root@server", "site", "--yes", "--no-db", "--no-logs"}, nil)
 	if err == nil {
@@ -133,7 +133,7 @@ func TestRootMaintenanceLockAllowsSiteUserAccess(t *testing.T) {
 func TestDeployThemesWaitForAVerifiedBinary(t *testing.T) {
 	w := newWorld(t)
 	dir := w.addSite(t)
-	t.Chdir(t.TempDir())
+	chdirTemp(t)
 	writeTree(t, ".", map[string]string{"bin/ocms-linux-amd64": "\x7fELFv1", "custom/themes/old/theme.json": "{}"})
 	w.systemctl = nil
 	if err := run(context.Background(), w.local, []string{"deploy", "root@server", "example_com", "--no-build", "--themes"}, nil); err != nil {

@@ -10,6 +10,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -41,12 +44,7 @@ type world struct {
 
 func newWorld(t *testing.T) *world {
 	t.Helper()
-	// Provisioning records canonical paths; on macOS the temporary
-	// directory sits behind the /var -> /private/var symlink.
-	root, err := filepath.EvalSymlinks(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	root := canonicalTempDir(t) // provisioning records canonical paths
 	w := &world{out: &bytes.Buffer{}}
 	euid = func() int { return 0 }
 	t.Cleanup(func() { euid = os.Geteuid })
@@ -110,6 +108,69 @@ func newWorld(t *testing.T) *world {
 		}
 	}
 	return w
+}
+
+// canonicalTempDir returns a new temporary directory with symlinks resolved:
+// on macOS t.TempDir sits behind the /var -> /private/var symlink.
+func canonicalTempDir(t *testing.T) string {
+	t.Helper()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// chdirTemp makes a new canonical temporary directory the working directory.
+// pull resolves symlinks in the checkout's database and uploads paths, and
+// prints and uses those real paths, so a test whose working directory has
+// the unresolved macOS name would expect database and uploads paths that
+// pull never prints.
+func chdirTemp(t *testing.T) {
+	t.Helper()
+	t.Chdir(canonicalTempDir(t))
+}
+
+// TestTestsStandInCanonicalDirectories keeps this package's tests in
+// chdirTemp: the only Chdir call in this package's test functions must be
+// the one inside chdirTemp. Linux /tmp is usually not a symlink, so CI passes a test that
+// chdirs into an unresolved t.TempDir() and compares paths, while macOS
+// fails it.
+func TestTestsStandInCanonicalDirectories(t *testing.T) {
+	files, err := filepath.Glob("*_test.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) == 0 {
+		t.Fatal("no test files found in the package directory")
+	}
+	positions := token.NewFileSet()
+	var calls []string
+	for _, file := range files {
+		parsed, parseErr := parser.ParseFile(positions, file, nil, 0)
+		if parseErr != nil {
+			t.Fatal(parseErr)
+		}
+		for _, decl := range parsed.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Body == nil {
+				continue
+			}
+			ast.Inspect(fn.Body, func(node ast.Node) bool {
+				call, isCall := node.(*ast.CallExpr)
+				if !isCall {
+					return true
+				}
+				if sel, isSel := call.Fun.(*ast.SelectorExpr); isSel && sel.Sel.Name == "Chdir" {
+					calls = append(calls, fn.Name.Name+" at "+positions.Position(call.Pos()).String())
+				}
+				return true
+			})
+		}
+	}
+	if len(calls) != 1 || !strings.HasPrefix(calls[0], "chdirTemp ") {
+		t.Errorf("Chdir calls = %v; change directory only through chdirTemp(t)", calls)
+	}
 }
 
 // addSite provisions example.com on the server, answering health checks.
@@ -194,7 +255,7 @@ func TestSiteAddWritesAStartableProductionConfig(t *testing.T) {
 func TestDeployInstallsOverSSHAndRestartsBehindTheHealthGate(t *testing.T) {
 	w := newWorld(t)
 	dir := w.addSite(t)
-	t.Chdir(t.TempDir())
+	chdirTemp(t)
 	for path, content := range map[string]string{"bin/ocms-linux-amd64": "\x7fELFnew build", "custom/themes/mine/theme.json": "{}"} {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatal(err)
@@ -261,7 +322,7 @@ func TestPullDeliversAScrubbedSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Chdir(t.TempDir())
+	chdirTemp(t)
 	if err := run(context.Background(), w.local, []string{"pull", "root@server", "example_com", "--yes", "--port", "0"}, nil); err != nil {
 		t.Fatalf("%v\n%s", err, w.out.String())
 	}
@@ -467,8 +528,11 @@ func TestRootSiteOperationsRunAsTheSiteUser(t *testing.T) {
 		t.Fatalf("%v\n%s", err, w.out.String())
 	}
 	backups, err := filepath.Glob(filepath.Join(site, "backups", "ocms_*.db.gz"))
-	if err != nil || len(backups) != 1 {
-		t.Fatalf("backups = %v, %v", backups, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(backups) != 1 {
+		t.Fatalf("backups = %v, want one", backups)
 	}
 	info, err := os.Stat(backups[0])
 	if err != nil {
