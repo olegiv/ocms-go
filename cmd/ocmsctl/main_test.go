@@ -426,6 +426,31 @@ func TestMain(m *testing.M) {
 // backups/ or custom/themes for a symlink would aim root's write anywhere.
 func TestRootSiteOperationsRunAsTheSiteUser(t *testing.T) {
 	w, site, rootOnly, uid := nobodySite(t)
+	nobody, err := user.Lookup("nobody")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantGroups, err := nobody.GroupIds()
+	if err != nil {
+		t.Fatal(err)
+	}
+	slices.Sort(wantGroups)
+	w.server.Exec = func(ctx context.Context, c sitectl.Cmd) error {
+		if len(c.Args) > 0 && c.Args[0] == sitectl.SiteOpCommand {
+			if c.Cred == nil || c.Cred.NoSetGroups {
+				t.Fatal("site operation did not set the site user's groups")
+			}
+			var groups []string
+			for _, gid := range c.Cred.Groups {
+				groups = append(groups, strconv.FormatUint(uint64(gid), 10))
+			}
+			slices.Sort(groups)
+			if !slices.Equal(groups, wantGroups) {
+				t.Fatalf("site operation groups = %v, want %v", groups, wantGroups)
+			}
+		}
+		return sitectl.RunCmd(ctx, c)
+	}
 	db, err := sql.Open("sqlite", filepath.Join(site, "data", "ocms.db"))
 	if err != nil {
 		t.Fatal(err)

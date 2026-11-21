@@ -36,10 +36,8 @@ const backupRetention = 30 * 24 * time.Hour
 const SiteOpCommand = "_site"
 
 // siteCred returns the credentials of the site user, nil when this process
-// already runs as that user. Group IDs are left empty on purpose: the site
-// user gets its primary group and none of root's. A site user that is root
-// is refused, for sites registered before this check too: running as it
-// would undo every drop of privileges below.
+// already runs as that user. A child receives the site user's configured
+// groups. UID 0 is refused even for sites registered before this check.
 func (a *App) siteCred(site Site) (*syscall.Credential, error) {
 	u, err := user.Lookup(site.User)
 	if err != nil {
@@ -62,7 +60,19 @@ func (a *App) siteCred(site Site) (*syscall.Credential, error) {
 	if os.Geteuid() != 0 {
 		return nil, fmt.Errorf("run this as root or as %s", site.User)
 	}
-	return &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid)}, nil
+	groupIDs, err := u.GroupIds()
+	if err != nil {
+		return nil, fmt.Errorf("list groups for %s: %w", site.User, err)
+	}
+	groups := make([]uint32, 0, len(groupIDs))
+	for _, id := range groupIDs {
+		group, err := strconv.ParseUint(id, 10, 32)
+		if err != nil {
+			return nil, fmt.Errorf("group ID for %s: %w", site.User, err)
+		}
+		groups = append(groups, uint32(group))
+	}
+	return &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid), Groups: groups}, nil
 }
 
 // asSiteUser runs a site operation with the site user's rights.

@@ -33,8 +33,9 @@ func TestDeploymentMakeTargetsUseGoCLI(t *testing.T) {
 			} // server setup belongs to the core checkout
 			t.Run(file+"/"+command, func(t *testing.T) {
 				site := t.TempDir()
+				buildDir := "custom build"
 				cmd := exec.Command(makeBin, "-n", "-f", filepath.Join(root, file), "SITE_DIR="+site, "CORE_DIR="+root,
-					"BUILD_DIR="+filepath.Join(site, "bin"), "VERSION=test", "GIT_COMMIT=test", "BUILD_TIME=test",
+					"BUILD_DIR="+buildDir, "BINARY_NAME=custom-ocms", "VERSION=test", "GIT_COMMIT=test", "BUILD_TIME=test",
 					"HOST=root@server", "SITES=example_com", "SITE=example_com", "DEPLOY_HOST=root@server", "DEPLOY_SITES=example_com", "SERVER_ARCH=arm64", command)
 				cmd.Dir = site
 				out, err := cmd.CombinedOutput()
@@ -59,6 +60,22 @@ func TestDeploymentMakeTargetsUseGoCLI(t *testing.T) {
 				}
 				if command != "pull" && !strings.Contains(string(out), "--arch arm64") {
 					t.Fatalf("server architecture omitted: %s", out)
+				}
+				if command == "deploy" {
+					artifactDir := buildDir
+					if file == "site.mk" {
+						artifactDir = filepath.Join(site, buildDir)
+					}
+					want := `--binary "` + filepath.Join(artifactDir, "custom-ocms-linux-arm64") + `"`
+					if !strings.Contains(string(out), want) {
+						t.Fatalf("want %s in: %s", want, out)
+					}
+				}
+				if command == "server-setup" {
+					want := `"` + filepath.Join(buildDir, "ocmsctl-linux-arm64") + `"`
+					if !strings.Contains(string(out), "-o "+want) || !strings.Contains(string(out), "--ctl "+want) {
+						t.Fatalf("want bootstrap to upload the built tool %s: %s", want, out)
+					}
 				}
 				// A site's deploy and pull get its paths as make resolved
 				// them, and no env file: this site has none, and neither
