@@ -29,6 +29,9 @@ var indirectPreviewMutations = map[string]bool{
 }
 
 var pageMutationBoundaries = map[string][]writerLocation{
+	// RefreshInitialDemoPageBody guards the original seeded revision and records the new
+	// version inside the demo seed transaction. All other writers advance through Finish.
+	"RefreshInitialDemoPageBody": {{"internal/store/seed_demo.go", "seedDemoPages"}},
 	// Finish advances the revision after detecting a tracked change.
 	"AdvancePageRevision": {{"internal/pagewrite/transaction.go", "Finish"}},
 	// The deletion transaction rejects all references to this language,

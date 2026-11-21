@@ -1146,7 +1146,7 @@ func APIKeysListPage(pc *PageContext, data APIKeysListData) templ.Component {
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = button.Button(button.Props{Size: button.SizeSm, Href: "/api/v2/docs", Target: "_blank"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var63), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = button.Button(button.Props{Size: button.SizeSm, Href: "/admin/api-docs"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var63), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}

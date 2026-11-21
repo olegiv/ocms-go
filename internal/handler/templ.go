@@ -66,6 +66,7 @@ func buildPageContext(
 		StatusPageURL: middleware.GetStatusPageURL(r),
 		CurrentPath:   r.URL.Path,
 		AdminLang:     adminLang,
+		IsDemoMode:    middleware.IsDemoMode(),
 	}
 
 	// Convert breadcrumbs
@@ -1390,7 +1391,9 @@ func convertPagesListViewData(data PagesListData, renderer *render.Renderer, lan
 	}
 
 	pagination := convertPagination(data.Pagination)
-	pagination.BulkAction = bulkPaginationAction(bulkScopePages, redirectAdminPages+RouteSuffixBulkDelete)
+	if !middleware.IsDemoMode() {
+		pagination.BulkAction = bulkPaginationAction(bulkScopePages, redirectAdminPages+RouteSuffixBulkDelete)
+	}
 	pagination.PerPageSelector = perPageSelector(data.Pagination.PerPage, perPageOptionsStandard)
 
 	return adminviews.PagesListViewData{

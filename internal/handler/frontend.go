@@ -319,6 +319,7 @@ type HomeData struct {
 	HeroSubtitle     string
 	HeroCTA          string
 	HeroCTAURL       string
+	DemoLinks        []MenuItem
 	HeroImage        string
 	ShowAllPostsLink bool
 }
@@ -854,6 +855,24 @@ func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 		HeroTitle:        base.SiteName,
 		HeroSubtitle:     base.Site.Description,
 		ShowAllPostsLink: len(recentPageViews) > 6,
+	}
+
+	if middleware.IsDemoMode() {
+		data.HeroSubtitle = i18n.T(languageCode, "demo.home.intro")
+		data.HeroCTA = i18n.T(languageCode, "demo.home.open_admin")
+		data.HeroCTAURL = "/admin/"
+		data.DemoLinks = []MenuItem{{Title: i18n.T(languageCode, "demo.home.github"), URL: "https://github.com/olegiv/ocms-go"}}
+		article, err := h.queries.GetPublishedPageBySlug(ctx, store.DemoArticleSlug)
+		if err == nil {
+			if prefix, ok := h.canonicalPageLanguagePrefix(ctx, article); ok {
+				data.DemoLinks = append(data.DemoLinks, MenuItem{
+					Title: i18n.T(languageCode, "demo.home.read_article", article.Title),
+					URL:   languagePrefixedURL(prefix, "/"+article.Slug),
+				})
+			}
+		} else if !errors.Is(err, sql.ErrNoRows) {
+			h.logger.Warn("cannot load demo walkthrough article", "error", err)
+		}
 	}
 
 	h.render(w, r, "home", data)

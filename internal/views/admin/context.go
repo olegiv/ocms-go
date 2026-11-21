@@ -30,6 +30,7 @@ type PageContext struct {
 	LangOptions    []LangOption
 	Breadcrumbs    []Breadcrumb
 	SidebarModules []SidebarModule
+	IsDemoMode     bool
 	// AccountLayout selects account navigation within the shared dashboard shell.
 	AccountLayout bool
 }

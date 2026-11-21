@@ -3722,6 +3722,34 @@ tr.unread {
   border: 1px solid rgba($warning, 0.2);
 }
 
+// Keep the action in place while its help opens, including on small screens.
+.action-help {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-2;
+  position: relative;
+
+  summary {
+    cursor: pointer;
+    text-decoration: underline;
+    font-size: $font-size-sm;
+  }
+
+  details > p {
+    position: absolute;
+    z-index: 5;
+    bottom: 100%;
+    inset-inline-end: 0;
+    width: min(18rem, 75vw);
+    padding: .6rem .8rem;
+    border: 1px solid $gray-300;
+    border-radius: .35rem;
+    background: $white;
+    color: $gray-900;
+    text-align: start;
+  }
+}
+
 .form-actions {
   display: flex;
   justify-content: flex-end;

@@ -30,7 +30,7 @@ type publicationSite struct {
 const (
 	newPageOnly   = "inserts a new page: no AI access or authoring history exists before its first revision, and ValidatePublication passes such pages"
 	draftOnly     = "creates a draft with no lifecycle fields"
-	startupDemo   = "fixed demo content written once at startup; skips existing pages"
+	startupDemo   = "fixed demo content and original, revision-guarded demo instructions written at startup"
 	validateInUse = "ValidatePublication"
 )
 

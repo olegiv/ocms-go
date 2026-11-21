@@ -1078,6 +1078,7 @@ func (h *FormsHandler) Show(w http.ResponseWriter, r *http.Request) {
 	base := h.getPublicFormBaseTemplateData(r, *form)
 	data := FormTemplateData{
 		BaseTemplateData: base,
+		PreviewOnly:      middleware.IsDemoMode() && store.IsDemoContactForm(*form),
 		Form:             *form,
 		Fields:           fields,
 		Errors:           make(map[string]string),
@@ -1094,6 +1095,11 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 
 	form := h.getActiveFormBySlug(w, r, slug)
 	if form == nil {
+		return
+	}
+
+	if middleware.IsDemoMode() && store.IsDemoContactForm(*form) {
+		http.Error(w, "This demo contact form is a preview and does not accept submissions.", http.StatusForbidden)
 		return
 	}
 
@@ -2059,11 +2065,12 @@ func (h *FormsHandler) TranslateForm(w http.ResponseWriter, r *http.Request) {
 // FormTemplateData holds data for form template rendering.
 type FormTemplateData struct {
 	BaseTemplateData
-	Form    store.Form
-	Fields  []store.FormField
-	Errors  map[string]string
-	Values  map[string]string
-	Success bool
+	PreviewOnly bool
+	Form        store.Form
+	Fields      []store.FormField
+	Errors      map[string]string
+	Values      map[string]string
+	Success     bool
 	// CSRFToken is intentionally left unassigned so existing HTML theme
 	// templates that still reference {{.CSRFToken}} render an empty string
 	// instead of failing with "can't evaluate field CSRFToken". The session
@@ -2136,6 +2143,7 @@ func (h *FormsHandler) buildPublicFormViewData(r *http.Request, data FormTemplat
 	return PublicFormViewData{
 		Base:           data.BaseTemplateData,
 		FormTitle:      data.Form.Title,
+		PreviewOnly:    data.PreviewOnly,
 		FormSlug:       data.Form.Slug,
 		Description:    description,
 		SuccessMessage: successMsg,

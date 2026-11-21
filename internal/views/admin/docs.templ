@@ -252,3 +252,12 @@ templ endpointMethodBadge(method string) {
 			}
 	}
 }
+
+// APIReferencePage keeps the live Swagger UI and its styles isolated in the admin layout.
+templ APIReferencePage(pc *PageContext) {
+	@AdminLayout(pc) {
+		@PageHeader(pc.T("nav.api_docs"), "") {
+		}
+		<iframe src="/api/v2/docs" title={ pc.T("nav.api_docs") } class="w-full rounded-md border" style="height: 75vh;"></iframe>
+	}
+}

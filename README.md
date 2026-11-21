@@ -13,7 +13,7 @@
 
 **Live demo:** [ocms-demo.fly.dev](https://ocms-demo.fly.dev/) · **Admin:** [/admin](https://ocms-demo.fly.dev/admin)
 
-Poke around, break things, see how it feels. The demo resets to a clean state every 24 hours (daily cron at 01:00 UTC, plus a catch-up reset on machine wake if Fly auto-stopped the instance during a quiet period). Worst-case staleness: 24h + the idle gap.
+Use **Fill demo credentials** to sign in. Open the sample article from the dashboard or create a draft and choose an image from the media library. Other visitors share the demo, so use sample content. Drafts are cleared at the daily 01:00 UTC reset or on the next wake if the reset was missed.
 
 Hosted on [Fly.io](https://fly.io) — see [`fly.toml`](fly.toml) and [`docs/demo-deployment.md`](docs/demo-deployment.md) for the full deployment recipe.
 

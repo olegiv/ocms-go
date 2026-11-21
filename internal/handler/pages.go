@@ -374,6 +374,7 @@ type PageCategoryNode struct {
 type FeaturedImageData struct {
 	ID        int64
 	Filename  string
+	Alt       string
 	Filepath  string
 	Thumbnail string
 	Mimetype  string
@@ -533,13 +534,14 @@ func (h *PagesHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 
 // Create handles POST /admin/pages - creates a new page.
 func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
-	if demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminPagesNew) {
-		return
-	}
-
 	lang := h.renderer.GetAdminLang(r)
 
 	if !parseFormOrRedirect(w, r, h.renderer, redirectAdminPagesNew) {
+		return
+	}
+
+	if demoPageFormBlocked(r) {
+		demoDraftWriteForbidden(w, lang)
 		return
 	}
 
@@ -692,6 +694,27 @@ func isValidPageType(pageType string) bool {
 	return false
 }
 
+// Only the admin page form can save drafts on the shared demo.
+func demoPageFormBlocked(r *http.Request) bool {
+	if !middleware.IsDemoMode() {
+		return false
+	}
+	status := r.FormValue("status")
+	return (status != "" && status != PageStatusDraft) ||
+		r.FormValue("scheduled_at") != "" || r.FormValue("published_at") != "" ||
+		r.FormValue("ai_access_present") != ""
+}
+
+func protectedDemoPage(page store.Page) bool {
+	return middleware.IsDemoMode() && (page.Status != PageStatusDraft || page.ScheduledAt.Valid)
+}
+
+// demoDraftWriteForbidden is the same policy response for a disallowed status,
+// a protected page, or a draft that became protected while it was open.
+func demoDraftWriteForbidden(w http.ResponseWriter, lang string) {
+	http.Error(w, i18n.T(lang, "pages.demo_drafts_only"), http.StatusForbidden)
+}
+
 // EditForm handles GET /admin/pages/{id} - displays the edit page form.
 func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	adminLang := h.renderer.GetAdminLang(r)
@@ -704,6 +727,20 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 	page, ok := h.requirePageWithRedirect(w, r, id)
 	if !ok {
+		return
+	}
+
+	if protectedDemoPage(page) {
+		data := adminviews.DemoProtectedPageViewData{Title: page.Title, Summary: page.Summary, Body: page.Body, StatusKey: "status.scheduled"}
+		if page.Status == PageStatusPublished {
+			data.StatusKey = "status.published"
+			data.PublicURL = publicPagePath(r.Context(), h.queries, page)
+		}
+		if image := h.loadImageData(r.Context(), page.FeaturedImageID); image != nil {
+			data.ImageURL, data.ImageAlt = image.Filepath, image.Alt
+		}
+		pc := buildPageContext(r, h.sessionManager, h.renderer, page.Title, pagesEditBreadcrumbs(adminLang, page.Title, page.ID))
+		renderTempl(w, r, adminviews.DemoProtectedPage(pc, data))
 		return
 	}
 
@@ -792,10 +829,6 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 // Update handles PUT /admin/pages/{id} - updates an existing page.
 func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
-	if demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminPages) {
-		return
-	}
-
 	lang := h.renderer.GetAdminLang(r)
 
 	id, err := ParseIDParam(r)
@@ -810,6 +843,11 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	existingPage, err := h.queries.GetPageByID(r.Context(), id)
 	if err != nil {
 		h.preservePageEdits(w, r, id, fmt.Errorf("load page before editing: %w", err))
+		return
+	}
+
+	if protectedDemoPage(existingPage) || demoPageFormBlocked(r) {
+		demoDraftWriteForbidden(w, lang)
 		return
 	}
 
@@ -927,6 +965,10 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		VideoUrl:          input.VideoURL,
 		VideoTitle:        input.VideoTitle,
 	}, existingPage.Slug, h.formWrite(r, input, submittedPageRevision(r)))
+	if errors.Is(err, errProtectedDemoPage) {
+		demoDraftWriteForbidden(w, lang)
+		return
+	}
 	if h.pageConflict(w, r, err, existingPage, input) {
 		return
 	}
@@ -1110,7 +1152,11 @@ func (h *PagesHandler) renderPageFormErrors(w http.ResponseWriter, r *http.Reque
 		data.AllLanguages = ListActiveLanguagesWithFallback(ctx, h.queries)
 	} else {
 		titleKey, breadcrumbs = "pages.edit", pagesEditBreadcrumbs(lang, existingPage.Title, pageID)
-		data.PublicURL = publicPagePath(ctx, h.queries, *existingPage)
+		if middleware.IsDemoMode() {
+			data.PublicURL = sessionPreviewPath(*existingPage)
+		} else {
+			data.PublicURL = publicPagePath(ctx, h.queries, *existingPage)
+		}
 		// Keep the submitted revision, including an explicit conflict confirmation.
 		if revision := submittedPageRevision(r); revision != nil {
 			data.FormValues["base_revision"] = strconv.FormatInt(*revision, 10)
@@ -1760,6 +1806,8 @@ func (h *PagesHandler) validatePageSlugUpdate(ctx context.Context, slug string, 
 // path segment, discovered inside the write's own transaction.
 var errPageRouteTaken = errors.New("page route is taken by a language prefix")
 
+var errProtectedDemoPage = errors.New("page is read-only in demo mode")
+
 // pageFormWrite carries the editor, displayed revision and form-related work.
 type pageFormWrite struct {
 	UserID       int64
@@ -1795,6 +1843,10 @@ func (h *PagesHandler) updatePageGuarded(ctx context.Context, params store.Updat
 		current, err := work.Track(ctx, params.ID, option.BaseRevision, true)
 		if err != nil {
 			return store.Page{}, err
+		}
+		// The scheduler can publish a page after the form was opened.
+		if protectedDemoPage(current) {
+			return store.Page{}, errProtectedDemoPage
 		}
 		if params.FeaturedImageID != current.FeaturedImageID {
 			if err := pagewrite.FeaturedImageSize(ctx, work.Q, params.FeaturedImageID); err != nil {
@@ -1968,6 +2020,7 @@ func (h *PagesHandler) queryImageData(ctx context.Context, id sql.NullInt64) (*F
 	return &FeaturedImageData{
 		ID:        media.ID,
 		Filename:  media.Filename,
+		Alt:       media.Alt.String,
 		Filepath:  model.MediaURL(model.VariantOriginal, media.Uuid, media.Filename),
 		Thumbnail: model.MediaURL("thumbnail", media.Uuid, media.Filename),
 		Mimetype:  media.MimeType,
@@ -2058,6 +2111,9 @@ const (
 // pasted embed or a value outside the allowed range would otherwise vanish
 // without a word.
 func (h *PagesHandler) pageSaved(w http.ResponseWriter, r *http.Request, pageID int64, successURL, action string, removed []string) {
+	if middleware.IsDemoMode() {
+		successURL = fmt.Sprintf(redirectAdminPagesID, pageID)
+	}
 	if len(removed) == 0 {
 		flashSuccess(w, r, h.renderer, successURL, action+" successfully")
 		return

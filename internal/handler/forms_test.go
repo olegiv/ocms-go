@@ -13,6 +13,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"testing"
@@ -1166,5 +1168,53 @@ func TestEscapeCSVRow_StillEscapesQuotesAndCommas(t *testing.T) {
 
 	if got != want {
 		t.Fatalf("escapeCSVRow() = %q, want %q", got, want)
+	}
+}
+
+// The shared demo flag is read once per process.
+func TestDemoContactPreview(t *testing.T) {
+	if os.Getenv("OCMS_TEST_DEMO_CONTACT") != "1" {
+		cmd := exec.Command(os.Args[0], "-test.run=^TestDemoContactPreview$")
+		cmd.Env = append(os.Environ(), "OCMS_DEMO_MODE=true", "OCMS_TEST_DEMO_CONTACT=1")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("demo contact preview: %v\n%s", err, out)
+		}
+		return
+	}
+	db, sm := testHandlerSetup(t)
+	q := store.New(db)
+	now := time.Now()
+	form, err := q.CreateForm(t.Context(), store.CreateFormParams{
+		Name: "Sample contact form", Slug: store.DemoContactFormSlug, Title: "Contact the editorial team",
+		LanguageCode: "en", IsActive: true, CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.CreateFormField(t.Context(), store.CreateFormFieldParams{
+		FormID: form.ID, Name: "message", Label: "Message", Type: "textarea", LanguageCode: "en", CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	tm := loadedFrontendThemeManager(t, "default")
+	menu := service.NewMenuService(db, nil)
+	frontend := NewFrontendHandler(db, tm, nil, slog.Default(), menu, nil)
+	h := NewFormsHandler(db, nil, sm, nil, tm, nil, menu, frontend)
+	router := chi.NewRouter()
+	router.Get(RouteFormsSlug, h.Show)
+	router.Post(RouteFormsSlug, h.Submit)
+
+	view := httptest.NewRecorder()
+	router.ServeHTTP(view, httptest.NewRequest(http.MethodGet, "/forms/contact", nil))
+	if view.Code != http.StatusOK || !strings.Contains(view.Body.String(), "fieldset disabled") || !strings.Contains(view.Body.String(), "Message") {
+		t.Fatalf("expected an inspectable preview with disabled controls: %d, %s", view.Code, view.Body.String())
+	}
+	post := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/forms/contact", strings.NewReader("message=sample"))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	router.ServeHTTP(post, request)
+	n, err := q.CountFormSubmissions(t.Context(), form.ID)
+	if post.Code != http.StatusForbidden || err != nil || n != 0 {
+		t.Fatalf("posted to demo sample: status %d, submissions %d, %v", post.Code, n, err)
 	}
 }

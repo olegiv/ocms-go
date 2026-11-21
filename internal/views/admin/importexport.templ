@@ -288,7 +288,7 @@ templ ExportPage(pc *PageContext, data ExportViewData) {
 						</div>
 					</div>
 				</div>
-				<div class="export-info">
+				<div class="export-info" x-show="!includeMedia || !includeMediaFiles">
 					@iconInfo()
 					<p>{ pc.T("export.info") }</p>
 				</div>
@@ -296,11 +296,16 @@ templ ExportPage(pc *PageContext, data ExportViewData) {
 					@iconArchive()
 					<p>{ pc.T("export.zip_info") }</p>
 				</div>
+				if pc.IsDemoMode {
+					<p class="form-hint">{ pc.T("export.demo_restriction") }</p>
+				}
 				<div class="form-actions">
-					@button.Button(button.Props{Type: button.TypeSubmit}) {
-						@iconDownload()
-						<span x-show="!includeMedia || !includeMediaFiles">{ pc.T("export.download") }</span>
-						<span x-show="includeMedia && includeMediaFiles" x-cloak>{ pc.T("export.download_zip") }</span>
+					@actionHelp(pc, "export.action_help") {
+						@button.Button(button.Props{Type: button.TypeSubmit, Disabled: pc.IsDemoMode}) {
+							@iconDownload()
+							<span x-show="!includeMedia || !includeMediaFiles">{ pc.T("export.download") }</span>
+							<span x-show="includeMedia && includeMediaFiles" x-cloak>{ pc.T("export.download_zip") }</span>
+						}
 					}
 				</div>
 				</form>
@@ -316,7 +321,25 @@ templ ImportPage(pc *PageContext, data ImportViewData) {
 		}
 		// Step 1: File Upload
 		if data.ValidationResult == nil && data.ImportResult == nil {
-			@importFileUpload(pc)
+			if pc.IsDemoMode {
+				@card.Card() {
+					@card.Content(card.ContentProps{Class: "p-6"}) {
+						<h2 class="section-title">{ pc.T("import.options") }</h2>
+						<p>{ pc.T("import.demo_preview") }</p>
+						<p class="form-hint">{ pc.T("import.demo_restriction") }</p>
+						<div class="form-actions">
+							@actionHelp(pc, "import.validate_help") {
+								@button.Button(button.Props{Type: button.TypeButton, Disabled: true}) {
+									@iconUpload()
+									{ pc.T("import.validate") }
+								}
+							}
+						</div>
+					}
+				}
+			} else {
+				@importFileUpload(pc)
+			}
 		}
 		// Step 2: Validation Results & Import Options
 		if data.ValidationResult != nil && data.ImportResult == nil {
@@ -399,9 +422,11 @@ templ importFileUpload(pc *PageContext) {
 				<p>{ pc.T("import.info") }</p>
 			</div>
 			<div class="media-dropzone-buttons">
-				@button.Button(button.Props{Type: button.TypeSubmit, Attributes: templ.Attributes{":disabled": "!selectedFile"}}) {
-					@iconUpload()
-					{ pc.T("import.validate") }
+				@actionHelp(pc, "import.validate_help") {
+					@button.Button(button.Props{Type: button.TypeSubmit, Attributes: templ.Attributes{":disabled": "!selectedFile"}}) {
+						@iconUpload()
+						{ pc.T("import.validate") }
+					}
 				}
 			</div>
 			</form>
@@ -572,9 +597,11 @@ templ importOptionsForm(pc *PageContext, data ImportViewData) {
 				@button.Button(button.Props{Variant: button.VariantSecondary, Href: "/admin/import"}) {
 					{ pc.T("btn.cancel") }
 				}
-				@button.Button(button.Props{Type: button.TypeSubmit}) {
-					@iconUpload()
-					{ pc.T("import.start_import") }
+				@actionHelp(pc, "import.apply_help") {
+					@button.Button(button.Props{Type: button.TypeSubmit}) {
+						@iconUpload()
+						{ pc.T("import.start_import") }
+					}
 				}
 			</div>
 			</form>

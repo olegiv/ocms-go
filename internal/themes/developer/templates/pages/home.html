@@ -21,9 +21,11 @@
                 <p class="dev-hero-subtitle">{{.HeroSubtitle}}</p>
                 {{end}}
                 {{if .HeroCTA}}
-                <div class="dev-terminal-line">
-                    <span class="dev-prompt">$</span>
-                    <a href="{{.HeroCTAURL}}" class="dev-btn dev-btn-primary">{{.HeroCTA}} <span class="dev-cursor">_</span></a>
+                <div class="dev-hero-actions">
+                    <a href="{{.HeroCTAURL}}" class="dev-btn dev-btn-primary">{{.HeroCTA}}</a>
+                    {{range .DemoLinks}}
+                    <a href="{{.URL}}" class="dev-btn dev-btn-secondary">{{.Title}}</a>
+                    {{end}}
                 </div>
                 {{end}}
                 {{end}}

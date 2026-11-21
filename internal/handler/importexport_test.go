@@ -21,12 +21,15 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/cache"
+	"github.com/olegiv/ocms-go/internal/i18n"
+	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/transfer"
@@ -499,4 +502,58 @@ func statementInvalidatesCaches(statement ast.Stmt) bool {
 	}
 	selector, ok := call.Fun.(*ast.SelectorExpr)
 	return ok && selector.Sel.Name == "invalidateCachesAfterImport"
+}
+
+// Demo mode is chosen once at process startup. Test its read-only previews
+// and direct POSTs in the same configuration used by the shared instance.
+func TestImportExportDemoPreview(t *testing.T) {
+	if os.Getenv("OCMS_TEST_TRANSFER_DEMO") != "1" {
+		cmd := exec.Command(os.Args[0], "-test.run=^TestImportExportDemoPreview$")
+		cmd.Env = append(os.Environ(), "OCMS_DEMO_MODE=true", "OCMS_TEST_TRANSFER_DEMO=1")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("demo child: %v\n%s", err, out)
+		}
+		return
+	}
+	if err := i18n.Init(nil); err != nil {
+		t.Fatal(err)
+	}
+	db, sm := testHandlerSetup(t)
+	user := createTestAdminUser(t, db)
+	renderer, err := render.New(render.Config{TemplatesFS: os.DirFS("../../web/templates"), SessionManager: sm, DB: db, IsDev: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := NewImportExportHandler(db, renderer, sm)
+	for _, preview := range []struct {
+		path, message string
+		handler       http.HandlerFunc
+	}{
+		{"/admin/export", "export.demo_restriction", h.ExportForm},
+		{"/admin/import", "import.demo_restriction", h.ImportForm},
+	} {
+		req := addUserToContext(requestWithSession(sm, httptest.NewRequest(http.MethodGet, preview.path, nil)), &user)
+		w := httptest.NewRecorder()
+		preview.handler(w, req)
+		body := w.Body.String()
+		if w.Code != http.StatusOK || !strings.Contains(body, i18n.T("en", preview.message)) || !strings.Contains(body, "disabled") || strings.Contains(body, `name="import_file"`) {
+			t.Errorf("GET %s did not render a read-only preview (status %d)", preview.path, w.Code)
+		}
+	}
+	for _, action := range []struct {
+		path        string
+		handler     http.HandlerFunc
+		restriction middleware.DemoRestriction
+	}{
+		{"/admin/export", h.Export, middleware.RestrictionExportData},
+		{"/admin/import/validate", h.ImportValidate, middleware.RestrictionImportData},
+		{"/admin/import", h.Import, middleware.RestrictionImportData},
+	} {
+		req := addUserToContext(requestWithSession(sm, httptest.NewRequest(http.MethodPost, action.path, nil)), &user)
+		w := httptest.NewRecorder()
+		action.handler(w, req)
+		if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/admin" || sm.GetString(req.Context(), "flash") != middleware.DemoModeMessageDetailed(action.restriction) {
+			t.Errorf("POST %s did not return the demo refusal (status %d)", action.path, w.Code)
+		}
+	}
 }

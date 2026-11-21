@@ -4,24 +4,16 @@
 package store
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"image"
-	"image/color"
-	"image/draw"
-	"image/png"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"time"
 
-	"github.com/disintegration/imaging"
-	"github.com/google/uuid"
 	"github.com/olegiv/ocms-go/internal/auth"
 )
 
@@ -87,8 +79,12 @@ func SeedDemo(ctx context.Context, db *sql.DB) error {
 	}
 
 	// Create demo pages
-	if err := seedDemoPages(ctx, queries, adminID, defaultLang.Code, categoryIDs, tagIDs, mediaIDs); err != nil {
+	if err := seedDemoPages(ctx, tx, adminID, defaultLang.Code, categoryIDs, tagIDs, mediaIDs); err != nil {
 		return fmt.Errorf("seeding demo pages: %w", err)
+	}
+
+	if err := seedDemoContactForm(ctx, queries, defaultLang.Code); err != nil {
+		return fmt.Errorf("seeding demo contact form: %w", err)
 	}
 
 	// Create demo menu items
@@ -152,18 +148,6 @@ func RotateDemoAdminPassword(ctx context.Context, db *sql.DB) (string, error) {
 		return "", nil
 	}
 
-	queries := New(db)
-	admin, err := queries.GetUserByEmail(ctx, DemoAdminEmail)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return "", nil
-		}
-		return "", fmt.Errorf("loading demo admin account: %w", err)
-	}
-	if admin.Role != "admin" {
-		return "", nil
-	}
-
 	raw := make([]byte, 18)
 	if _, err := rand.Read(raw); err != nil {
 		return "", fmt.Errorf("generating demo admin password: %w", err)
@@ -174,12 +158,15 @@ func RotateDemoAdminPassword(ctx context.Context, db *sql.DB) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("hashing rotated demo admin password: %w", err)
 	}
-	if err := queries.UpdateUserPassword(ctx, UpdateUserPasswordParams{
+	updated, err := New(db).RotatePublicDemoAdminPassword(ctx, RotatePublicDemoAdminPasswordParams{
 		PasswordHash: passwordHash,
 		UpdatedAt:    time.Now(),
-		ID:           admin.ID,
-	}); err != nil {
+	})
+	if err != nil {
 		return "", fmt.Errorf("updating demo admin password: %w", err)
+	}
+	if updated == 0 {
+		return "", nil
 	}
 
 	return password, nil
@@ -399,21 +386,65 @@ type demoPage struct {
 	FeaturedImage   string // Filename from demo media to use as featured image
 }
 
-func seedDemoPages(ctx context.Context, queries *Queries, authorID int64, langCode string, categoryIDs, tagIDs, mediaIDs map[string]int64) error {
-	// Check if pages already exist
+func seedDemoPages(ctx context.Context, tx *sql.Tx, authorID int64, langCode string, categoryIDs, tagIDs, mediaIDs map[string]int64) error {
+	queries := New(tx)
 	count, err := queries.CountPages(ctx)
 	if err != nil {
 		return err
-	}
-	if count > 0 {
-		slog.Info("pages already exist, skipping demo pages")
-		return nil
 	}
 
 	now := time.Now()
 	pages := getDemoPages()
 
+	recordVersion := func(page Page) error {
+		snapshot, err := queries.GetPageSnapshot(ctx, page.ID)
+		if err != nil {
+			return err
+		}
+		_, err = queries.CreateCompletePageVersion(ctx, CreateCompletePageVersionParams{
+			PageID: page.ID, Title: page.Title, Body: page.Body, ChangedBy: authorID,
+			CreatedAt: now, Revision: sql.NullInt64{Int64: page.Revision, Valid: true},
+			SnapshotJson: sql.NullString{String: snapshot, Valid: true},
+		})
+		if err != nil {
+			return err
+		}
+		return queries.CreateContentProvenance(ctx, CreateContentProvenanceParams{
+			PageID: page.ID, Revision: page.Revision, Source: "system", Transport: "demo_seed",
+			ValidatedJson: "{}", ReportedJson: "{}", CreatedAt: now,
+		})
+	}
+
 	for i, page := range pages {
+		if count > 0 {
+			if page.Status != "draft" {
+				// Older demo databases already contain the published pages.
+				// Refresh only the original, unedited demo instructions.
+				switch page.Slug {
+				case "home", "contact", DemoArticleSlug:
+					updated, err := queries.RefreshInitialDemoPageBody(ctx, RefreshInitialDemoPageBodyParams{
+						Body: page.Body, UpdatedAt: now, Slug: page.Slug, LanguageCode: langCode, AuthorID: authorID, Title: page.Title,
+					})
+					if errors.Is(err, sql.ErrNoRows) {
+						continue
+					}
+					if err != nil {
+						return err
+					}
+					if err := recordVersion(updated); err != nil {
+						return err
+					}
+				}
+				continue
+			}
+			exists, err := queries.SlugOrAliasExists(ctx, SlugOrAliasExistsParams{Slug: page.Slug, Alias: page.Slug})
+			if err != nil {
+				return err
+			}
+			if exists != 0 {
+				continue
+			}
+		}
 		publishedAt := sql.NullTime{Valid: false}
 		if page.Status == "published" {
 			publishedAt = sql.NullTime{Time: now.Add(-time.Duration(len(pages)-i) * 24 * time.Hour), Valid: true}
@@ -477,14 +508,7 @@ func seedDemoPages(ctx context.Context, queries *Queries, authorID int64, langCo
 				}
 			}
 		}
-		snapshot, err := queries.GetPageSnapshot(ctx, created.ID)
-		if err != nil {
-			return err
-		}
-		if _, err = queries.CreateCompletePageVersion(ctx, CreateCompletePageVersionParams{PageID: created.ID, Title: created.Title, Body: created.Body, ChangedBy: authorID, CreatedAt: now, Revision: sql.NullInt64{Int64: created.Revision, Valid: true}, SnapshotJson: sql.NullString{String: snapshot, Valid: true}}); err != nil {
-			return err
-		}
-		if err = queries.CreateContentProvenance(ctx, CreateContentProvenanceParams{PageID: created.ID, Revision: created.Revision, Source: "system", Transport: "demo_seed", ValidatedJson: "{}", ReportedJson: "{}", CreatedAt: now}); err != nil {
+		if err := recordVersion(created); err != nil {
 			return err
 		}
 
@@ -507,7 +531,7 @@ func getDemoPages() []demoPage {
 			MetaDescription: "oCMS is a lightweight, fast, and secure content management system built with Go.",
 			CategorySlugs:   []string{},
 			TagSlugs:        []string{},
-			FeaturedImage:   "hero-banner.png",
+			FeaturedImage:   "studio-table.jpg",
 		},
 		{
 			Title:           "About Us",
@@ -519,7 +543,7 @@ func getDemoPages() []demoPage {
 			MetaDescription: "Learn about oCMS, our mission, and the technology behind this modern CMS.",
 			CategorySlugs:   []string{},
 			TagSlugs:        []string{},
-			FeaturedImage:   "about-image.png",
+			FeaturedImage:   "reader-research.jpg",
 		},
 		{
 			Title:           "Contact",
@@ -531,7 +555,7 @@ func getDemoPages() []demoPage {
 			MetaDescription: "Get in touch with the oCMS team.",
 			CategorySlugs:   []string{},
 			TagSlugs:        []string{},
-			FeaturedImage:   "team-photo.png",
+			FeaturedImage:   "mobile-wireframe.jpg",
 		},
 		{
 			Title:           "Cookie Policy",
@@ -544,10 +568,21 @@ func getDemoPages() []demoPage {
 			CategorySlugs:   []string{},
 			TagSlugs:        []string{},
 		},
+		{
+			Title: "Planning the next issue",
+			Slug:  "planning-the-next-issue",
+			Body: `<p>Our next studio journal will follow a story from the first interview to the published page.</p>
+<h2>Outline for the editorial meeting</h2>
+<ul><li>Choose the opening photograph and write its caption.</li><li>Review the interview notes and confirm the pull quote.</li><li>Check the article on a phone before sending it for review.</li></ul>
+<p><em>Editor’s note: the interview and opening photograph are still under review.</em></p>`,
+			Status:        "draft",
+			PageType:      "post",
+			FeaturedImage: "studio-table.jpg",
+		},
 		// Blog posts
 		{
 			Title:           "Getting Started with oCMS",
-			Slug:            "getting-started-with-ocms",
+			Slug:            DemoArticleSlug,
 			Body:            getGettingStartedBody(),
 			Status:          "published",
 			PageType:        "post",
@@ -555,7 +590,7 @@ func getDemoPages() []demoPage {
 			MetaDescription: "Run a prebuilt oCMS release locally, explore the shared demo, and find current instructions for themes, deployment, and building from source.",
 			CategorySlugs:   []string{"blog", "resources"},
 			TagSlugs:        []string{"tutorial", "featured"},
-			FeaturedImage:   "blog-post-1.png",
+			FeaturedImage:   "planning-workshop.jpg",
 		},
 		{
 			Title:           "Building Modern Websites with Go",
@@ -567,7 +602,7 @@ func getDemoPages() []demoPage {
 			MetaDescription: "Discover why Go is an excellent choice for building fast, secure web applications.",
 			CategorySlugs:   []string{"blog"},
 			TagSlugs:        []string{"go", "web-development", "tutorial"},
-			FeaturedImage:   "blog-post-2.png",
+			FeaturedImage:   "service-architecture.jpg",
 		},
 		{
 			Title:           "oCMS Theme Development",
@@ -579,7 +614,7 @@ func getDemoPages() []demoPage {
 			MetaDescription: "A comprehensive guide to creating beautiful custom themes for oCMS.",
 			CategorySlugs:   []string{"blog", "resources"},
 			TagSlugs:        []string{"tutorial", "design", "web-development"},
-			FeaturedImage:   "blog-post-3.png",
+			FeaturedImage:   "geometric-facade.jpg",
 		},
 		// Portfolio items
 		{
@@ -592,7 +627,7 @@ func getDemoPages() []demoPage {
 			MetaDescription: "A modern e-commerce platform built with oCMS and custom integrations.",
 			CategorySlugs:   []string{"portfolio"},
 			TagSlugs:        []string{"featured", "web-development"},
-			FeaturedImage:   "portfolio-1.png",
+			FeaturedImage:   "book-catalog.jpg",
 		},
 		{
 			Title:           "Corporate Website Redesign",
@@ -604,7 +639,7 @@ func getDemoPages() []demoPage {
 			MetaDescription: "Complete redesign of a Fortune 500 company website using oCMS.",
 			CategorySlugs:   []string{"portfolio"},
 			TagSlugs:        []string{"design", "featured"},
-			FeaturedImage:   "portfolio-2.png",
+			FeaturedImage:   "gallery-staircase.jpg",
 		},
 		// Services
 		{
@@ -617,7 +652,7 @@ func getDemoPages() []demoPage {
 			MetaDescription: "Custom web development services using modern technologies and best practices.",
 			CategorySlugs:   []string{"services"},
 			TagSlugs:        []string{"web-development"},
-			FeaturedImage:   "services-web.png",
+			FeaturedImage:   "studio-interior.jpg",
 		},
 	}
 }
@@ -675,215 +710,6 @@ func seedDemoMenuItems(ctx context.Context, queries *Queries) error {
 	return nil
 }
 
-// demoImage defines a placeholder image to generate.
-type demoImage struct {
-	Filename string
-	Alt      string
-	Width    int
-	Height   int
-	Color    color.RGBA
-}
-
-func seedDemoMedia(ctx context.Context, queries *Queries, userID int64, langCode, uploadsDir string) (map[string]int64, error) {
-	mediaIDs := make(map[string]int64)
-
-	// Check if media already exists
-	count, err := queries.CountMedia(ctx)
-	if err != nil {
-		return mediaIDs, err
-	}
-	if count > 0 {
-		slog.Info("media already exists, skipping demo media")
-		// Return existing media IDs by filename
-		media, err := queries.ListMedia(ctx, ListMediaParams{Limit: 100, Offset: 0})
-		if err == nil {
-			for _, m := range media {
-				mediaIDs[m.Filename] = m.ID
-			}
-		}
-		return mediaIDs, nil
-	}
-
-	now := time.Now()
-
-	// Define demo images with different colors for variety
-	// All images are 2400x1600 to ensure all variants (including large 1920x1080) are created
-	images := []demoImage{
-		{Filename: "hero-banner.png", Alt: "Hero banner image", Width: 2400, Height: 1600, Color: color.RGBA{R: 59, G: 130, B: 246, A: 255}},             // Blue
-		{Filename: "about-image.png", Alt: "About page image", Width: 2400, Height: 1600, Color: color.RGBA{R: 16, G: 185, B: 129, A: 255}},              // Green
-		{Filename: "blog-post-1.png", Alt: "Blog post featured image", Width: 2400, Height: 1600, Color: color.RGBA{R: 245, G: 158, B: 11, A: 255}},      // Amber
-		{Filename: "blog-post-2.png", Alt: "Blog tutorial image", Width: 2400, Height: 1600, Color: color.RGBA{R: 139, G: 92, B: 246, A: 255}},           // Purple
-		{Filename: "blog-post-3.png", Alt: "Blog news image", Width: 2400, Height: 1600, Color: color.RGBA{R: 236, G: 72, B: 153, A: 255}},               // Pink
-		{Filename: "portfolio-1.png", Alt: "E-commerce project screenshot", Width: 2400, Height: 1600, Color: color.RGBA{R: 20, G: 184, B: 166, A: 255}}, // Teal
-		{Filename: "portfolio-2.png", Alt: "Corporate website screenshot", Width: 2400, Height: 1600, Color: color.RGBA{R: 99, G: 102, B: 241, A: 255}},  // Indigo
-		{Filename: "services-web.png", Alt: "Web development services", Width: 2400, Height: 1600, Color: color.RGBA{R: 239, G: 68, B: 68, A: 255}},      // Red
-		{Filename: "team-photo.png", Alt: "Team photo placeholder", Width: 2400, Height: 1600, Color: color.RGBA{R: 107, G: 114, B: 128, A: 255}},        // Gray
-		{Filename: "logo-sample.png", Alt: "Sample logo image", Width: 2400, Height: 1600, Color: color.RGBA{R: 34, G: 197, B: 94, A: 255}},              // Green-500
-	}
-
-	for _, img := range images {
-		mediaID, err := createDemoImage(ctx, queries, userID, langCode, uploadsDir, img, now)
-		if err != nil {
-			slog.Warn("failed to create demo image", "filename", img.Filename, "error", err)
-			// Continue with other images
-		} else if mediaID > 0 {
-			mediaIDs[img.Filename] = mediaID
-		}
-	}
-
-	slog.Info("seeded demo media", "count", len(images))
-	return mediaIDs, nil
-}
-
-// imageVariant defines settings for a single image variant.
-type imageVariant struct {
-	name   string
-	width  int
-	height int
-	crop   bool
-}
-
-// demoImageVariants matches the variants defined in internal/model/media.go
-var demoImageVariants = []imageVariant{
-	{name: "thumbnail", width: 150, height: 150, crop: true},
-	{name: "grid", width: 256, height: 256, crop: true},
-	{name: "small", width: 400, height: 300, crop: false},
-	{name: "medium", width: 800, height: 600, crop: false},
-	{name: "large", width: 1920, height: 1080, crop: false},
-	{name: "og", width: 1200, height: 630, crop: false},
-}
-
-func createDemoImage(ctx context.Context, queries *Queries, userID int64, langCode, uploadsDir string, img demoImage, now time.Time) (int64, error) {
-	// Generate UUID for the file
-	fileUUID := uuid.New().String()
-
-	// Create the placeholder image
-	rect := image.Rect(0, 0, img.Width, img.Height)
-	rgba := image.NewRGBA(rect)
-
-	// Fill with the specified color
-	draw.Draw(rgba, rgba.Bounds(), &image.Uniform{C: img.Color}, image.Point{}, draw.Src)
-
-	// Add a lighter center rectangle to make it look like a placeholder
-	centerRect := image.Rect(img.Width/4, img.Height/4, img.Width*3/4, img.Height*3/4)
-	lighterColor := color.RGBA{
-		R: min(img.Color.R+40, 255),
-		G: min(img.Color.G+40, 255),
-		B: min(img.Color.B+40, 255),
-		A: 255,
-	}
-	draw.Draw(rgba, centerRect, &image.Uniform{C: lighterColor}, image.Point{}, draw.Src)
-
-	// Create directory structure for original
-	originalsDir := filepath.Join(uploadsDir, "originals", fileUUID)
-	if err := os.MkdirAll(originalsDir, 0755); err != nil {
-		return 0, fmt.Errorf("failed to create originals directory: %w", err)
-	}
-
-	// Save the original image
-	originalPath := filepath.Join(originalsDir, img.Filename)
-	originalData, err := encodePNG(rgba)
-	if err != nil {
-		return 0, fmt.Errorf("failed to encode original PNG: %w", err)
-	}
-	if err := os.WriteFile(originalPath, originalData, 0644); err != nil {
-		return 0, fmt.Errorf("failed to write original file: %w", err)
-	}
-
-	// Create media record in database
-	media, err := queries.CreateMedia(ctx, CreateMediaParams{
-		Uuid:         fileUUID,
-		Filename:     img.Filename,
-		MimeType:     "image/png",
-		Size:         int64(len(originalData)),
-		Width:        sql.NullInt64{Int64: int64(img.Width), Valid: true},
-		Height:       sql.NullInt64{Int64: int64(img.Height), Valid: true},
-		Alt:          sql.NullString{String: img.Alt, Valid: true},
-		Caption:      sql.NullString{String: "", Valid: true},
-		FolderID:     sql.NullInt64{Valid: false},
-		UploadedBy:   userID,
-		LanguageCode: langCode,
-		CreatedAt:    now,
-		UpdatedAt:    now,
-	})
-	if err != nil {
-		_ = os.Remove(originalPath)
-		return 0, fmt.Errorf("failed to create media record: %w", err)
-	}
-
-	// Create image variants directly (following developer module pattern)
-	for _, v := range demoImageVariants {
-		// Skip if source is smaller than target (for non-crop variants)
-		if !v.crop && img.Width <= v.width && img.Height <= v.height {
-			continue
-		}
-
-		// Create variant directory
-		variantDir := filepath.Join(uploadsDir, v.name, fileUUID)
-		if err := os.MkdirAll(variantDir, 0755); err != nil {
-			slog.Warn("failed to create variant directory", "variant", v.name, "error", err)
-			continue
-		}
-
-		// Resize the image
-		variantData, variantWidth, variantHeight, err := resizeImage(rgba, v.width, v.height, v.crop)
-		if err != nil {
-			slog.Warn("failed to resize image for variant", "variant", v.name, "error", err)
-			continue
-		}
-
-		// Save variant file
-		variantPath := filepath.Join(variantDir, img.Filename)
-		if err := os.WriteFile(variantPath, variantData, 0644); err != nil {
-			slog.Warn("failed to write variant file", "variant", v.name, "error", err)
-			continue
-		}
-
-		// Create variant record in database
-		_, err = queries.CreateMediaVariant(ctx, CreateMediaVariantParams{
-			MediaID:   media.ID,
-			Type:      v.name,
-			Width:     int64(variantWidth),
-			Height:    int64(variantHeight),
-			Size:      int64(len(variantData)),
-			CreatedAt: now,
-		})
-		if err != nil {
-			slog.Warn("failed to store variant record", "variant", v.name, "error", err)
-		}
-	}
-
-	return media.ID, nil
-}
-
-// encodePNG encodes an image as PNG and returns the bytes.
-func encodePNG(img image.Image) ([]byte, error) {
-	var buf bytes.Buffer
-	if err := png.Encode(&buf, img); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
-
-// resizeImage resizes an image to the specified dimensions.
-// If crop is true, it crops to exact size; otherwise it fits within bounds.
-func resizeImage(src image.Image, width, height int, crop bool) ([]byte, int, int, error) {
-	var resized image.Image
-	if crop {
-		resized = imaging.Fill(src, width, height, imaging.Center, imaging.Lanczos)
-	} else {
-		resized = imaging.Fit(src, width, height, imaging.Lanczos)
-	}
-
-	bounds := resized.Bounds()
-	data, err := encodePNG(resized)
-	if err != nil {
-		return nil, 0, 0, err
-	}
-
-	return data, bounds.Dx(), bounds.Dy(), nil
-}
-
 // Page content helpers
 
 func getHomePageBody() string {
@@ -917,7 +743,7 @@ func getHomePageBody() string {
 <li><strong>Admin Panel</strong> - Login to explore the full admin interface</li>
 </ul>
 
-<p><em>Demo login credentials are shown in the banner at the top of the page. The admin password is rotated on every restart for security.</em></p>`
+<p><a href="/admin/">Open the admin panel</a> and sign in using the demo sign-in option to explore the editor.</p>`
 }
 
 func getAboutPageBody() string {
@@ -964,7 +790,7 @@ func getContactPageBody() string {
 </ul>
 
 <h3>Demo Note</h3>
-<p>This is a demo installation. The contact form is disabled, but in a production environment, you can create custom forms using the built-in form builder.</p>
+<p><a href="/forms/contact">Preview the sample contact form</a> to see its fields and validation. The shared demo does not accept submissions for this example. In the admin panel, open <a href="/admin/forms">Forms</a> and choose “Sample contact form” to inspect its settings.</p>
 
 <p>The form builder supports:</p>
 <ul>
@@ -993,8 +819,8 @@ func getGettingStartedBody() string {
 <p>The <a href="https://ocms.tech/build-your-first-ocms-site">Build your first oCMS site walkthrough</a> continues through a first page, custom theme changes, and deployment preparation.</p>
 
 <h2>Explore this shared demo</h2>
-<p>Use the <a href="/admin/">admin panel</a> and the current sign-in details shown in the banner at the top of the demo. Browse Pages, Media, Themes, and the other administration screens.</p>
-<p>Content editing is disabled in the shared demo, and sample data resets daily. Use a local installation to create and edit your own content.</p>
+<p>Open the <a href="/admin/">admin panel</a> and use the demo sign-in option. Browse the media library, inspect the sample contact form, or open Pages and filter by Drafts to find “Planning the next issue.”</p>
+<p>Try creating and editing an unpublished draft. Publishing is disabled in the shared demo, and the example data resets daily. Use a local installation to keep and publish your work.</p>
 
 <h2>Build from source when you need it</h2>
 <p>A source build requires Go and the frontend build tools. Follow the <a href="https://github.com/olegiv/ocms-go#build-from-source">repository's build instructions</a> for their current version requirements and commands.</p>

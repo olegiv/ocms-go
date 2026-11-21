@@ -26,9 +26,14 @@ templ FrontendHomePage(data HomeData) {
 							<p class="fe-hero-subtitle mx-auto mt-4 max-w-2xl text-lg text-muted-foreground sm:text-xl">{ data.HeroSubtitle }</p>
 						}
 						if data.HeroCTA != "" && data.HeroCTAURL != "" {
-							<div class="mt-8">
+							<div class="mt-8 flex flex-wrap justify-center gap-2">
 								@button.Button(button.Props{Href: data.HeroCTAURL, Size: button.SizeLg}) {
 									{ data.HeroCTA }
+								}
+								for _, link := range data.DemoLinks {
+									@button.Button(button.Props{Href: link.URL, Variant: button.VariantOutline, Size: button.SizeLg}) {
+										{ link.Title }
+									}
 								}
 							</div>
 						}
@@ -378,8 +383,8 @@ func pageViewsFromRecent(posts []RecentPost) []PageView {
 	views := make([]PageView, 0, len(posts))
 	for _, p := range posts {
 		views = append(views, PageView{
-			URL:                 p.URL,
-			Title:               p.Title,
+			URL:                  p.URL,
+			Title:                p.Title,
 			PublishedAtFormatted: p.Date,
 		})
 	}

@@ -7,6 +7,7 @@ package handler
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -120,6 +121,21 @@ func NewAdminHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManag
 		sessionManager: sm,
 		cacheManager:   cacheManager,
 	}
+}
+
+// DemoArticle opens the editor for the current seed's published walkthrough article.
+func (h *AdminHandler) DemoArticle(w http.ResponseWriter, r *http.Request) {
+	page, err := h.queries.GetPublishedPageBySlug(r.Context(), store.DemoArticleSlug)
+	if errors.Is(err, sql.ErrNoRows) {
+		http.Redirect(w, r, redirectAdminPages, http.StatusFound)
+		return
+	}
+	if err != nil {
+		slog.Error("loading demo walkthrough article", "error", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf(redirectAdminPagesID, page.ID), http.StatusFound)
 }
 
 // Dashboard renders the admin dashboard with stats and recent activity.

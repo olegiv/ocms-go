@@ -122,11 +122,6 @@ type ExportFormData struct {
 
 // ExportForm handles GET /admin/export - displays the export form.
 func (h *ImportExportHandler) ExportForm(w http.ResponseWriter, r *http.Request) {
-	// Block in demo mode
-	if demoGuard(w, r, h.renderer, middleware.RestrictionExportData, redirectAdmin) {
-		return
-	}
-
 	lang := middleware.GetAdminLang(r)
 
 	pc := buildPageContext(r, h.sessionManager, h.renderer,
@@ -266,11 +261,6 @@ func (h *ImportExportHandler) renderImportPage(w http.ResponseWriter, r *http.Re
 
 // ImportForm handles GET /admin/import - displays the import form.
 func (h *ImportExportHandler) ImportForm(w http.ResponseWriter, r *http.Request) {
-	// Block in demo mode
-	if demoGuard(w, r, h.renderer, middleware.RestrictionImportData, redirectAdmin) {
-		return
-	}
-
 	user := middleware.GetUser(r)
 	h.renderImportPage(w, r, user, ImportFormData{
 		ConflictStrategies: defaultConflictStrategies(),

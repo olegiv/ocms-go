@@ -18,6 +18,9 @@
             {{if .HeroCTA}}
             <a href="{{.HeroCTAURL}}" class="st-btn st-btn--primary">{{.HeroCTA}}</a>
             {{end}}
+            {{range .DemoLinks}}
+            <a href="{{.URL}}" class="st-btn st-btn--outline">{{.Title}}</a>
+            {{end}}
         </div>
     </section>
     {{end}}

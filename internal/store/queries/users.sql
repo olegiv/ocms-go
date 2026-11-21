@@ -37,6 +37,12 @@ WHERE id = ?;
 -- name: UpdateUserLastLogin :exec
 UPDATE users SET last_login_at = ? WHERE id = ?;
 
+-- name: RotatePublicDemoAdminPassword :execrows
+-- Demo startup rotates the publicly shared login when a machine wakes.
+-- Existing demo sessions stay valid until normal expiry or database reset.
+UPDATE users SET password_hash = ?, updated_at = ?
+WHERE email = 'demo@example.com' AND role = 'admin';
+
 -- name: DeleteUser :exec
 DELETE FROM users WHERE id = ?;
 

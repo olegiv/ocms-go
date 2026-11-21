@@ -1,6 +1,8 @@
 # Import/Export
 
-oCMS provides comprehensive import and export functionality to backup, migrate, or transfer content between installations.
+Use import and export to transfer selected content between oCMS installations. For a database snapshot and copies of the uploads and custom files, see [site backups](deploy-ubuntu-plesk.md#backups).
+
+In the shared demo, administrators can preview both tools. File uploads, imports and export downloads are disabled.
 
 ## Overview
 
@@ -63,7 +65,7 @@ ocms-export-2024-01-15.zip
 ```
 
 Best for:
-- Complete site backups
+- Transferring content together with its media
 - Migration between servers
 - Sites with media files
 

@@ -1,0 +1,18 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package admin
+
+// Native details toggles on touch. Hovering or focusing the adjacent action
+// previews the same explanation without intercepting its click or Enter key.
+templ actionHelp(pc *PageContext, messageKey string) {
+	<div class="action-help" x-data="actionHelp"
+		@pointerenter="pointerEnter" @pointerleave="pointerLeave"
+		@focusin="focusIn" @focusout="close" @keydown.escape.stop="close">
+		{ children... }
+		<details x-ref="disclosure" @click.stop>
+			<summary>{ pc.T("action.help") }</summary>
+			<p>{ pc.T(messageKey) }</p>
+		</details>
+	</div>
+}

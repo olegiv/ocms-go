@@ -14,10 +14,11 @@ import (
 // email, role or password: the ones a stolen administrator session could
 // use to take an account over.
 var accountWriteMethods = map[string]bool{
-	"CreateUser":             true,
-	"UpdateUser":             true,
-	"UpdateUserPassword":     true,
-	"UpdateUserPasswordHash": true,
+	"CreateUser":                    true,
+	"UpdateUser":                    true,
+	"UpdateUserPassword":            true,
+	"UpdateUserPasswordHash":        true,
+	"RotatePublicDemoAdminPassword": true,
 }
 
 // accountWriteSites are the functions allowed to call accountWriteMethods
@@ -29,7 +30,7 @@ var accountWriteSites = map[string]string{
 	"internal/handler/auth.go (*AuthHandler).Login":          "rehashes the password the user has just signed in with",
 	"internal/transfer/importer.go (*Importer).importUsers":  "importRole never grants or removes the admin role; new users get a random password",
 	"internal/store/seed.go SeedWithAdminPassword":           "startup seeding of the default administrator, opt-in by OCMS_DO_SEED",
-	"internal/store/seed_demo.go RotateDemoAdminPassword":    "demo mode startup; the password is random and shown only in the informer bar",
+	"internal/store/seed_demo.go RotateDemoAdminPassword":    "demo mode startup rotation for the publicly shared demo admin",
 	"internal/store/seed_demo.go RotateDefaultAdminPassword": "demo mode startup; replaces the well-known default password with a random one",
 	"internal/store/seed_demo.go seedDemoUsers":              "demo mode startup seeding of the demo accounts",
 }

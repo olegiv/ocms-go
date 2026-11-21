@@ -227,6 +227,26 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 	return items, nil
 }
 
+const rotatePublicDemoAdminPassword = `-- name: RotatePublicDemoAdminPassword :execrows
+UPDATE users SET password_hash = ?, updated_at = ?
+WHERE email = 'demo@example.com' AND role = 'admin'
+`
+
+type RotatePublicDemoAdminPasswordParams struct {
+	PasswordHash string    `json:"password_hash"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+// Demo startup rotates the publicly shared login when a machine wakes.
+// Existing demo sessions stay valid until normal expiry or database reset.
+func (q *Queries) RotatePublicDemoAdminPassword(ctx context.Context, arg RotatePublicDemoAdminPasswordParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, rotatePublicDemoAdminPassword, arg.PasswordHash, arg.UpdatedAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const updateUser = `-- name: UpdateUser :one
 UPDATE users SET email = ?, role = ?, name = ?, avatar = ?, bio = ?, website_url = ?, linkedin_url = ?, github_url = ?, telegram_url = ?, updated_at = ?
 WHERE id = ?

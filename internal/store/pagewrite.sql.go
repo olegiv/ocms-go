@@ -457,6 +457,69 @@ func (q *Queries) ListPageIDsForTag(ctx context.Context, tagID int64) ([]int64, 
 	return items, nil
 }
 
+const refreshInitialDemoPageBody = `-- name: RefreshInitialDemoPageBody :one
+UPDATE pages
+SET body = ?1, updated_at = ?2, revision = revision + 1
+WHERE slug = ?3 AND language_code = ?4
+  AND author_id = ?5 AND title = ?6
+  AND status = 'published' AND revision = 1 AND body != ?1
+  AND EXISTS (SELECT 1 FROM content_provenance cp WHERE cp.page_id = pages.id
+              AND cp.revision = 1 AND cp.source = 'system' AND cp.transport = 'demo_seed')
+RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title, revision
+`
+
+type RefreshInitialDemoPageBodyParams struct {
+	Body         string    `json:"body"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	Slug         string    `json:"slug"`
+	LanguageCode string    `json:"language_code"`
+	AuthorID     int64     `json:"author_id"`
+	Title        string    `json:"title"`
+}
+
+// A demo upgrade may refresh the instructions that were originally seeded by
+// the system. Preserve edited articles, languages, publication state and links.
+func (q *Queries) RefreshInitialDemoPageBody(ctx context.Context, arg RefreshInitialDemoPageBodyParams) (Page, error) {
+	row := q.db.QueryRowContext(ctx, refreshInitialDemoPageBody,
+		arg.Body,
+		arg.UpdatedAt,
+		arg.Slug,
+		arg.LanguageCode,
+		arg.AuthorID,
+		arg.Title,
+	)
+	var i Page
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Slug,
+		&i.Body,
+		&i.Status,
+		&i.AuthorID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PublishedAt,
+		&i.FeaturedImageID,
+		&i.MetaTitle,
+		&i.MetaDescription,
+		&i.MetaKeywords,
+		&i.OgImageID,
+		&i.NoIndex,
+		&i.NoFollow,
+		&i.CanonicalUrl,
+		&i.ScheduledAt,
+		&i.LanguageCode,
+		&i.HideFeaturedImage,
+		&i.PageType,
+		&i.ExcludeFromLists,
+		&i.Summary,
+		&i.VideoUrl,
+		&i.VideoTitle,
+		&i.Revision,
+	)
+	return i, err
+}
+
 const setPageAIAccess = `-- name: SetPageAIAccess :exec
 INSERT INTO page_ai_access (page_id, ai_editable, set_by, set_at)
 VALUES (?, ?, ?, ?)

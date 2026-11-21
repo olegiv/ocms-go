@@ -4,7 +4,7 @@ This guide covers oCMS demo mode for showcasing features, and deploying to Fly.i
 
 ## Demo Mode
 
-Demo mode seeds sample content (users, pages, categories, tags, media, and menus) when the application starts. It's designed for public demos and evaluations.
+Demo mode seeds sample content (users, pages, categories, tags, media, menus and a sample form) when the application starts. It's designed for public demos and evaluations.
 
 ### Enabling Demo Mode
 
@@ -24,17 +24,24 @@ When enabled, `SeedDemo` creates:
 | Users | 2 | Admin and editor with demo credentials |
 | Categories | 4 | Blog, Portfolio, Services, Resources |
 | Tags | 7 | Tutorial, News, Featured, Go, Web Development, Design, Open Source |
-| Pages | 10 | Home, About, Contact, Cookie Policy, 3 blog posts, 2 portfolio items, 1 services page |
-| Media | 10 | Placeholder images (2400x1600) with all variants (thumbnail, grid, small, medium, large, og) |
+| Pages | 11 | Ten published pages and posts, plus an unpublished editorial draft |
+| Media | 10 | Editorial photographs with thumbnails and responsive variants |
+| Forms | 1 | A contact form with fields to inspect in the form builder |
 | Menu items | 7 | Home, Blog, Portfolio, Services, About, Contact, Cookie Policy |
 
 ### Demo Credentials
 
 | Role | Email | Password |
 |------|-------|----------|
-| Admin | `demo@example.com` | Random, regenerated on every startup; shown in the informer bar at the top of the site |
+| Admin | `demo@example.com` | Choose **Fill demo credentials** on the sign-in page for the current email and password, then choose **Login**. The homepage banner also shows the current credentials. |
 | Editor | `editor@example.com` | `demo1234demo` |
 | Default admin | `admin@example.com` | Seeded with `changeme1234`, but rotated to a random password at startup in demo mode, so it cannot be used |
+
+### Demo sessions
+
+Fly can stop the demo when it is idle. On the next visit, the server reads its existing database from the volume and generates a new public demo admin password. An existing signed-in browser can continue its tour. A new sign-in uses the latest password.
+
+Sessions expire after two hours without a request or 24 hours after sign-in. The daily [demo reset](#demo-reset) also ends all sessions and replaces sample content and uploads. After that reset, use **Fill demo credentials** and sign in again.
 
 ### Demo Mode Restrictions
 
@@ -42,13 +49,14 @@ In demo mode, certain actions are restricted to prevent abuse while still allowi
 
 | Area | Allowed | Blocked |
 |------|---------|---------|
-| Content (pages, tags, categories, menus, media, forms, widgets) | View | Create, edit, delete, unpublish |
+| Pages and posts | Browse published pages and create or edit drafts in the admin editor | Change a published page, schedule, publish, unpublish or delete |
+| Tags, categories, menus, media, forms, widgets | View | Create, edit, delete |
 | Themes | View, switch active theme | Edit theme settings (colors, options), import, delete |
 | Users | View | Create, edit, delete, change roles |
 | Site config | View | Edit |
 | Languages | View | Edit |
 | API keys, webhooks | View | Create, edit, delete |
-| Import/export | — | Export, import |
+| Import/export | View options and descriptions | Upload, validate, import or download data |
 | Modules | View | Toggle, change settings |
 | Cache | View stats | Clear cache |
 | Scheduler | View jobs | Edit schedules, reset, trigger, custom-task actions |

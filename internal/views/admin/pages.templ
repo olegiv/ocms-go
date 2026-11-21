@@ -7,6 +7,7 @@ import "fmt"
 import "strings"
 import "net/url"
 import "encoding/json"
+import "github.com/olegiv/ocms-go/internal/security"
 import "github.com/olegiv/ocms-go/internal/views/utils"
 import "github.com/olegiv/ocms-go/internal/views/components/alert"
 import "github.com/olegiv/ocms-go/internal/views/components/badge"
@@ -416,7 +417,11 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 		@PageHeader(pc.T("pages.title"), pc.T("pages.total_count", data.TotalCount)) {
 			@button.Button(button.Props{Href: "/admin/pages/new"}) {
 				@icon.FileText(icon.Props{Size: 16})
-				{ pc.T("pages.new") }
+				if data.IsDemoMode {
+					{ pc.T("pages.new_draft") }
+				} else {
+					{ pc.T("pages.new") }
+				}
 			}
 		}
 		<!-- Filters -->
@@ -762,7 +767,9 @@ templ pageListRow(pc *PageContext, page PageListItemView, isDemoMode bool, bulkS
 			}
 		}
 		@table.Cell() {
-			if page.PublicURL != "" {
+			if isDemoMode && page.Status == "draft" {
+				<a href={ fmt.Sprintf("/admin/pages/%d", page.ID) } class="page-title-link">{ page.Title }</a>
+			} else if page.PublicURL != "" {
 				<a href={ templ.SafeURL(page.PublicURL) } class="page-title-link" target="_blank" rel="noopener noreferrer">{ page.Title }</a>
 			} else {
 				<span class="page-title-link">{ page.Title }</span>
@@ -839,42 +846,50 @@ templ pageListRow(pc *PageContext, page PageListItemView, isDemoMode bool, bulkS
 		}
 		@table.Cell() {
 			<div class="action-buttons">
-				@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/pages/%d", page.ID), Attributes: templ.Attributes{"title": pc.T("btn.edit")}}) {
-					@iconEdit()
-				}
-				<div x-data="{ showConfirm: false }" class="delete-action">
-					@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeSm, Attributes: templ.Attributes{"@click": "showConfirm = true", "title": pc.T("btn.delete")}}) {
-						@iconTrash()
+				if isDemoMode && (page.IsDemoPublished || page.IsScheduled) {
+					@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/pages/%d", page.ID), Attributes: templ.Attributes{"title": pc.T("btn.view"), "aria-label": pc.T("btn.view")}}) {
+						@icon.Eye(icon.Props{Size: 16})
 					}
-					<!-- Delete Confirmation Modal -->
-					<div
-						class="modal-overlay"
-						x-show="showConfirm"
-						x-cloak
-						@click.self="showConfirm = false"
-						x-transition:enter="modal-enter"
-						x-transition:leave="modal-leave"
-					>
-						<div class="modal" @click.stop>
-							<div class="modal-header">
-								<h3 class="modal-title">{ pc.T("pages.delete_page") }</h3>
-								<button type="button" class="modal-close" @click="showConfirm = false" aria-label={ pc.T("btn.close") }>&times;</button>
-							</div>
-							<div class="modal-body">
-								<p>{ pc.T("pages.confirm_delete") }</p>
-								<p class="text-muted">{ pc.T("pages.delete_warning") }</p>
-							</div>
-							<div class="modal-footer">
-								@button.Button(button.Props{Variant: button.VariantOutline, Attributes: templ.Attributes{"@click": "showConfirm = false"}}) {
-									{ pc.T("btn.cancel") }
-								}
-								@button.Button(button.Props{Variant: button.VariantDestructive, Attributes: templ.Attributes{"hx-delete": fmt.Sprintf("/admin/pages/%d", page.ID), "hx-target": fmt.Sprintf("#page-row-%d", page.ID), "hx-swap": "outerHTML", "@click": "showConfirm = false"}}) {
-									{ pc.T("pages.delete_page") }
-								}
+				} else {
+					@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/pages/%d", page.ID), Attributes: templ.Attributes{"title": pc.T("btn.edit"), "aria-label": pc.T("btn.edit")}}) {
+						@iconEdit()
+					}
+				}
+				if !isDemoMode {
+					<div x-data="{ showConfirm: false }" class="delete-action">
+						@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeSm, Attributes: templ.Attributes{"@click": "showConfirm = true", "title": pc.T("btn.delete")}}) {
+							@iconTrash()
+						}
+						<!-- Delete Confirmation Modal -->
+						<div
+							class="modal-overlay"
+							x-show="showConfirm"
+							x-cloak
+							@click.self="showConfirm = false"
+							x-transition:enter="modal-enter"
+							x-transition:leave="modal-leave"
+						>
+							<div class="modal" @click.stop>
+								<div class="modal-header">
+									<h3 class="modal-title">{ pc.T("pages.delete_page") }</h3>
+									<button type="button" class="modal-close" @click="showConfirm = false" aria-label={ pc.T("btn.close") }>&times;</button>
+								</div>
+								<div class="modal-body">
+									<p>{ pc.T("pages.confirm_delete") }</p>
+									<p class="text-muted">{ pc.T("pages.delete_warning") }</p>
+								</div>
+								<div class="modal-footer">
+									@button.Button(button.Props{Variant: button.VariantOutline, Attributes: templ.Attributes{"@click": "showConfirm = false"}}) {
+										{ pc.T("btn.cancel") }
+									}
+									@button.Button(button.Props{Variant: button.VariantDestructive, Attributes: templ.Attributes{"hx-delete": fmt.Sprintf("/admin/pages/%d", page.ID), "hx-target": fmt.Sprintf("#page-row-%d", page.ID), "hx-swap": "outerHTML", "@click": "showConfirm = false"}}) {
+										{ pc.T("pages.delete_page") }
+									}
+								</div>
 							</div>
 						</div>
 					</div>
-				</div>
+				}
 			</div>
 		}
 	}
@@ -890,6 +905,42 @@ func publishTitle(pc *PageContext, status string) string {
 // =============================================================================
 // PAGE FORM PAGE
 // =============================================================================
+type DemoProtectedPageViewData struct {
+	Title, Summary, Body string
+	ImageURL, ImageAlt   string
+	StatusKey, PublicURL string
+}
+
+templ DemoProtectedPage(pc *PageContext, data DemoProtectedPageViewData) {
+	@AdminLayout(pc) {
+		@PageHeader(data.Title, pc.T("pages.demo_protected")) {
+			@badge.Badge(badge.Props{}) {
+				{ pc.T(data.StatusKey) }
+			}
+			if data.PublicURL != "" {
+				@button.Button(button.Props{Href: data.PublicURL}) {
+					@icon.Eye(icon.Props{Size: 16})
+					{ pc.T("pages.view_public") }
+				}
+			}
+			@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/pages/new"}) {
+				{ pc.T("pages.new_draft") }
+			}
+		}
+		@card.Card() {
+			@card.Content(card.ContentProps{Class: "docs-content"}) {
+				if data.Summary != "" {
+					<p class="font-medium">{ data.Summary }</p>
+				}
+				if data.ImageURL != "" {
+					<img src={ data.ImageURL } alt={ data.ImageAlt } class="w-full rounded-md"/>
+				}
+				@templ.Raw(security.SanitizePageHTML(data.Body))
+			}
+		}
+	}
+}
+
 templ PageFormPage(pc *PageContext, data PageFormViewData) {
 	@AdminLayout(pc) {
 		if data.IsEdit {
@@ -917,7 +968,14 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 				}
 			}
 		}
-		<div class={ reviewLayout(data.Review != nil) }>
+		if data.IsDemoMode {
+			@alert.Alert(alert.Props{Class: "alert-info mb-4"}) {
+				@alert.Description() {
+					{ pc.T("pages.demo_draft_notice") }
+				}
+			}
+		}
+		<div class={ reviewLayout(data.Review != nil && !data.IsDemoMode) }>
 			<div class="min-w-0">
 				@card.Card() {
 					<form
@@ -950,7 +1008,7 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 								}
 							}
 						}
-						if data.CanManageAI {
+						if data.CanManageAI && !data.IsDemoMode {
 							<input type="hidden" name="ai_access_present" value="1"/>
 							<div class="mb-6 flex items-center gap-2">
 								@checkbox.Checkbox(checkbox.Props{ID: "allow_ai_edits", Name: "allow_ai_edits", Checked: data.AIEditable})
@@ -1009,10 +1067,10 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 								@label.Label(label.Props{For: "status", Class: "block mb-1"}) {
 									{ pc.T("label.status") }
 								}
-								if data.IsDemoMode && data.IsEdit && currentStatus(data.FormValues, data.PageStatus) == "published" {
-									<input type="hidden" name="status" value="published"/>
-									@badge.Badge(badge.Props{Class: "badge-success"}) {
-										{ pc.T("status.published") }
+								if data.IsDemoMode {
+									<input type="hidden" name="status" value="draft"/>
+									@badge.Badge(badge.Props{}) {
+										{ pc.T("status.draft") }
 									}
 								} else {
 									@selectbox.SelectBox(selectbox.Props{Class: "select-no-clear"}) {
@@ -1116,7 +1174,7 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 								<input type="hidden" name="language_code" value={ data.Language.Code }/>
 							}
 							<!-- Translations Panel (Edit mode only) -->
-							if data.IsEdit && data.HasMultipleLanguages {
+							if data.IsEdit && data.HasMultipleLanguages && !data.IsDemoMode {
 								<div class="form-group form-group-full">
 									@translationsPanel(pc, data)
 								</div>
@@ -1217,16 +1275,20 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 								@seoSection(pc, data)
 							</div>
 							<!-- Scheduling -->
-							<div class="form-group form-group-full">
-								@schedulingSection(pc, data)
-							</div>
+							if !data.IsDemoMode {
+								<div class="form-group form-group-full">
+									@schedulingSection(pc, data)
+								</div>
+							}
 						</div>
 						<div class="form-actions">
 							@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/pages"}) {
 								{ pc.T("btn.cancel") }
 							}
 							@button.Button(button.Props{Type: button.TypeSubmit}) {
-								if data.IsEdit {
+								if data.IsDemoMode {
+									{ pc.T("pages.save_draft") }
+								} else if data.IsEdit {
 									{ pc.T("pages.update") }
 								} else {
 									{ pc.T("pages.create") }
@@ -1234,12 +1296,12 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 							}
 						</div>
 					</form>
-					if data.IsEdit && data.HasMultipleLanguages {
+					if data.IsEdit && data.HasMultipleLanguages && !data.IsDemoMode {
 						@pageTranslationForms(data)
 					}
 				}
 			</div>
-			if data.Review!=nil {
+			if data.Review != nil && !data.IsDemoMode {
 				@EditorialReviewPanel(pc, *data.Review)
 			}
 		</div>
@@ -1762,10 +1824,12 @@ templ mediaDropzoneSelectArea(pc *PageContext) {
 	>
 		<!-- Empty State -->
 		<div class="media-dropzone-empty" x-show="!selectedImage">
-			<div class="media-dropzone-icon">
-				@iconImagePlaceholderLarge()
-			</div>
-			<p class="media-dropzone-title">{ pc.T("media.click_to_select") }</p>
+			@actionHelp(pc, "media.picker_select_help") {
+				<button type="button" class="media-dropzone-title">
+					<span class="media-dropzone-icon">@iconImagePlaceholderLarge()</span>
+					{ pc.T("media.click_to_select") }
+				</button>
+			}
 		</div>
 		<!-- Selected Image Preview -->
 		<div class="media-dropzone-selected" x-show="selectedImage" @click.stop>
@@ -1781,9 +1845,11 @@ templ mediaDropzoneSelectArea(pc *PageContext) {
 				</template>
 			</div>
 			<div class="media-dropzone-actions">
-				@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Attributes: templ.Attributes{"@click": "openPicker()"}}) {
-					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" x2="12" y1="3" y2="15"></line></svg>
-					{ pc.T("btn.change") }
+				@actionHelp(pc, "media.picker_select_help") {
+					@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Attributes: templ.Attributes{"@click": "openPicker()"}}) {
+						<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" x2="12" y1="3" y2="15"></line></svg>
+						{ pc.T("btn.change") }
+					}
 				}
 				@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeSm, Attributes: templ.Attributes{"@click": "clearSelection()"}}) {
 					@iconX14()
@@ -1879,8 +1945,10 @@ templ mediaDropzoneSelectModal(pc *PageContext) {
 				@button.Button(button.Props{Variant: button.VariantOutline, Attributes: templ.Attributes{"@click": "closeModal()"}}) {
 					{ pc.T("btn.cancel") }
 				}
-				@button.Button(button.Props{Attributes: templ.Attributes{":disabled": "!tempSelected", "@click": "confirmSelection()"}}) {
-					{ pc.T("media.select_image") }
+				@actionHelp(pc, "media.picker_select_help") {
+					@button.Button(button.Props{Attributes: templ.Attributes{":disabled": "!tempSelected", "@click": "confirmSelection()"}}) {
+						{ pc.T("media.select_image") }
+					}
 				}
 			</div>
 		</div>
@@ -1951,8 +2019,10 @@ templ editorImageModal(pc *PageContext) {
 				@button.Button(button.Props{Variant: button.VariantOutline, Attributes: templ.Attributes{"id": "editor-image-cancel-btn"}}) {
 					{ pc.T("btn.cancel") }
 				}
-				@button.Button(button.Props{Disabled: true, Attributes: templ.Attributes{"id": "editor-image-insert-btn"}}) {
-					{ pc.T("editor.insert_image") }
+				@actionHelp(pc, "media.picker_select_help") {
+					@button.Button(button.Props{Disabled: true, Attributes: templ.Attributes{"id": "editor-image-insert-btn"}}) {
+						{ pc.T("editor.insert_image") }
+					}
 				}
 			</div>
 		</div>
@@ -2012,7 +2082,7 @@ templ pageFormScripts(pc *PageContext, data PageFormViewData) {
 			});
 		},
 		open(callback) {
-			this.uploader.reset();
+			this.uploader?.reset();
 			this.uploadedImage = null;
 			this.insertCallback = callback || null;
 			this.selectedImage = null;
@@ -2026,7 +2096,7 @@ templ pageFormScripts(pc *PageContext, data PageFormViewData) {
 			this.searchInput.focus();
 		},
 		close() {
-			this.uploader.reset();
+			this.uploader?.reset();
 			clearTimeout(this.debounceTimer);
 			this.request++;
 			this.uploadedImage = null;

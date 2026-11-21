@@ -19,6 +19,7 @@ type LoginData struct {
 	LangOptions     []LangOption
 	HcaptchaEnabled bool
 	HcaptchaWidget  string
+	DemoEmail       string
 }
 
 // T translates a key using the admin language.
@@ -57,6 +58,9 @@ templ LoginPage(d LoginData) {
 			@authCard(d.T("auth.login_title"), d.Flash, d.FlashType) {
 				<form method="POST" action="/login" class="auth-form">
 					@csrfField()
+					if d.DemoEmail != "" {
+						@demoLoginFill(d)
+					}
 					<div class="form-group">
 						@label.Label(label.Props{For: "email", Class: "block mb-1"}) {
 							{ d.T("label.email") }
@@ -68,7 +72,7 @@ templ LoginPage(d LoginData) {
 							Placeholder: "admin@example.com",
 							Attributes: templ.Attributes{
 								"required":         true,
-								"autofocus":        true,
+								"autofocus":        d.DemoEmail == "",
 								"data-msg-required": d.T("validation.required"),
 								"data-msg-email":   d.T("validation.email_invalid"),
 							},
@@ -102,6 +106,45 @@ templ LoginPage(d LoginData) {
 			}
 		@loginValidationScript()
 	}
+}
+
+// demoLoginFill fetches the current password on demand, even if this tab
+// was opened before a restart. The login form still submits normally.
+templ demoLoginFill(d LoginData) {
+	@button.Button(button.Props{
+		ID: "demo-fill",
+		Type: button.TypeButton,
+		Variant: button.VariantOutline,
+		FullWidth: true,
+		Attributes: templ.Attributes{"data-email": d.DemoEmail, "autofocus": true},
+	}) {
+		{ d.T("auth.fill_demo_account") }
+	}
+	<p id="demo-fill-error" role="alert" hidden>{ d.T("auth.demo_account_unavailable") }</p>
+	<script nonce={ templ.GetNonce(ctx) }>
+	document.getElementById('demo-fill').addEventListener('click', async function () {
+		const form = this.form;
+		const error = document.getElementById('demo-fill-error');
+		this.disabled = true;
+		error.hidden = true;
+		try {
+			const response = await fetch('/api/informer/demo-credentials', {cache: 'no-store'});
+			if (!response.ok) throw new Error();
+			const {password} = await response.json();
+			if (typeof password !== 'string' || !password) throw new Error();
+			for (const [name, value] of [['email', this.dataset.email], ['password', password]]) {
+				const input = form.elements.namedItem(name);
+				input.value = value;
+				input.dispatchEvent(new Event('input', {bubbles: true}));
+			}
+			form.querySelector('button[type="submit"]').focus();
+		} catch {
+			error.hidden = false;
+		} finally {
+			this.disabled = false;
+		}
+	});
+	</script>
 }
 
 // authShell is the document around the standalone sign-in pages: login, the

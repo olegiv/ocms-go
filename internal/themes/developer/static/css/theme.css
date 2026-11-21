@@ -1106,6 +1106,12 @@ img {
     margin: 0 0 var(--dev-space-lg) 0;
 }
 
+.dev-hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--dev-space-sm);
+}
+
 .dev-hero-banner {
     margin-top: var(--dev-space-md);
     line-height: 0;

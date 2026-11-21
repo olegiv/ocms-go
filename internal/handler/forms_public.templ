@@ -28,6 +28,7 @@ type PublicFormField struct {
 
 // PublicFormViewData holds all data needed to render the public form page.
 type PublicFormViewData struct {
+	PreviewOnly    bool
 	Base           BaseTemplateData
 	FormTitle      string
 	FormSlug       string
@@ -104,28 +105,38 @@ templ formEntryView(data PublicFormViewData) {
 		}
 	}
 	<form method="POST" action={ templ.SafeURL(data.Base.LangPrefix + "/forms/" + data.FormSlug) } class="space-y-6">
-		<!-- Honeypot -->
-		<div class="sr-only" aria-hidden="true">
-			<label for="_website">{ formT(data.Lang, "forms.public.honeypot_label") }</label>
-			<input type="text" name="_website" id="_website" tabindex="-1" autocomplete="off"/>
-		</div>
-		for _, field := range data.Fields {
-			if field.Type == "captcha" {
-				if data.CaptchaWidget != "" {
-					<div class="space-y-2">
-						@templ.Raw(data.CaptchaWidget)
-					</div>
-				}
-			} else {
-				@formFieldGroup(data, field)
-			}
+		if data.PreviewOnly {
+			<fieldset disabled class="space-y-6">
+				@publicFormControls(data)
+			</fieldset>
+		} else {
+			@publicFormControls(data)
 		}
-		<div class="pt-2">
-			@button.Button(button.Props{Type: button.TypeSubmit, Size: button.SizeLg, FullWidth: true}) {
-				{ formT(data.Lang, "forms.public.submit") }
-			}
-		</div>
 	</form>
+}
+
+templ publicFormControls(data PublicFormViewData) {
+	<!-- Honeypot -->
+	<div class="sr-only" aria-hidden="true">
+		<label for="_website">{ formT(data.Lang, "forms.public.honeypot_label") }</label>
+		<input type="text" name="_website" id="_website" tabindex="-1" autocomplete="off"/>
+	</div>
+	for _, field := range data.Fields {
+		if field.Type == "captcha" {
+			if data.CaptchaWidget != "" {
+				<div class="space-y-2">
+					@templ.Raw(data.CaptchaWidget)
+				</div>
+			}
+		} else {
+			@formFieldGroup(data, field)
+		}
+	}
+	<div class="pt-2">
+		@button.Button(button.Props{Type: button.TypeSubmit, Size: button.SizeLg, FullWidth: true}) {
+			{ formT(data.Lang, "forms.public.submit") }
+		}
+	</div>
 }
 
 templ formFieldGroup(data PublicFormViewData, field PublicFormField) {
@@ -182,11 +193,11 @@ templ formFieldGroup(data PublicFormViewData, field PublicFormField) {
 				})
 			case "date":
 				@input.Input(input.Props{
-					ID:       fmt.Sprintf("field_%d", field.ID),
-					Name:     field.Name,
-					Type:     input.TypeDate,
-					Value:    data.Values[field.Name],
-					HasError: data.Errors[field.Name] != "",
+					ID:         fmt.Sprintf("field_%d", field.ID),
+					Name:       field.Name,
+					Type:       input.TypeDate,
+					Value:      data.Values[field.Name],
+					HasError:   data.Errors[field.Name] != "",
 					Attributes: requiredAttr(field.IsRequired),
 				})
 			case "select":
@@ -240,10 +251,10 @@ templ formFieldGroup(data PublicFormViewData, field PublicFormField) {
 				</div>
 			case "file":
 				@input.Input(input.Props{
-					ID:       fmt.Sprintf("field_%d", field.ID),
-					Name:     field.Name,
-					Type:     input.TypeFile,
-					HasError: data.Errors[field.Name] != "",
+					ID:         fmt.Sprintf("field_%d", field.ID),
+					Name:       field.Name,
+					Type:       input.TypeFile,
+					HasError:   data.Errors[field.Name] != "",
 					Attributes: requiredAttr(field.IsRequired),
 				})
 			default:

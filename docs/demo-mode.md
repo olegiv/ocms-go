@@ -8,7 +8,7 @@ When `OCMS_DEMO_MODE=true` is set, the following restrictions apply:
 
 | Feature | Normal Mode | Demo Mode |
 |---------|-------------|-----------|
-| Create/Edit pages | Allowed | **Blocked** |
+| Create/edit pages in the admin editor | Allowed | Create and edit drafts until the demo resets. Published and scheduled pages are read-only. |
 | Publish/unpublish pages | Allowed | **Blocked** |
 | Delete pages | Allowed | **Blocked** |
 | Upload/Edit media | Allowed | **Blocked** |
@@ -25,8 +25,8 @@ When `OCMS_DEMO_MODE=true` is set, the following restrictions apply:
 | Cache clearing | Full access | **Blocked** |
 | Scheduler management | Full access | **Blocked** |
 | SQL execution (DB Manager) | Full access | **Blocked** |
-| Data export | Full access | **Blocked** |
-| Data import | Full access | **Blocked** |
+| Data export | Full access | View the options. File download is disabled. |
+| Data import | Full access | View the options. Upload, validation and import are disabled. |
 | Delete tags/categories | Allowed | **Blocked** |
 | Delete menus/items | Allowed | **Blocked** |
 | Delete forms/widgets | Allowed | **Blocked** |
@@ -68,7 +68,7 @@ Demo mode still allows users to:
 - Switch the active theme
 - Use the REST API for read operations
 
-Content is read-only: pages, media, tags, categories, menus, forms, widgets and redirects cannot be created, edited, published or deleted, and media uploads are blocked entirely (the seeded demo content is the only media).
+Create a draft from the dashboard, save it, and reopen it in Pages. Drafts are shared with other demo visitors and disappear at the next reset. Choose an existing image from the media library to try the editor. Uploading media, publishing, scheduling and changing published content are disabled.
 
 ## Scheduled Reset
 

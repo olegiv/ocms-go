@@ -2401,6 +2401,10 @@ func run(inspectRouter func(chi.Router) error) (runErr error) {
 
 			// Dashboard and common routes
 			r.Get(handler.RouteRoot, adminHandler.Dashboard)
+			r.Get("/api-docs", docsHandler.APIReference)
+			if middleware.IsDemoMode() {
+				r.Get("/demo/article", adminHandler.DemoArticle)
+			}
 			r.Post("/language", adminHandler.SetLanguage)
 			r.Get("/events", eventsHandler.List)
 

@@ -3,6 +3,71 @@
     "language": "ru",
     "messages": [
         {
+            "id": "media.picker_demo_restriction",
+            "message": "Choose an existing demo image. Uploads are disabled on the shared demo.",
+            "translation": "Выберите изображение из медиатеки демосайта. Загрузка новых файлов отключена."
+        },
+        {
+            "id": "media.picker_select_help",
+            "message": "Choose an image from the library without leaving the form. Your unsaved edits stay in place until you save the form.",
+            "translation": "Выберите изображение из медиатеки, не покидая форму. Несохранённые правки останутся в форме до сохранения."
+        },
+        {
+            "id": "import.demo_restriction",
+            "message": "File uploads and imports are disabled on the shared demo.",
+            "translation": "На демосайте загрузка файлов и импорт отключены."
+        },
+        {
+            "id": "import.demo_preview",
+            "message": "After validation you can select sections such as pages, menus or media. For matching records you can skip, overwrite or rename where supported. A dry run previews the result.",
+            "translation": "После проверки можно выбрать разделы, например страницы, меню или медиафайлы. Совпадающие записи можно пропустить, обновить или переименовать, если тип записи это допускает. Пробный запуск покажет результат."
+        },
+        {
+            "id": "import.apply_help",
+            "message": "Import applies the selected sections and conflict rules. Select a dry run to see the result before saving changes.",
+            "translation": "При импорте будут применены выбранные разделы и правила обработки совпадений. Пробный запуск покажет результат до сохранения изменений."
+        },
+        {
+            "id": "import.validate_help",
+            "message": "Validation checks the file and shows available sections and conflicts before any records are changed.",
+            "translation": "Проверка покажет доступные разделы и совпадающие записи до внесения изменений."
+        },
+        {
+            "id": "export.demo_restriction",
+            "message": "You can explore the export options here. Downloads are disabled on the shared demo.",
+            "translation": "На демосайте можно изучить параметры экспорта. Скачивание данных отключено."
+        },
+        {
+            "id": "export.action_help",
+            "message": "Download a copy of the selected records. Selecting media files packages them with the data in a ZIP archive.",
+            "translation": "Вы скачаете копию выбранных записей. Если включить медиафайлы, они будут упакованы вместе с данными в ZIP-архив."
+        },
+        {
+            "id": "action.help",
+            "message": "Help",
+            "translation": "Справка"
+        },
+        {
+            "id": "demo.home.intro",
+            "message": "A single-binary Go CMS with a built-in editor.",
+            "translation": "CMS на Go со встроенным редактором в одном исполняемом файле."
+        },
+        {
+            "id": "demo.home.open_admin",
+            "message": "Open demo admin",
+            "translation": "Открыть демопанель"
+        },
+        {
+            "id": "demo.home.github",
+            "message": "View on GitHub",
+            "translation": "Посмотреть на GitHub"
+        },
+        {
+            "id": "demo.home.read_article",
+            "message": "Read “%s”",
+            "translation": "Прочитать «%s»"
+        },
+        {
             "id": "account.title",
             "message": "My account",
             "translation": "Моя учётная запись"
@@ -228,6 +293,21 @@
             "translation": "Последние медиа"
         },
         {
+            "id": "dashboard.demo_intro",
+            "message": "Explore a published article in the editor, then view it on the site. Published articles are read-only in this demo.",
+            "translation": "Посмотрите, как опубликованная статья выглядит в редакторе и на сайте. В демоверсии опубликованные статьи доступны только для чтения."
+        },
+        {
+            "id": "dashboard.demo_open_article",
+            "message": "Explore a sample article",
+            "translation": "Открыть пример статьи"
+        },
+        {
+            "id": "dashboard.demo_new_draft",
+            "message": "Create a draft",
+            "translation": "Создать черновик"
+        },
+        {
             "id": "dashboard.quick_actions",
             "message": "Quick Actions",
             "translation": "Быстрые действия"
@@ -341,6 +421,36 @@
             "id": "pages.title",
             "message": "Pages",
             "translation": "Страницы"
+        },
+        {
+            "id": "pages.demo_protected",
+            "message": "This page is read-only in the shared demo. Create a draft to try the editor.",
+            "translation": "Эта страница в общей демоверсии доступна только для чтения. Чтобы попробовать редактор, создайте черновик."
+        },
+        {
+            "id": "pages.view_public",
+            "message": "View on public site",
+            "translation": "Открыть на сайте"
+        },
+        {
+            "id": "pages.new_draft",
+            "message": "Create a draft",
+            "translation": "Создать черновик"
+        },
+        {
+            "id": "pages.save_draft",
+            "message": "Save draft",
+            "translation": "Сохранить черновик"
+        },
+        {
+            "id": "pages.demo_draft_notice",
+            "message": "You can save and reopen drafts until the next daily demo reset at 01:00 UTC. Other demo visitors can see drafts in the admin. Drafts stay off the public site.",
+            "translation": "Черновики можно сохранять и открывать до следующего ежедневного сброса демоверсии в 01:00 UTC. Другие посетители демоверсии видят черновики в панели управления. На сайте черновики не публикуются."
+        },
+        {
+            "id": "pages.demo_drafts_only",
+            "message": "Only unscheduled drafts can be saved in the shared demo.",
+            "translation": "В общей демоверсии можно сохранять только черновики без даты публикации."
         },
         {
             "id": "pages.new",
@@ -4838,6 +4948,16 @@
             "translation": "Войдите в свой аккаунт"
         },
         {
+            "id": "auth.fill_demo_account",
+            "message": "Fill demo credentials",
+            "translation": "Заполнить данные для входа в демо"
+        },
+        {
+            "id": "auth.demo_account_unavailable",
+            "message": "Could not load the demo credentials. Try again.",
+            "translation": "Не удалось загрузить данные для входа в демо. Попробуйте ещё раз."
+        },
+        {
             "id": "auth.remember_me",
             "message": "Remember me",
             "translation": "Запомнить меня"
@@ -5709,8 +5829,8 @@
         },
         {
             "id": "export.description",
-            "message": "Export your site content as JSON",
-            "translation": "Экспортируйте содержимое сайта в формате JSON"
+            "message": "Choose the sections to export. Download the data as JSON, or include media files to get a ZIP archive.",
+            "translation": "Выберите разделы для экспорта. Данные можно скачать в формате JSON. Чтобы получить ZIP-архив, добавьте медиафайлы."
         },
         {
             "id": "export.content_section",
@@ -5849,8 +5969,8 @@
         },
         {
             "id": "export.info",
-            "message": "The export will generate a JSON file containing all selected content. Media files are not included in the export - only their metadata. Use this export for backup purposes or to migrate content to another oCMS instance.",
-            "translation": "Экспорт создаст JSON-файл со всем выбранным содержимым. Медиа-файлы не включаются — только их метаданные. Используйте экспорт для резервного копирования или миграции контента в другой экземпляр oCMS."
+            "message": "The JSON file includes the selected records. Media entries contain file information only.",
+            "translation": "В JSON попадут выбранные записи. Для медиафайлов сохраняются только сведения о файлах."
         },
         {
             "id": "export.download",
@@ -5874,8 +5994,8 @@
         },
         {
             "id": "export.zip_info",
-            "message": "The export will create a ZIP archive containing both the JSON data and all media files. This may take longer and produce a larger file.",
-            "translation": "Экспорт создаст ZIP-архив, содержащий JSON-данные и все медиа-файлы. Это может занять больше времени и создать файл большего размера."
+            "message": "The ZIP archive includes the selected records, original media files and their image variants.",
+            "translation": "В ZIP-архив попадут выбранные записи, оригиналы медиафайлов и их версии разных размеров."
         },
         {
             "id": "import.title",
@@ -5884,8 +6004,8 @@
         },
         {
             "id": "import.description",
-            "message": "Import content from a JSON or ZIP file",
-            "translation": "Импорт содержимого из JSON или ZIP файла"
+            "message": "Upload a JSON or ZIP export from oCMS. Validate the file, then choose which sections to import and how to handle conflicts.",
+            "translation": "Загрузите JSON или ZIP, созданный в oCMS. Проверьте файл, затем выберите разделы для импорта и способ обработки совпадений."
         },
         {
             "id": "import.drop_file",
@@ -5909,8 +6029,8 @@
         },
         {
             "id": "import.info",
-            "message": "Import content from a JSON or ZIP file previously exported from oCMS. You can select what to import and how to handle conflicts with existing content.",
-            "translation": "Импорт содержимого из JSON или ZIP файла, ранее экспортированного из oCMS. Вы можете выбрать, что импортировать и как обрабатывать конфликты с существующим контентом."
+            "message": "The validation report lists the records in the file and any matches already on this site.",
+            "translation": "После проверки вы увидите, какие записи есть в файле и какие из них уже есть на сайте."
         },
         {
             "id": "import.zip_file_detected",

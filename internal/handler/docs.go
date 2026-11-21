@@ -96,6 +96,17 @@ type DocsGuide struct {
 	Title string
 }
 
+// APIReference renders the public API reference inside the back office.
+func (h *DocsHandler) APIReference(w http.ResponseWriter, r *http.Request) {
+	lang := h.renderer.GetAdminLang(r)
+	title := i18n.T(lang, "nav.api_docs")
+	pc := buildPageContext(r, h.sessionManager, h.renderer, title, []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: title, Active: true},
+	})
+	renderTempl(w, r, adminviews.APIReferencePage(pc))
+}
+
 // Overview handles GET /admin/docs - displays the site documentation overview.
 func (h *DocsHandler) Overview(w http.ResponseWriter, r *http.Request) {
 	lang := middleware.GetAdminLang(r)

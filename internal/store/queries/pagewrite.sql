@@ -93,3 +93,15 @@ SELECT CAST(json_object(
     'ai_editable', COALESCE((SELECT ai_editable FROM page_ai_access WHERE page_id = p.id), 0),
     'translations', json((SELECT json_group_array(json_object('id', member.id, 'language_code', member.language_code)) FROM (SELECT sibling.id, sibling.language_code FROM pages sibling JOIN members ON members.id = sibling.id ORDER BY sibling.id) member))
 ) AS TEXT) AS snapshot FROM pages p WHERE p.id = sqlc.arg(page_id);
+
+-- A demo upgrade may refresh the instructions that were originally seeded by
+-- the system. Preserve edited articles, languages, publication state and links.
+-- name: RefreshInitialDemoPageBody :one
+UPDATE pages
+SET body = sqlc.arg(body), updated_at = sqlc.arg(updated_at), revision = revision + 1
+WHERE slug = sqlc.arg(slug) AND language_code = sqlc.arg(language_code)
+  AND author_id = sqlc.arg(author_id) AND title = sqlc.arg(title)
+  AND status = 'published' AND revision = 1 AND body != sqlc.arg(body)
+  AND EXISTS (SELECT 1 FROM content_provenance cp WHERE cp.page_id = pages.id
+              AND cp.revision = 1 AND cp.source = 'system' AND cp.transport = 'demo_seed')
+RETURNING *;

@@ -536,7 +536,7 @@ templ themeSettingsScript(pc *PageContext) {
 			document.getElementById('media-picker-confirm').disabled = false;
 			loadThemeMedia();
 		});
-		themePicker.uploader.reset();
+		themePicker.uploader?.reset();
 		document.getElementById('media-picker-confirm').disabled = true;
 		overlay.style.display = 'flex';
 		document.body.classList.add('modal-open');

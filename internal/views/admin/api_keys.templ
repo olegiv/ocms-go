@@ -191,7 +191,7 @@ templ APIKeysListPage(pc *PageContext, data APIKeysListData) {
 					@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: "/api/v2/status", Target: "_blank"}) {
 						{ pc.T("api_keys.check_status") }
 					}
-					@button.Button(button.Props{Size: button.SizeSm, Href: "/api/v2/docs", Target: "_blank"}) {
+					@button.Button(button.Props{Size: button.SizeSm, Href: "/admin/api-docs"}) {
 						@icon.FileText(icon.Props{Size: 14})
 						{ pc.T("api_keys.view_docs") }
 					}

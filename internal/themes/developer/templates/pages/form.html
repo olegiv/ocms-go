@@ -37,6 +37,7 @@
     {{end}}
 
     <form method="POST" action="{{.LangPrefix}}/forms/{{.Form.Slug}}" class="public-form">
+        {{if .PreviewOnly}}<fieldset disabled>{{end}}
         <!-- Honeypot field (hidden from real users, bots will fill it) -->
         <div class="sr-only">
             <label for="_website">{{TTheme $.LangCode "forms.public.honeypot_label"}}</label>
@@ -182,6 +183,7 @@
         <div class="form-actions">
             <button type="submit" class="btn btn-primary btn-lg">{{TTheme $.LangCode "forms.public.submit"}}</button>
         </div>
+        {{if .PreviewOnly}}</fieldset>{{end}}
     </form>
     {{end}}
 </div>

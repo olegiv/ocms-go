@@ -9,6 +9,9 @@
             {{if .HeroCTA}}
             <a href="{{.HeroCTAURL}}" class="btn btn-primary">{{.HeroCTA}}</a>
             {{end}}
+            {{range .DemoLinks}}
+            <a href="{{.URL}}" class="btn btn-secondary">{{.Title}}</a>
+            {{end}}
         </div>
         {{if .HeroImage}}
         <div class="hero-image">

@@ -75,6 +75,9 @@ func (h *AuthHandler) LoginForm(w http.ResponseWriter, r *http.Request) {
 		Title:     i18n.T(lang, "auth.login"),
 		AdminLang: lang,
 	}
+	if middleware.IsDemoMode() {
+		data.DemoEmail = store.DemoAdminEmail
+	}
 
 	data.LangOptions = adminLangOptions(h.renderer)
 

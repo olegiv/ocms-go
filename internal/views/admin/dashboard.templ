@@ -84,15 +84,30 @@ type ActivityItem struct {
 templ DashboardPage(pc *PageContext, data DashboardData) {
 	@AdminLayout(pc) {
 		<!-- Page header -->
-		<div class="flex items-center justify-between mb-6">
+		<div class="flex flex-wrap items-center justify-between gap-3 mb-6">
 			<div>
 				<h1 class="text-2xl font-bold text-foreground">{ pc.T("dashboard.title") }</h1>
-				<p class="text-sm text-muted-foreground mt-1">{ pc.T("dashboard.welcome", pc.User.Name) }</p>
+				if pc.IsDemoMode {
+					<p class="text-sm text-muted-foreground mt-1">{ pc.T("dashboard.demo_intro") }</p>
+				} else {
+					<p class="text-sm text-muted-foreground mt-1">{ pc.T("dashboard.welcome", pc.User.Name) }</p>
+				}
 			</div>
-			<div>
-				@button.Button(button.Props{Href: "/admin/pages/new"}) {
-					@icon.Plus(icon.Props{Size: 16})
-					{ pc.T("pages.new") }
+			<div class="flex flex-wrap gap-2">
+				if pc.IsDemoMode {
+					@button.Button(button.Props{Href: "/admin/demo/article"}) {
+						@icon.FileText(icon.Props{Size: 16})
+						{ pc.T("dashboard.demo_open_article") }
+					}
+					@button.Button(button.Props{Href: "/admin/pages/new", Variant: button.VariantOutline}) {
+						@icon.FilePlus(icon.Props{Size: 16})
+						{ pc.T("dashboard.demo_new_draft") }
+					}
+				} else {
+					@button.Button(button.Props{Href: "/admin/pages/new"}) {
+						@icon.Plus(icon.Props{Size: 16})
+						{ pc.T("pages.new") }
+					}
 				}
 			</div>
 		</div>
@@ -298,14 +313,21 @@ templ quickActionsCard(pc *PageContext) {
 		}
 		@card.Content() {
 			<div class="grid grid-cols-2 gap-3">
-				@dashQuickAction("/admin/pages/new", pc.T("dashboard.create_page"), icon.FilePlus)
-				@dashQuickAction("/admin/media/upload", pc.T("dashboard.upload_media"), icon.Upload)
-				@dashQuickAction("/admin/forms/new", pc.T("dashboard.create_form"), icon.SquareCheck)
-				@dashQuickAction("/admin/menus", pc.T("dashboard.manage_menus"), icon.Menu)
-				@dashQuickAction("/admin/users/new", pc.T("dashboard.add_user"), icon.UserPlus)
-				@dashQuickAction("/admin/export", pc.T("dashboard.export_content"), icon.Download)
-				@dashQuickAction("/admin/import", pc.T("dashboard.import_content"), icon.Upload)
-				@dashQuickAction("/admin/config", pc.T("nav.settings"), icon.Settings)
+				if pc.IsDemoMode {
+					@dashQuickAction("/admin/pages", pc.T("nav.pages"), icon.FileText)
+					@dashQuickAction("/admin/media", pc.T("nav.media"), icon.Image)
+					@dashQuickAction("/admin/forms", pc.T("nav.forms"), icon.SquareCheck)
+					@dashQuickAction("/admin/menus", pc.T("nav.menus"), icon.Menu)
+				} else {
+					@dashQuickAction("/admin/pages/new", pc.T("dashboard.create_page"), icon.FilePlus)
+					@dashQuickAction("/admin/media/upload", pc.T("dashboard.upload_media"), icon.Upload)
+					@dashQuickAction("/admin/forms/new", pc.T("dashboard.create_form"), icon.SquareCheck)
+					@dashQuickAction("/admin/menus", pc.T("dashboard.manage_menus"), icon.Menu)
+					@dashQuickAction("/admin/users/new", pc.T("dashboard.add_user"), icon.UserPlus)
+					@dashQuickAction("/admin/export", pc.T("dashboard.export_content"), icon.Download)
+					@dashQuickAction("/admin/import", pc.T("dashboard.import_content"), icon.Upload)
+					@dashQuickAction("/admin/config", pc.T("nav.settings"), icon.Settings)
+				}
 			</div>
 		}
 	}

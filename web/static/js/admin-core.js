@@ -13,6 +13,23 @@ document.addEventListener('alpine:init', () => {
         }
     }));
 
+    // Keep the native details toggle on touch; hover and keyboard focus can
+    // preview the same help without activating the adjacent form control.
+    Alpine.data('actionHelp', () => ({
+        pointerEnter(event) {
+            if (event.pointerType === 'mouse') this.$refs.disclosure.open = true;
+        },
+        pointerLeave(event) {
+            if (event.pointerType === 'mouse' && !this.$el.querySelector(':focus-visible')) this.close();
+        },
+        focusIn(event) {
+            if (event.target.matches(':focus-visible')) this.$refs.disclosure.open = true;
+        },
+        close() {
+            this.$refs.disclosure.open = false;
+        }
+    }));
+
     Alpine.data('flashAlert', () => ({
         show: true,
         dismissing: false,

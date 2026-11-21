@@ -72,10 +72,7 @@ templ Sidebar(pc *PageContext) {
 						@navLinkPrefix(pc, "/admin/webhooks", pc.T("nav.webhooks"), pc.HasPrefix("/admin/webhooks"), iconWebhooks())
 						@navLinkPrefix(pc, "/admin/redirects", pc.T("nav.redirects"), pc.HasPrefix("/admin/redirects"), iconRedirects())
 					}
-					<a href="/api/v2/docs" class="nav-link" target="_blank">
-						@iconAPIDocs()
-						<span>{ pc.T("nav.api_docs") }</span>
-					</a>
+					@navLink(pc, "/admin/api-docs", pc.T("nav.api_docs"), pc.IsActive("/admin/api-docs"), iconAPIDocs())
 					if pc.IsAdmin() {
 						@navLinkPrefix(pc, "/admin/docs", pc.T("nav.site_docs"), pc.HasPrefix("/admin/docs"), iconDocs())
 					}

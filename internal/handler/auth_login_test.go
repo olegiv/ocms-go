@@ -4,6 +4,7 @@
 package handler
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/alexedwards/scs/sqlite3store"
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
@@ -24,7 +26,75 @@ import (
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/render"
+	"github.com/olegiv/ocms-go/internal/session"
+	"github.com/olegiv/ocms-go/internal/store"
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
+
+func TestDemoLoginForm(t *testing.T) {
+	if err := i18n.Init(nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, demoEmail := range []string{"", store.DemoAdminEmail} {
+		var out bytes.Buffer
+		if err := adminviews.LoginPage(adminviews.LoginData{AdminLang: "en", DemoEmail: demoEmail}).Render(t.Context(), &out); err != nil {
+			t.Fatal(err)
+		}
+		page := out.String()
+		for _, fragment := range []string{"/api/informer/demo-credentials", "Fill demo credentials", store.DemoAdminEmail} {
+			if strings.Contains(page, fragment) != (demoEmail != "") {
+				t.Errorf("demo=%t, unexpected presence of %q", demoEmail != "", fragment)
+			}
+		}
+		if !strings.Contains(page, `method="POST" action="/login"`) {
+			t.Error("both forms must use the regular sign-in flow")
+		}
+	}
+}
+
+// A wake rotates the public login password while the mounted database survives.
+// A daily reset instead seeds another database, including an empty session store.
+func TestDemoAdminSessionAcrossRestartAndReset(t *testing.T) {
+	t.Setenv("OCMS_DEMO_MODE", "true")
+	db := testDB(t)
+	start := func(database *sql.DB) (http.Handler, *scs.SessionManager) {
+		sm := session.New(database, false)
+		t.Cleanup(sm.Store.(*sqlite3store.SQLite3Store).StopCleanup)
+		return authTestRouter(testAuthHandler(t, database, sm), database, sm), sm
+	}
+	user := testUser{Email: store.DemoAdminEmail, Role: model.RoleAdmin, Name: "Demo"}
+	createTestUser(t, db, user)
+	password, err := store.RotateDemoAdminPassword(t.Context(), db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	router, sm := start(db)
+	login := authRequest(router, http.MethodPost, "/login", url.Values{"email": {user.Email}, "password": {password}})
+	if login.Header().Get("Location") != "/admin" {
+		t.Fatalf("demo login returned %d, location %q", login.Code, login.Header().Get("Location"))
+	}
+	cookie := sessionCookie(t, login, sm)
+
+	rotated, err := store.RotateDemoAdminPassword(t.Context(), db)
+	if err != nil || rotated == password || rotated == "" {
+		t.Fatal("restart failed to rotate the public password", err)
+	}
+	// Account for nine minutes of idle time in the persisted session expiry
+	// without sleeping or changing the SQLite clock used by the session store.
+	if _, err := db.Exec("UPDATE sessions SET expiry = expiry - 9.0 / (24 * 60)"); err != nil {
+		t.Fatal(err)
+	}
+	router, _ = start(db)
+	if got := authRequest(router, http.MethodGet, "/admin", nil, cookie); got.Code != http.StatusNoContent {
+		t.Fatalf("surviving session after rotation and idle interval: %d %q", got.Code, got.Header().Get("Location"))
+	}
+	resetDB := testDB(t)
+	createTestUser(t, resetDB, user)
+	router, _ = start(resetDB)
+	if got := authRequest(router, http.MethodGet, "/admin", nil, cookie); got.Code != http.StatusSeeOther || got.Header().Get("Location") != "/login" {
+		t.Fatalf("session after database replacement: %d %q", got.Code, got.Header().Get("Location"))
+	}
+}
 
 func TestLoginRoleRedirect(t *testing.T) {
 	if err := i18n.Init(nil); err != nil {
@@ -164,17 +234,22 @@ func TestLockedLoginSamplesRepeatedIPv6Denials(t *testing.T) {
 
 func newAuthTestHandler(t *testing.T) (*AuthHandler, *sql.DB, *scs.SessionManager) {
 	t.Helper()
+	db, sm := testHandlerSetup(t)
+	return testAuthHandler(t, db, sm), db, sm
+}
+
+func testAuthHandler(t *testing.T, db *sql.DB, sm *scs.SessionManager) *AuthHandler {
+	t.Helper()
 	if err := i18n.Init(nil); err != nil {
 		t.Fatal(err)
 	}
-	db, sm := testHandlerSetup(t)
 	middleware.SetSessionManager(sm)
 	t.Cleanup(func() { middleware.SetSessionManager(nil) })
 	renderer, err := render.New(render.Config{TemplatesFS: fstest.MapFS{}, SessionManager: sm, DB: db})
 	if err != nil {
 		t.Fatal(err)
 	}
-	return NewAuthHandler(db, renderer, sm, nil, nil, testMFAService(t, db)), db, sm
+	return NewAuthHandler(db, renderer, sm, nil, nil, testMFAService(t, db))
 }
 
 func authTestRouter(h *AuthHandler, db *sql.DB, sm *scs.SessionManager) http.Handler {

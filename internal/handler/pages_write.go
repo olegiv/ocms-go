@@ -94,7 +94,7 @@ func (h *PagesHandler) formWrite(r *http.Request, input pageFormInput, base *int
 				return err
 			}
 		}
-		if !input.CreatedAt.IsZero() && !input.CreatedAt.Equal(page.CreatedAt) {
+		if !middleware.IsDemoMode() && !input.CreatedAt.IsZero() && !input.CreatedAt.Equal(page.CreatedAt) {
 			if err := work.Q.UpdatePageCreatedAt(ctx, store.UpdatePageCreatedAtParams{ID: page.ID, CreatedAt: input.CreatedAt}); err != nil {
 				return err
 			}
@@ -194,6 +194,10 @@ func (h *PagesHandler) pageConflict(w http.ResponseWriter, r *http.Request, err 
 	latest, loadErr := h.queries.GetPageByID(r.Context(), page.ID)
 	if loadErr != nil {
 		h.preservePageEdits(w, r, page.ID, fmt.Errorf("load current page for conflict form: %w", loadErr))
+		return true
+	}
+	if protectedDemoPage(latest) {
+		demoDraftWriteForbidden(w, h.renderer.GetAdminLang(r))
 		return true
 	}
 	allCategories, loadErr := h.queries.ListCategories(r.Context())
