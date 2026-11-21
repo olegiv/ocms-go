@@ -3,7 +3,7 @@
     "language": "en",
     "messages": [
         {"id": "informer.title", "message": "Informer Bar", "translation": "Informer Bar"},
-        {"id": "informer.description", "message": "Display a dismissible notification bar with a spinner at the top of the page", "translation": "Display a dismissible notification bar with a spinner at the top of the page"},
+        {"id": "informer.description", "message": "Display a dismissible notification bar at the top of the page", "translation": "Display a dismissible notification bar at the top of the page"},
         {"id": "informer.enabled", "message": "Enable Informer Bar", "translation": "Enable Informer Bar"},
         {"id": "informer.enabled_help", "message": "When enabled, visitors will see a notification bar at the top of the page", "translation": "When enabled, visitors will see a notification bar at the top of the page"},
         {"id": "informer.text_section", "message": "Message", "translation": "Message"},

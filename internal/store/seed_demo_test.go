@@ -238,6 +238,56 @@ func TestSeedDemoSnapshotFailureRollsBackDatabase(t *testing.T) {
 	}
 }
 
+func TestSeedDemoInformerSettingsRefreshesLegacyNotice(t *testing.T) {
+	db, cleanup := testDB(t)
+	t.Cleanup(cleanup)
+	// The informer module owns this table and creates its singleton before demo seeding.
+	if _, err := db.Exec(`CREATE TABLE informer_settings (
+		id INTEGER PRIMARY KEY, enabled INTEGER, text TEXT, bg_color TEXT,
+		text_color TEXT, version INTEGER, updated_at DATETIME
+	)`); err != nil {
+		t.Fatal(err)
+	}
+	const legacyNotice = `This is a demo instance. Admin panel: <a href="/admin/">/admin/</a> &mdash; Login: <strong>demo@example.com</strong> / <strong class="ocms-demo-pw">&hellip;</strong>`
+	const customNotice = "Registration opens on Monday."
+	for _, tc := range []struct {
+		mode, initial string
+	}{
+		{"true", legacyNotice},
+		{"false", customNotice},
+	} {
+		t.Run("demo="+tc.mode, func(t *testing.T) {
+			t.Setenv("OCMS_DEMO_MODE", tc.mode)
+			if _, err := db.Exec(`INSERT OR REPLACE INTO informer_settings (id, enabled, text, version)
+				VALUES (1, 1, ?, 7)`, tc.initial); err != nil {
+				t.Fatal(err)
+			}
+			if err := SeedDemoInformerSettings(db); err != nil {
+				t.Fatal(err)
+			}
+			var notice string
+			var version int
+			if err := db.QueryRow("SELECT text, version FROM informer_settings WHERE id = 1").Scan(&notice, &version); err != nil {
+				t.Fatal(err)
+			}
+			if tc.mode == "false" {
+				if notice != customNotice || version != 7 {
+					t.Errorf("ordinary startup changed the custom notice: %q (version %d)", notice, version)
+				}
+				return
+			}
+			if version <= 7 || !strings.Contains(notice, `href="/admin/"`) || !strings.Contains(notice, ">Open the back office</a>") {
+				t.Errorf("demo startup did not replace the old notice with the back-office link: %q (version %d)", notice, version)
+			}
+			for _, obsolete := range []string{"login", DemoAdminEmail, "ocms-demo-pw"} {
+				if strings.Contains(strings.ToLower(notice), obsolete) {
+					t.Errorf("refreshed demo notice still contains %q", obsolete)
+				}
+			}
+		})
+	}
+}
+
 func TestSeedDemo_Disabled(t *testing.T) {
 	db, cleanup, ctx, q := testSetup(t)
 	defer cleanup()

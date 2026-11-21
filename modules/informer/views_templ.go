@@ -320,7 +320,17 @@ func InformerPage(pc *adminviews.PageContext, data InformerViewData) templ.Compo
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "\"><div class=\"informer-preview-content\"><span class=\"informer-preview-spinner\"></span> <span id=\"informer-preview-text\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "\"><div class=\"informer-preview-content\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if !demoMode() {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<span class=\"informer-preview-spinner\" aria-hidden=\"true\"></span> ")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "<span id=\"informer-preview-text\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -333,66 +343,66 @@ func InformerPage(pc *adminviews.PageContext, data InformerViewData) templ.Compo
 				var templ_7745c5c3_Var23 string
 				templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("informer.text_placeholder"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/informer/views.templ`, Line: 125, Col: 45}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/informer/views.templ`, Line: 127, Col: 45}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "</span></div><span class=\"informer-preview-close\" style=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "</span></div><span class=\"informer-preview-close\" style=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var24 string
 			templ_7745c5c3_Var24, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("color:" + data.TextColor + ";")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/informer/views.templ`, Line: 129, Col: 83}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/informer/views.templ`, Line: 131, Col: 83}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"18\" y1=\"6\" x2=\"6\" y2=\"18\"></line><line x1=\"6\" y1=\"6\" x2=\"18\" y2=\"18\"></line></svg></span></div></div></div></div><!-- Info Box --><div class=\"card informer-card\"><div class=\"card-body\"><div class=\"info-box info-box-info\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"10\"></circle> <path d=\"M12 16v-4\"></path> <path d=\"M12 8h.01\"></path></svg> <span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"18\" y1=\"6\" x2=\"6\" y2=\"18\"></line><line x1=\"6\" y1=\"6\" x2=\"18\" y2=\"18\"></line></svg></span></div></div></div></div><!-- Info Box --><div class=\"card informer-card\"><div class=\"card-body\"><div class=\"info-box info-box-info\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"10\"></circle> <path d=\"M12 16v-4\"></path> <path d=\"M12 8h.01\"></path></svg> <span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var25 string
 			templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("informer.cookie_info"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/informer/views.templ`, Line: 145, Col: 42}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/informer/views.templ`, Line: 147, Col: 42}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "</span></div></div></div><div class=\"form-actions\"><button type=\"submit\" class=\"btn btn-primary\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z\"></path> <polyline points=\"17 21 17 13 7 13 7 21\"></polyline> <polyline points=\"7 3 7 8 15 8\"></polyline></svg> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "</span></div></div></div><div class=\"form-actions\"><button type=\"submit\" class=\"btn btn-primary\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z\"></path> <polyline points=\"17 21 17 13 7 13 7 21\"></polyline> <polyline points=\"7 3 7 8 15 8\"></polyline></svg> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var26 string
 			templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("informer.save_button"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/informer/views.templ`, Line: 156, Col: 35}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/informer/views.templ`, Line: 158, Col: 35}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "</button></div></form><style>\n.informer-form {\n    max-width: 800px;\n}\n\n.informer-card {\n    margin-bottom: 1.5rem;\n}\n\n.provider-header {\n    display: flex;\n    align-items: center;\n    gap: 1rem;\n}\n\n.provider-logo {\n    width: 48px;\n    height: 48px;\n    border-radius: 8px;\n    display: flex;\n    align-items: center;\n    justify-content: center;\n    flex-shrink: 0;\n}\n\n.provider-logo-informer {\n    background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);\n    color: white;\n}\n\n.provider-info {\n    flex: 1;\n}\n\n.provider-info h2 {\n    margin: 0;\n    font-size: 1.1rem;\n}\n\n.provider-info p {\n    margin: 0.25rem 0 0;\n    font-size: 0.875rem;\n    color: var(--text-muted);\n}\n\n.form-row {\n    display: grid;\n    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));\n    gap: 1rem;\n}\n\n.color-input-group {\n    display: flex;\n    align-items: center;\n    gap: 0.5rem;\n}\n\n.form-control-color {\n    width: 48px;\n    height: 38px;\n    padding: 2px;\n    border: 1px solid var(--border-color);\n    border-radius: 4px;\n    cursor: pointer;\n    background: none;\n}\n\n.color-text {\n    max-width: 100px;\n    font-family: monospace;\n}\n\n.informer-preview {\n    display: flex;\n    align-items: center;\n    justify-content: space-between;\n    padding: 8px 16px;\n    border-radius: 6px;\n    font-size: 14px;\n    line-height: 1.4;\n    box-shadow: 0 2px 4px rgba(0,0,0,0.15);\n}\n\n.informer-preview-content {\n    display: flex;\n    align-items: center;\n    gap: 10px;\n    flex: 1;\n    justify-content: center;\n}\n\n.informer-preview-spinner {\n    display: inline-block;\n    width: 16px;\n    height: 16px;\n    border: 2px solid currentColor;\n    border-top-color: transparent;\n    border-radius: 50%;\n    animation: informer-admin-spin 0.8s linear infinite;\n    flex-shrink: 0;\n}\n\n@keyframes informer-admin-spin {\n    to { transform: rotate(360deg); }\n}\n\n.informer-preview-close {\n    opacity: 0.8;\n    display: flex;\n    align-items: center;\n}\n\n.form-actions {\n    margin-top: 1.5rem;\n}\n</style> <script nonce=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "</button></div></form><style>\n.informer-form {\n    max-width: 800px;\n}\n\n.informer-card {\n    margin-bottom: 1.5rem;\n}\n\n.provider-header {\n    display: flex;\n    align-items: center;\n    gap: 1rem;\n}\n\n.provider-logo {\n    width: 48px;\n    height: 48px;\n    border-radius: 8px;\n    display: flex;\n    align-items: center;\n    justify-content: center;\n    flex-shrink: 0;\n}\n\n.provider-logo-informer {\n    background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);\n    color: white;\n}\n\n.provider-info {\n    flex: 1;\n}\n\n.provider-info h2 {\n    margin: 0;\n    font-size: 1.1rem;\n}\n\n.provider-info p {\n    margin: 0.25rem 0 0;\n    font-size: 0.875rem;\n    color: var(--text-muted);\n}\n\n.form-row {\n    display: grid;\n    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));\n    gap: 1rem;\n}\n\n.color-input-group {\n    display: flex;\n    align-items: center;\n    gap: 0.5rem;\n}\n\n.form-control-color {\n    width: 48px;\n    height: 38px;\n    padding: 2px;\n    border: 1px solid var(--border-color);\n    border-radius: 4px;\n    cursor: pointer;\n    background: none;\n}\n\n.color-text {\n    max-width: 100px;\n    font-family: monospace;\n}\n\n.informer-preview {\n    display: flex;\n    align-items: center;\n    justify-content: space-between;\n    padding: 8px 16px;\n    border-radius: 6px;\n    font-size: 14px;\n    line-height: 1.4;\n    box-shadow: 0 2px 4px rgba(0,0,0,0.15);\n}\n\n.informer-preview-content {\n    display: flex;\n    align-items: center;\n    gap: 10px;\n    flex: 1;\n    justify-content: center;\n}\n\n.informer-preview-spinner {\n    display: inline-block;\n    width: 16px;\n    height: 16px;\n    border: 2px solid currentColor;\n    border-top-color: transparent;\n    border-radius: 50%;\n    animation: informer-admin-spin 0.8s linear infinite;\n    flex-shrink: 0;\n}\n\n@keyframes informer-admin-spin {\n    to { transform: rotate(360deg); }\n}\n\n.informer-preview-close {\n    opacity: 0.8;\n    display: flex;\n    align-items: center;\n}\n\n.form-actions {\n    margin-top: 1.5rem;\n}\n</style> <script nonce=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var27 string
 			templ_7745c5c3_Var27, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.GetNonce(ctx)).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/informer/views.templ`, Line: 276, Col: 37}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/informer/views.templ`, Line: 278, Col: 37}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var27)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "\">\n(function() {\n    // Sync color picker with text display\n    var bgColor = document.getElementById('bg_color');\n    var textColor = document.getElementById('text_color');\n    var preview = document.getElementById('informer-preview');\n    var previewText = document.getElementById('informer-preview-text');\n    var textInput = document.getElementById('text');\n\n    if (bgColor) {\n        bgColor.addEventListener('input', function() {\n            this.nextElementSibling.value = this.value;\n            if (preview) preview.style.background = this.value;\n        });\n    }\n    if (textColor) {\n        textColor.addEventListener('input', function() {\n            this.nextElementSibling.value = this.value;\n            if (preview) {\n                preview.style.color = this.value;\n                var closeBtn = preview.querySelector('.informer-preview-close');\n                if (closeBtn) closeBtn.style.color = this.value;\n            }\n        });\n    }\n    if (textInput && previewText) {\n        function sanitizePreviewHTML(value) {\n            var html = String(value || '');\n            var tpl = document.createElement('template');\n            tpl.innerHTML = html;\n\n            tpl.content.querySelectorAll('script,style,iframe,object,embed,link,meta,base,svg,math').forEach(function(node) {\n                node.remove();\n            });\n\n            tpl.content.querySelectorAll('*').forEach(function(node) {\n                Array.from(node.attributes).forEach(function(attr) {\n                    var attrName = attr.name.toLowerCase();\n                    var attrValue = attr.value || '';\n                    if (attrName.indexOf('on') === 0 || attrName === 'style') {\n                        node.removeAttribute(attr.name);\n                        return;\n                    }\n                    if ((attrName === 'href' || attrName === 'src') && /^\\s*javascript:/i.test(attrValue)) {\n                        node.removeAttribute(attr.name);\n                    }\n                });\n            });\n\n            return tpl.innerHTML;\n        }\n\n        textInput.addEventListener('input', function() {\n            previewText.innerHTML = this.value ? sanitizePreviewHTML(this.value) : this.placeholder;\n        });\n    }\n})();\n</script>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "\">\n(function() {\n    // Sync color picker with text display\n    var bgColor = document.getElementById('bg_color');\n    var textColor = document.getElementById('text_color');\n    var preview = document.getElementById('informer-preview');\n    var previewText = document.getElementById('informer-preview-text');\n    var textInput = document.getElementById('text');\n\n    if (bgColor) {\n        bgColor.addEventListener('input', function() {\n            this.nextElementSibling.value = this.value;\n            if (preview) preview.style.background = this.value;\n        });\n    }\n    if (textColor) {\n        textColor.addEventListener('input', function() {\n            this.nextElementSibling.value = this.value;\n            if (preview) {\n                preview.style.color = this.value;\n                var closeBtn = preview.querySelector('.informer-preview-close');\n                if (closeBtn) closeBtn.style.color = this.value;\n            }\n        });\n    }\n    if (textInput && previewText) {\n        function sanitizePreviewHTML(value) {\n            var html = String(value || '');\n            var tpl = document.createElement('template');\n            tpl.innerHTML = html;\n\n            tpl.content.querySelectorAll('script,style,iframe,object,embed,link,meta,base,svg,math').forEach(function(node) {\n                node.remove();\n            });\n\n            tpl.content.querySelectorAll('*').forEach(function(node) {\n                Array.from(node.attributes).forEach(function(attr) {\n                    var attrName = attr.name.toLowerCase();\n                    var attrValue = attr.value || '';\n                    if (attrName.indexOf('on') === 0 || attrName === 'style') {\n                        node.removeAttribute(attr.name);\n                        return;\n                    }\n                    if ((attrName === 'href' || attrName === 'src') && /^\\s*javascript:/i.test(attrValue)) {\n                        node.removeAttribute(attr.name);\n                    }\n                });\n            });\n\n            return tpl.innerHTML;\n        }\n\n        textInput.addEventListener('input', function() {\n            previewText.innerHTML = this.value ? sanitizePreviewHTML(this.value) : this.placeholder;\n        });\n    }\n})();\n</script>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

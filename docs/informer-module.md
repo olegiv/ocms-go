@@ -1,17 +1,17 @@
 # Informer Module
 
-The Informer module displays a dismissible notification bar with a spinning indicator at the top of the page. It is useful for showing maintenance notices, announcements, or alerts to visitors.
+The Informer module displays a dismissible notification bar at the top of the page for maintenance notices, announcements, or alerts.
 
 ## Features
 
-- **Notification bar** above the page content with a spinning indicator
+- **Notification bar** above the page content. Regular announcements include a spinning indicator.
 - **Dismissible** - visitors can close the bar; their preference is stored in a cookie
 - **Auto-reset** - saving settings in admin resets all dismissals so everyone sees the updated bar
 - **HTML support** - notification text supports sanitized HTML for links, bold, and other formatting
 - **Customizable colors** - configurable background and text colors via the admin panel
 - **Translated admin UI** - admin labels and messages are translated (`en`, `ru`); the bar text itself is shown as entered
 - **Admin control** - enable/disable and update text from `/admin/informer`
-- **Demo mode** - automatically enabled with admin access info when `OCMS_DEMO_MODE=true`
+- **Demo mode** displays a static notice with a link to the back office when `OCMS_DEMO_MODE=true`.
 
 ## Admin Settings
 
@@ -50,9 +50,9 @@ The bar is rendered with `display:none` by default and shown via JavaScript only
 
 ## Demo Mode
 
-When `OCMS_DEMO_MODE=true`, the informer bar is automatically enabled on every startup with a message showing how to access the admin dashboard, including the demo admin email. Because each startup saves the settings again, the version counter increments and earlier dismissals are reset.
+When `OCMS_DEMO_MODE=true`, the bar identifies the shared demo and links to its back office. Follow that link and choose **Fill demo credentials** on the sign-in page, then **Login**.
 
-The demo password is not part of the page HTML. The bar's JavaScript fetches it at page-view time from the public endpoint `GET /api/informer/demo-credentials` (JSON `{"password": "..."}`, `Cache-Control: no-store`), which answers 404 unless `OCMS_DEMO_MODE=true`. In demo mode the admin settings form refuses to save.
+Each startup refreshes the demo notice and its dismissal version. The Informer settings are read-only on the shared demo.
 
 ## Translating the Bar Text
 
@@ -80,7 +80,7 @@ Both the `default` and `developer` themes include this integration. Custom theme
 - **Cookie name**: `ocms_informer_dismissed`
 - **Cookie value**: settings version counter (integer)
 - **Admin URL**: `/admin/informer`
-- **Public route**: `GET /api/informer/demo-credentials` (demo mode only)
+- **Demo sign-in route**: **Fill demo credentials** requests the current password from `GET /api/informer/demo-credentials` (`Cache-Control: no-store`). The endpoint is available only in demo mode.
 - **Template function**: `informerBar` - returns the full HTML/CSS/JS for the bar (takes the CSP nonce as its optional argument)
 
-The bar renders in normal document flow above the page content. It uses a CSS animation (`@keyframes informer-spin`) for the spinning indicator and inline styles for color customization.
+The bar renders in normal document flow above the page content and uses inline styles for its configured colors. Regular notifications use the `informer-spin` animation. The demo notice is static.

@@ -533,9 +533,7 @@ renamed or replaced admin is not brought back by a restart with
 
 With `OCMS_DEMO_MODE=true` (requires `OCMS_DO_SEED=true`), additional demo content is seeded including sample pages, categories, tags, media, and menu items. Two demo users are created:
 
-- **Admin**: demo@example.com; its password is rotated to a random value on
-  every startup and shown in the informer bar (the default admin's
-  `changeme1234` is rotated away too)
+- **Admin** (`demo@example.com`). Follow the back-office link in the demo banner and choose **Fill demo credentials** on the sign-in page. The password changes on every startup. Demo mode also replaces the default admin password if it is still `changeme1234`.
 - **Editor**: editor@example.com / demo1234demo
 
 See [docs/demo-deployment.md](docs/demo-deployment.md) for Fly.io deployment and demo configuration details.

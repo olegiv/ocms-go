@@ -33,7 +33,7 @@ When enabled, `SeedDemo` creates:
 
 | Role | Email | Password |
 |------|-------|----------|
-| Admin | `demo@example.com` | Choose **Fill demo credentials** on the sign-in page for the current email and password, then choose **Login**. The homepage banner also shows the current credentials. |
+| Admin | `demo@example.com` | Follow the back-office link in the demo banner. On the sign-in page, choose **Fill demo credentials**, then **Login**. |
 | Editor | `editor@example.com` | `demo1234demo` |
 | Default admin | `admin@example.com` | Seeded with `changeme1234`, but rotated to a random password at startup in demo mode, so it cannot be used |
 

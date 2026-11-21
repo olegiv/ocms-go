@@ -49,13 +49,13 @@
         },
         {
             "id": "demo.home.intro",
-            "message": "A single-binary Go CMS with a built-in editor.",
-            "translation": "A single-binary Go CMS with a built-in editor."
+            "message": "Open the back office to try the editor in this single-binary Go CMS. Use the demo account to create and save a draft.",
+            "translation": "Open the back office to try the editor in this single-binary Go CMS. Use the demo account to create and save a draft."
         },
         {
             "id": "demo.home.open_admin",
-            "message": "Open demo admin",
-            "translation": "Open demo admin"
+            "message": "Try the back office",
+            "translation": "Try the back office"
         },
         {
             "id": "demo.home.github",

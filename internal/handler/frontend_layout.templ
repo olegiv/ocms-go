@@ -149,6 +149,11 @@ templ frontendNav(base BaseTemplateData) {
 				}
 			</a>
 			<nav class="fe-nav flex items-center gap-2" x-data="{ open: false }">
+				if link := base.DemoBackOffice; link != nil {
+					@button.Button(button.Props{Href: link.URL, Size: button.SizeSm, Class: "whitespace-normal text-center leading-tight"}) {
+						{ link.Title }
+					}
+				}
 				<button class="fe-nav-toggle inline-flex items-center justify-center rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground md:hidden" @click="open = !open" aria-label="Toggle navigation">
 					<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
 				</button>

@@ -212,10 +212,11 @@ type BaseTemplateData struct {
 	CustomCSS     string
 
 	// Menus - MainMenu/FooterMenu for code, Navigation/FooterNav for templates
-	MainMenu   []MenuItem
-	FooterMenu []MenuItem
-	Navigation []MenuItem
-	FooterNav  []MenuItem
+	MainMenu       []MenuItem
+	FooterMenu     []MenuItem
+	Navigation     []MenuItem
+	FooterNav      []MenuItem
+	DemoBackOffice *MenuItem
 
 	// Footer
 	FooterText    string
@@ -857,10 +858,10 @@ func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 		ShowAllPostsLink: len(recentPageViews) > 6,
 	}
 
-	if middleware.IsDemoMode() {
+	if base.DemoBackOffice != nil {
 		data.HeroSubtitle = i18n.T(languageCode, "demo.home.intro")
-		data.HeroCTA = i18n.T(languageCode, "demo.home.open_admin")
-		data.HeroCTAURL = "/admin/"
+		data.HeroCTA = base.DemoBackOffice.Title
+		data.HeroCTAURL = base.DemoBackOffice.URL
 		data.DemoLinks = []MenuItem{{Title: i18n.T(languageCode, "demo.home.github"), URL: "https://github.com/olegiv/ocms-go"}}
 		article, err := h.queries.GetPublishedPageBySlug(ctx, store.DemoArticleSlug)
 		if err == nil {
@@ -2448,6 +2449,9 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 	// Navigation/FooterNav are aliases for MainMenu/FooterMenu (for template compatibility)
 	data.Navigation = data.MainMenu
 	data.FooterNav = data.FooterMenu
+	if middleware.IsDemoMode() {
+		data.DemoBackOffice = &MenuItem{Title: i18n.T(langCode, "demo.home.open_admin"), URL: "/admin/"}
+	}
 
 	// Load widgets for the active theme
 	if activeTheme := h.themeManager.GetActiveTheme(); activeTheme != nil && !preview.IsRequest(ctx) {

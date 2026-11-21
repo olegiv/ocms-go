@@ -179,6 +179,59 @@ img {
     color: inherit;
 }
 
+/* The demo entry stays in the sticky header, including when navigation is collapsed. */
+.dev-header-inner-demo {
+    flex-wrap: wrap;
+    gap: var(--dev-space-sm) var(--dev-space-md);
+}
+
+.dev-header-inner-demo .dev-back-office {
+    min-height: 44px;
+    padding-inline: 0.75rem;
+    justify-content: center;
+    line-height: 1.3;
+    text-align: center;
+}
+
+.dev-back-office:focus-visible {
+    outline: 2px solid var(--dev-text-bright);
+    outline-offset: 3px;
+}
+
+@media (min-width: 769px) {
+    .dev-header-inner-demo .dev-nav:has(.dev-nav-list) {
+        flex-basis: min(100%, 32rem);
+    }
+}
+
+@media (max-width: 768px) {
+    .dev-header-inner-demo {
+        flex-wrap: nowrap;
+        gap: var(--dev-space-sm);
+    }
+
+    .dev-header-inner-demo .dev-logo {
+        flex-shrink: 1;
+        min-width: 0;
+    }
+
+    .dev-header-inner-demo .dev-logo-text {
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+    }
+
+    .dev-header-inner-demo .dev-back-office {
+        margin-inline-start: auto;
+    }
+
+    .dev-header-inner-demo .dev-menu-toggle {
+        flex-shrink: 0;
+        min-width: 44px;
+        min-height: 44px;
+    }
+}
+
 /* Navigation */
 .dev-nav {
     display: flex;

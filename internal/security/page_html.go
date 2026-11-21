@@ -110,11 +110,6 @@ func buildPageHTMLSanitizer() *bluemonday.Policy {
 	p.AllowAttrs("class").Matching(
 		regexp.MustCompile(`^language-[a-zA-Z0-9_-]+(\s+line-numbers)?$`),
 	).OnElements("pre", "code")
-	// Allow the informer module's demo-credential marker so the banner JS can swap
-	// in the current demo admin password at runtime.
-	p.AllowAttrs("class").Matching(
-		regexp.MustCompile(`^ocms-demo-pw$`),
-	).OnElements("strong")
 	// Keep the value-checked inline styles the admin editor writes (alignment,
 	// colours, fonts, indent, image and table layout); see pageStyleRules.
 	allowPageStyles(p)

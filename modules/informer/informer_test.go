@@ -4,6 +4,7 @@
 package informer
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -12,6 +13,8 @@ import (
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
+
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
 
 func TestNew(t *testing.T) {
@@ -115,6 +118,7 @@ func TestRenderBarNilSettings(t *testing.T) {
 }
 
 func TestRenderBarEnabled(t *testing.T) {
+	t.Setenv("OCMS_DEMO_MODE", "")
 	m := &Module{
 		settings: &Settings{
 			Enabled:   true,
@@ -142,7 +146,7 @@ func TestRenderBarEnabled(t *testing.T) {
 		t.Error("output should contain the text color")
 	}
 
-	if !strings.Contains(output, "informer-bar-spinner") {
+	if !strings.Contains(output, `class="informer-bar-spinner"`) {
 		t.Error("output should contain the spinner element")
 	}
 
@@ -594,41 +598,28 @@ func TestHandleDemoCredentials_ReturnsRotatedPassword(t *testing.T) {
 	}
 }
 
-func TestRenderBarEmitsDemoFetchScript(t *testing.T) {
-	t.Setenv("OCMS_DEMO_MODE", "true")
-	m := &Module{
-		settings: &Settings{
-			Enabled:   true,
-			Text:      `Login: <strong class="ocms-demo-pw">&hellip;</strong>`,
-			BgColor:   "#1e40af",
-			TextColor: "#ffffff",
-		},
-	}
-
-	output := string(m.renderBar(""))
-
-	if !strings.Contains(output, "/api/informer/demo-credentials") {
-		t.Error("demo-mode banner should fetch credentials endpoint")
-	}
-	if !strings.Contains(output, "ocms-demo-pw") {
-		t.Error("banner markup should contain the password placeholder class")
-	}
-}
-
-func TestRenderBarOmitsDemoFetchScriptOutsideDemoMode(t *testing.T) {
-	t.Setenv("OCMS_DEMO_MODE", "")
-	m := &Module{
-		settings: &Settings{
-			Enabled:   true,
-			Text:      "Regular notice",
-			BgColor:   "#1e40af",
-			TextColor: "#ffffff",
-		},
-	}
-
-	output := string(m.renderBar(""))
-
-	if strings.Contains(output, "/api/informer/demo-credentials") {
-		t.Error("non-demo banner must not fetch the demo credentials endpoint")
+func TestInformerDemoPresentation(t *testing.T) {
+	m := &Module{settings: &Settings{Enabled: true, Text: "Demo notice"}}
+	for _, mode := range []string{"true", "false"} {
+		t.Run(mode, func(t *testing.T) {
+			t.Setenv("OCMS_DEMO_MODE", mode)
+			banner := string(m.renderBar("nonce"))
+			if strings.Contains(banner, "/api/informer/demo-credentials") {
+				t.Error("public banner requests sign-in credentials")
+			}
+			if !strings.Contains(banner, "Demo notice") || !strings.Contains(banner, "dismissInformer") {
+				t.Fatal("notice or dismiss control missing")
+			}
+			var preview bytes.Buffer
+			pc := &adminviews.PageContext{AdminLang: "en"}
+			if err := InformerPage(pc, InformerViewData{}).Render(t.Context(), &preview); err != nil {
+				t.Fatal(err)
+			}
+			wantSpinner := mode != "true"
+			if strings.Contains(banner, `class="informer-bar-spinner"`) != wantSpinner ||
+				strings.Contains(preview.String(), `class="informer-preview-spinner"`) != wantSpinner {
+				t.Errorf("public and preview spinner presence should both be %t", wantSpinner)
+			}
+		})
 	}
 }

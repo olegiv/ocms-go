@@ -99,12 +99,8 @@ func SeedDemo(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
-// SeedDemoInformerSettings enables the informer bar with demo credentials.
+// SeedDemoInformerSettings enables the public demo notice and its back-office link.
 // Must be called after module initialization (informer module creates the table).
-//
-// The password is NOT baked into the banner HTML. The banner's JS fetches the
-// current password from /api/informer/demo-credentials at page-view time so it
-// always matches the live DB hash, even after cold-start rotations.
 func SeedDemoInformerSettings(db *sql.DB) error {
 	if os.Getenv("OCMS_DEMO_MODE") != "true" {
 		return nil
@@ -118,10 +114,7 @@ func SeedDemoInformerSettings(db *sql.DB) error {
 		return nil
 	}
 
-	demoText := fmt.Sprintf(
-		`This is a demo instance. Admin panel: <a href="/admin/" style="color:#fff;text-decoration:underline">/admin/</a> &mdash; Login: <strong>%s</strong> / <strong class="ocms-demo-pw">&hellip;</strong>`,
-		DemoAdminEmail,
-	)
+	const demoText = `This is the oCMS demo. <a href="/admin/" style="color:#fff;text-decoration:underline">Open the back office</a>`
 
 	_, err = db.Exec(`
 		UPDATE informer_settings SET

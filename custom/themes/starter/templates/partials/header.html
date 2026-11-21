@@ -63,6 +63,9 @@
             </nav>
 
             <div class="st-header__actions">
+                {{with .DemoBackOffice}}
+                <a class="st-btn st-btn--primary demo-back-office" href="{{.URL}}">{{.Title}}</a>
+                {{end}}
                 {{if .ShowSearch}}
                 <div class="st-search-toggle">
                     <button class="st-search-toggle__btn" aria-label="{{TTheme .LangCode "search.title"}}" aria-expanded="false">

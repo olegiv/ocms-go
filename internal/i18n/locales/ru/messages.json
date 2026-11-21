@@ -49,13 +49,13 @@
         },
         {
             "id": "demo.home.intro",
-            "message": "A single-binary Go CMS with a built-in editor.",
-            "translation": "CMS на Go со встроенным редактором в одном исполняемом файле."
+            "message": "Open the back office to try the editor in this single-binary Go CMS. Use the demo account to create and save a draft.",
+            "translation": "Откройте панель управления и попробуйте редактор этой CMS на Go. Войдите под демо-аккаунтом, чтобы создать и сохранить черновик."
         },
         {
             "id": "demo.home.open_admin",
-            "message": "Open demo admin",
-            "translation": "Открыть демопанель"
+            "message": "Try the back office",
+            "translation": "В панель управления"
         },
         {
             "id": "demo.home.github",

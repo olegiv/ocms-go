@@ -325,7 +325,7 @@ Summary (grouped by concern; source of truth: `internal/config/config.go`):
 
 Local bootstrap requires explicit `OCMS_ENV=development`. With `OCMS_DO_SEED=true`, it seeds `admin@example.com` / `changeme1234` unless a seed password is configured. Outside development, seeding requires explicit demo mode.
 
-When `OCMS_DEMO_MODE=true`, also seeds demo users: `demo@example.com` (admin; its password is rotated to a random value on every startup and shown in the informer bar, and the default admin's password is rotated too while it is still `changeme1234`) and `editor@example.com` / `demo1234demo` (editor)
+When `OCMS_DEMO_MODE=true`, startup also seeds the demo admin (`demo@example.com`) and editor (`editor@example.com` / `demo1234demo`). The public demo banner links to the back office. On the sign-in page, **Fill demo credentials** fills in the current admin account details. The demo admin password rotates on every startup. The default admin's password also rotates if it is still `changeme1234`.
 
 Seeding is opt-in to prevent automatic recreation of deleted data on restart.
 

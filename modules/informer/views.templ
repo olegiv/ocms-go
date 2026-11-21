@@ -117,7 +117,9 @@ templ InformerPage(pc *adminviews.PageContext, data InformerViewData) {
 						<label>{ pc.T("informer.preview") }</label>
 						<div id="informer-preview" class="informer-preview" style={ "background:" + data.BgColor + ";color:" + data.TextColor + ";" }>
 							<div class="informer-preview-content">
-								<span class="informer-preview-spinner"></span>
+								if !demoMode() {
+									<span class="informer-preview-spinner" aria-hidden="true"></span>
+								}
 								<span id="informer-preview-text">
 									if data.Text != "" {
 										@templ.Raw(security.SanitizePageHTML(data.Text))

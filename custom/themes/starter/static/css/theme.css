@@ -1717,6 +1717,11 @@ select.st-form__input {
 }
 
 @media (max-width: 768px) {
+    .st-header__inner:has(.demo-back-office) {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
     .st-header__toggle {
         display: flex;
     }

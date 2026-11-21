@@ -116,7 +116,7 @@ func (m *Module) RegisterRoutes(r chi.Router) {
 }
 
 // SetDemoPassword stores the plaintext demo admin password in memory so the
-// demo-credentials endpoint can serve it to the banner. Called after every
+// sign-in page can fill the shared demo account on request. Called after every
 // password rotation at startup.
 func (m *Module) SetDemoPassword(pw string) {
 	m.demoPasswordMu.Lock()
@@ -124,11 +124,13 @@ func (m *Module) SetDemoPassword(pw string) {
 	m.demoPasswordMu.Unlock()
 }
 
-// handleDemoCredentials returns the current demo admin password as JSON so the
-// informer banner can always display credentials that match the live DB hash,
-// even when the surrounding page HTML is served from a browser cache.
+func demoMode() bool {
+	return os.Getenv("OCMS_DEMO_MODE") == "true"
+}
+
+// handleDemoCredentials returns the current password to the demo sign-in form.
 func (m *Module) handleDemoCredentials(w http.ResponseWriter, _ *http.Request) {
-	if os.Getenv("OCMS_DEMO_MODE") != "true" {
+	if !demoMode() {
 		http.NotFound(w, nil)
 		return
 	}
@@ -250,7 +252,9 @@ func (m *Module) renderBar(nonce string) template.HTML {
 	var b strings.Builder
 	fmt.Fprintf(&b, `<div id="informer-bar" style="display:none;background:%s;color:%s;" class="informer-bar">`, bgColor, textColor)
 	b.WriteString(`<div class="informer-bar-content">`)
-	b.WriteString(`<span class="informer-bar-spinner"></span>`)
+	if !demoMode() {
+		b.WriteString(`<span class="informer-bar-spinner" aria-hidden="true"></span>`)
+	}
 	fmt.Fprintf(&b, `<span class="informer-bar-text">%s</span>`, text)
 	b.WriteString(`</div>`)
 	fmt.Fprintf(&b, `<button type="button" class="informer-bar-close" aria-label="Close" style="color:%s;">`, textColor)
@@ -282,21 +286,6 @@ var closeBtn=document.querySelector('#informer-bar .informer-bar-close');
 if(closeBtn){closeBtn.addEventListener('click',function(){window.dismissInformer()})}
 })();
 </script>`, cookieName, version)
-
-	// In demo mode, fetch the current demo admin password at runtime so the banner
-	// always shows credentials matching the live DB hash — even when the page HTML
-	// itself was served from a browser cache before the latest cold-start rotation.
-	if os.Getenv("OCMS_DEMO_MODE") == "true" {
-		b.WriteString(`<script>
-(function(){
-fetch('/api/informer/demo-credentials',{cache:'no-store'}).then(function(r){return r.ok?r.json():null}).then(function(d){
-if(!d||!d.password)return;
-var els=document.querySelectorAll('#informer-bar .ocms-demo-pw');
-for(var i=0;i<els.length;i++){els[i].textContent=d.password}
-});
-})();
-</script>`)
-	}
 
 	return template.HTML(util.AddNonceToScriptTags(b.String(), nonce))
 }

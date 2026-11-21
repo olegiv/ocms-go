@@ -3,7 +3,7 @@
     "language": "ru",
     "messages": [
         {"id": "informer.title", "message": "Informer Bar", "translation": "Информационная панель"},
-        {"id": "informer.description", "message": "Display a dismissible notification bar with a spinner at the top of the page", "translation": "Отображение закрываемой панели уведомлений со спиннером вверху страницы"},
+        {"id": "informer.description", "message": "Display a dismissible notification bar at the top of the page", "translation": "Показывать вверху страницы панель уведомлений, которую можно закрыть"},
         {"id": "informer.enabled", "message": "Enable Informer Bar", "translation": "Включить информационную панель"},
         {"id": "informer.enabled_help", "message": "When enabled, visitors will see a notification bar at the top of the page", "translation": "При включении посетители увидят панель уведомлений вверху страницы"},
         {"id": "informer.text_section", "message": "Message", "translation": "Сообщение"},

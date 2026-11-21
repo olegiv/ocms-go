@@ -1,11 +1,15 @@
 <header class="dev-header">
     <div class="dev-container">
-        <div class="dev-header-inner">
+        <div class="dev-header-inner{{if .DemoBackOffice}} dev-header-inner-demo{{end}}">
             <a href="{{.HomeURL}}" class="dev-logo">
                 <span class="dev-logo-bracket">{</span>
                 <span class="dev-logo-text">{{.SiteName}}</span>
                 <span class="dev-logo-bracket">}</span>
             </a>
+
+            {{with .DemoBackOffice}}
+            <a class="dev-btn dev-btn-primary dev-back-office" href="{{.URL}}">{{.Title}}</a>
+            {{end}}
 
             <button class="dev-menu-toggle" id="menu-toggle" aria-label="Toggle menu"
                     x-data
