@@ -8,6 +8,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/input"
 	"github.com/olegiv/ocms-go/internal/views/components/label"
+	"github.com/olegiv/ocms-go/internal/views/utils"
 )
 
 // LoginData holds data for the login page.
@@ -115,8 +116,8 @@ templ authShell(title, lang string) {
 		<meta name="generator" content="oCMS - https://ocms.tech"/>
 		<title>{ title } - oCMS</title>
 		<link rel="icon" type="image/x-icon" href="/favicon.ico"/>
-		<link rel="stylesheet" href="/static/dist/main.css"/>
-		<link rel="stylesheet" href="/static/dist/admin-tw.css"/>
+		<link rel="stylesheet" href={ utils.ScriptURL("/static/dist/main.css") }/>
+		<link rel="stylesheet" href={ utils.ScriptURL("/static/dist/admin-tw.css") }/>
 	</head>
 	<body>
 		<div class="auth-container">

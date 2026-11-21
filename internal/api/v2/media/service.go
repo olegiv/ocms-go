@@ -18,7 +18,6 @@ import (
 
 	v2 "github.com/olegiv/ocms-go/internal/api/v2"
 	"github.com/olegiv/ocms-go/internal/cache"
-	"github.com/olegiv/ocms-go/internal/handler"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
@@ -84,7 +83,8 @@ func (s *Service) requireWritePerm(ctx context.Context, a v2.Actor) error {
 	return v2.RequireEditor(ctx, s.queries, a)
 }
 
-// dtoFromStore converts a store.Medium to a Media DTO, populating URLs.
+// dtoFromStore converts a store.Medium to a Media DTO with its original URL.
+// Variant URLs depend on which variants were recorded; see setVariantURLs.
 func dtoFromStore(m store.Medium) Media {
 	dto := Media{
 		ID:         m.ID,
@@ -112,32 +112,46 @@ func dtoFromStore(m store.Medium) Media {
 		dto.FolderID = &m.FolderID.Int64
 	}
 	dto.URLs = &URLs{Original: model.MediaURL(model.VariantOriginal, m.Uuid, m.Filename)}
-	if handler.IsImageMime(m.MimeType) {
-		dto.URLs.Thumbnail = model.MediaURL("thumbnail", m.Uuid, m.Filename)
-		dto.URLs.Medium = model.MediaURL("medium", m.Uuid, m.Filename)
-		dto.URLs.Large = model.MediaURL("large", m.Uuid, m.Filename)
-	}
 	return dto
 }
 
-// populateIncludes attaches optional relations to a Media DTO.
-func (s *Service) populateIncludes(ctx context.Context, dto *Media, mediaID int64, f ListFilter) {
-	if f.IncludeVariants {
-		if variants, err := s.queries.GetMediaVariants(ctx, mediaID); err == nil {
-			dto.Variants = make([]Variant, 0, len(variants))
-			for _, v := range variants {
-				dto.Variants = append(dto.Variants, Variant{
-					ID:        v.ID,
-					Type:      v.Type,
-					Width:     v.Width,
-					Height:    v.Height,
-					Size:      v.Size,
-					URL:       model.MediaURL(v.Type, dto.UUID, dto.Filename),
-					CreatedAt: v.CreatedAt,
-				})
-			}
+// setVariantURLs sets the thumbnail, medium and large URLs for the variants
+// recorded for the item. Imaging skips a fit variant when the source is under
+// half its target in both dimensions and an ICO gets none, so listing them
+// for every image pointed at missing files.
+func setVariantURLs(dto *Media, variants []store.MediaVariant) {
+	for _, v := range variants {
+		url := model.MediaURL(v.Type, dto.UUID, dto.Filename)
+		switch v.Type {
+		case model.VariantThumbnail:
+			dto.URLs.Thumbnail = url
+		case model.VariantMedium:
+			dto.URLs.Medium = url
+		case model.VariantLarge:
+			dto.URLs.Large = url
 		}
 	}
+}
+
+// mediaDTO builds the DTO for m with the variant URLs it actually has, plus
+// the full variant list when the filter asks for it, and the other includes.
+func (s *Service) mediaDTO(ctx context.Context, m store.Medium, f ListFilter) (Media, error) {
+	dto := dtoFromStore(m)
+	variants, err := s.queries.GetMediaVariants(ctx, m.ID)
+	if err != nil {
+		return dto, err
+	}
+	setVariantURLs(&dto, variants)
+	if f.IncludeVariants {
+		dto.Variants = variantsToDTOs(variants, dto.UUID, dto.Filename)
+	}
+	s.populateIncludes(ctx, &dto, m.ID, f)
+	return dto, nil
+}
+
+// populateIncludes attaches the optional folder and translations to a Media
+// DTO; mediaDTO attaches the variants.
+func (s *Service) populateIncludes(ctx context.Context, dto *Media, mediaID int64, f ListFilter) {
 	if f.IncludeFolder && dto.FolderID != nil {
 		if folder, err := s.queries.GetMediaFolderByID(ctx, *dto.FolderID); err == nil {
 			f := &Folder{
@@ -227,8 +241,10 @@ func (s *Service) List(ctx context.Context, a v2.Actor, f ListFilter) (*ListResu
 
 	dtos := make([]Media, 0, len(rows))
 	for _, m := range rows {
-		dto := dtoFromStore(m)
-		s.populateIncludes(ctx, &dto, m.ID, f)
+		dto, err := s.mediaDTO(ctx, m, f)
+		if err != nil {
+			return nil, v2.NewInternalError("Failed to list media", err)
+		}
 		dtos = append(dtos, dto)
 	}
 	_ = a // no per-actor visibility rules today; kept for symmetry with Pages
@@ -244,8 +260,10 @@ func (s *Service) Get(ctx context.Context, a v2.Actor, id int64, f ListFilter) (
 		}
 		return nil, v2.NewInternalError("Failed to load media", err)
 	}
-	dto := dtoFromStore(m)
-	s.populateIncludes(ctx, &dto, m.ID, f)
+	dto, err := s.mediaDTO(ctx, m, f)
+	if err != nil {
+		return nil, v2.NewInternalError("Failed to load media", err)
+	}
 	_ = a
 	return &dto, nil
 }
@@ -322,6 +340,7 @@ func (s *Service) Upload(ctx context.Context, a v2.Actor, in UploadMediaMetadata
 	}
 
 	dto := dtoFromStore(result.Media)
+	setVariantURLs(&dto, result.Variants)
 	dto.Variants = variantsToDTOs(result.Variants, dto.UUID, dto.Filename)
 	s.logMediaAudit(ctx, a, "API: Media uploaded", map[string]any{
 		"media_id": result.Media.ID,
@@ -410,8 +429,13 @@ func (s *Service) Update(ctx context.Context, a v2.Actor, id int64, in UpdateMed
 		return nil, v2.NewInternalError("Failed to update media", err)
 	}
 	dto := dtoFromStore(updated)
+	// The update is already saved, so a failed variant lookup only leaves the
+	// response without variant URLs.
 	if variants, err := s.queries.GetMediaVariants(ctx, updated.ID); err == nil {
+		setVariantURLs(&dto, variants)
 		dto.Variants = variantsToDTOs(variants, dto.UUID, dto.Filename)
+	} else {
+		slog.WarnContext(ctx, "failed to load media variants", "error", err, "media_id", updated.ID)
 	}
 	s.logMediaAudit(ctx, a, "API: Media updated", map[string]any{
 		"media_id": updated.ID,

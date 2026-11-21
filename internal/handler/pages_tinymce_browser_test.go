@@ -108,8 +108,11 @@ func TestTinyMCEFormPreservesOriginalBodyUntilEdited(t *testing.T) {
 	assertSaved := func(wantBody string, revision int64) {
 		t.Helper()
 		stored, loadErr := q.GetPageByID(ctx, page.ID)
-		if loadErr != nil || stored.Revision != revision || stored.Title != "Metadata-only edit" || stored.Body != wantBody {
-			t.Fatalf("saved revision=%d title=%q body=%q, want revision %d and body %q: %v", stored.Revision, stored.Title, stored.Body, revision, wantBody, loadErr)
+		if loadErr != nil {
+			t.Fatalf("load saved page: %v", loadErr)
+		}
+		if stored.Revision != revision || stored.Title != "Metadata-only edit" || stored.Body != wantBody {
+			t.Fatalf("saved revision=%d title=%q body=%q, want revision %d and body %q", stored.Revision, stored.Title, stored.Body, revision, wantBody)
 		}
 	}
 	assertSaved(original, page.Revision+1)
@@ -173,6 +176,115 @@ func TestTinyMCEFormPreservesOriginalBodyUntilEdited(t *testing.T) {
 			return 'oCMS browser step passed';
 		}`, strconv.Quote(formURL), ready))
 		t.Log("Chrome selected a TinyMCE image, kept it selected after reload and search, and inserted it")
+	})
+
+	// Issue #233: TinyMCE's file picker opens the media picker from inside a
+	// TinyMCE dialog, so the picker must stack above TinyMCE's dialog layer.
+	// Escape, typing and the chosen URL must stay with the picker and the
+	// dialog field that opened it.
+	t.Run("image picker opens above TinyMCE dialogs", func(t *testing.T) {
+		browser(t, "run-code", fmt.Sprintf(`async page => {
+			await page.setViewportSize({width: 1680, height: 1080});
+			await page.goto(%s);
+			%s
+			const dialog = page.locator('.tox-dialog');
+			const picker = page.locator('#editor-image-modal');
+			const item = picker.locator('.editor-image-item[data-id="7"]');
+			const openFromDialog = async () => {
+				await dialog.locator('.tox-browse-url').click();
+				await item.waitFor();
+				const topmost = await item.evaluate(element => {
+					const box = element.getBoundingClientRect();
+					return element.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2));
+				});
+				if (!topmost) throw new Error('Media picker opened behind the TinyMCE dialog');
+			};
+			// Selects the fixture, then reads the dialog's URL field by its
+			// label. TinyMCE renders it as a combobox. A field without its own
+			// picker text (the media poster) gives its browse button the same
+			// label, so a plain label lookup would match both.
+			const pickInto = async label => {
+				await item.click();
+				await page.locator('#editor-image-insert-btn').click();
+				await picker.waitFor({state: 'hidden'});
+				const value = await dialog.getByRole('combobox', {name: label, exact: true}).inputValue();
+				if (value !== '/static/dist/favicon.ico') throw new Error('Media picker did not fill ' + label + ': ' + value);
+			};
+			await page.evaluate(() => tinymce.get('editor').execCommand('mceImage'));
+			await openFromDialog();
+			await page.keyboard.press('Escape');
+			await picker.waitFor({state: 'hidden'});
+			if (!await dialog.isVisible()) throw new Error('Escape in the media picker also closed the TinyMCE dialog');
+			await openFromDialog();
+			await Promise.all([
+				page.waitForResponse(response => new URL(response.url()).searchParams.get('q') === 'picker'),
+				page.keyboard.type('picker'),
+			]);
+			if (await page.locator('#editor-image-search').inputValue() !== 'picker') {
+				throw new Error('Typing did not reach the media picker search field');
+			}
+			// The size options portal into a 9999 layer and must open above
+			// the picker (1400).
+			await item.click();
+			await picker.locator('#editor-image-size button').first().click();
+			const full = page.locator('[role=option][data-tui-selectbox-value="full"]');
+			await full.waitFor();
+			if (!await full.evaluate(o => { const b = o.getBoundingClientRect(); return o.contains(document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2)); })) {
+				throw new Error('Size options opened behind the media picker');
+			}
+			await full.click();
+			await pickInto('Source');
+			await dialog.getByRole('button', {name: 'Save'}).click();
+			await page.waitForFunction(() => tinymce.get('editor').getBody().querySelector('img[src$="/static/dist/favicon.ico"]'));
+			await page.evaluate(() => tinymce.get('editor').execCommand('mceMedia'));
+			await dialog.getByRole('tab', {name: 'Advanced'}).click();
+			await openFromDialog();
+			await pickInto('Media poster (Image URL)');
+			return 'oCMS browser step passed';
+		}`, strconv.Quote(formURL), ready))
+		t.Log("Chrome opened the media picker above the TinyMCE image and media dialogs and filled their fields")
+	})
+
+	// Selecting an image opens the alt-text panel; on a short screen the picker
+	// must still show its Insert button instead of clipping the footer.
+	t.Run("image picker footer stays reachable on short screens", func(t *testing.T) {
+		browser(t, "run-code", fmt.Sprintf(`async page => {
+			await page.setViewportSize({width: 1280, height: 600});
+			await page.goto(%s);
+			%s
+			await page.evaluate(() => editorImagePicker.open());
+			await page.locator('#editor-image-grid .editor-image-item[data-id="7"]').click();
+			// Selecting reloads the grid; measure the settled layout.
+			await page.locator('#editor-image-grid .editor-image-item.is-selected').waitFor();
+			const dialog = page.locator('.editor-image-modal-dialog');
+			if (!await dialog.evaluate(d => d.scrollHeight > d.clientHeight)) {
+				throw new Error('The picker does not overflow at this height; the test proves nothing');
+			}
+			const insert = page.locator('#editor-image-insert-btn');
+			const reachable = () => insert.evaluate(button => {
+				const box = button.getBoundingClientRect();
+				return !button.disabled && box.bottom <= innerHeight &&
+					button.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2));
+			});
+			if (!await reachable()) throw new Error('Insert button is clipped or covered after selecting an image');
+			// Scrolling down to the image options keeps the footer in place.
+			if (await dialog.evaluate(d => { d.scrollTop = d.scrollHeight; return d.scrollTop; }) === 0 || !await reachable()) {
+				throw new Error('Insert button moved or was covered while scrolling to the image options');
+			}
+			// Bringing a field into view, as keyboard focus does, must leave it
+			// above the sticky footer rather than underneath it.
+			await dialog.evaluate(d => { d.scrollTop = 0; });
+			const sizeShown = await page.locator('#editor-image-size button').first().evaluate(field => {
+				field.scrollIntoView({block: 'nearest'});
+				const box = field.getBoundingClientRect();
+				return field.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2));
+			});
+			if (!sizeShown) throw new Error('The sticky footer covers the image size field brought into view');
+			await insert.click();
+			await page.locator('#editor-image-modal').waitFor({state: 'hidden'});
+			return 'oCMS browser step passed';
+		}`, strconv.Quote(formURL), ready))
+		t.Log("Chrome kept the picker's Insert button on a 600px-high screen")
 	})
 }
 

@@ -2139,9 +2139,12 @@ templ pageFormScripts(pc *PageContext, data PageFormViewData) {
 			if (!this.selectedImage) return;
 			const alt = this.altInput.value.trim() || this.selectedImage.filename || 'Image';
 			const size = this.sizeSelect.value;
+			// The server lists only recorded variants; an image without the
+			// chosen one (under 400x300 for medium, 200x150 for small) falls
+			// back to the original.
 			let imageUrl = this.selectedImage.filepath;
-			if (size === 'medium' && this.selectedImage.thumbnail && this.selectedImage.filepath) imageUrl = this.selectedImage.filepath.replace('/originals/', '/medium/');
-			else if (size === 'small' && this.selectedImage.thumbnail) imageUrl = this.selectedImage.thumbnail;
+			if (size === 'medium' && this.selectedImage.medium) imageUrl = this.selectedImage.medium;
+			else if (size === 'small' && this.selectedImage.small) imageUrl = this.selectedImage.small;
 			if (this.insertCallback) this.insertCallback(imageUrl, { alt: alt, title: alt });
 			else if (tinymceEditor) {
 				// Serialize via a DOM element so filename-derived alt text

@@ -915,3 +915,36 @@ func TestImageFailuresAreClassified(t *testing.T) {
 		}
 	})
 }
+
+// TestCreateAllVariantsReportsPartialFailures blocks one variant directory:
+// the variants that could be written must still be returned, and the error
+// must name the one that failed instead of being dropped.
+func TestCreateAllVariantsReportsPartialFailures(t *testing.T) {
+	uploadsDir := t.TempDir()
+	p := NewProcessor(uploadsDir)
+	const uuid = "test-uuid-partial"
+	var source bytes.Buffer
+	if err := png.Encode(&source, createTestImage(1200, 800)); err != nil {
+		t.Fatal(err)
+	}
+	result, err := p.ProcessImage(bytes.NewReader(source.Bytes()), uuid, "partial.png")
+	if err != nil {
+		t.Fatalf("ProcessImage: %v", err)
+	}
+	// A file where the medium directory belongs makes only that variant fail.
+	if err := os.WriteFile(filepath.Join(uploadsDir, model.VariantMedium), []byte("blocked"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	variants, err := p.CreateAllVariants(result.FilePath, uuid, "partial.png")
+	if err == nil || !strings.Contains(err.Error(), "some variants failed") || !strings.Contains(err.Error(), model.VariantMedium+":") {
+		t.Fatalf("CreateAllVariants error = %v, want a partial failure naming %s", err, model.VariantMedium)
+	}
+	if len(variants) == 0 {
+		t.Fatal("the variants that were written were dropped")
+	}
+	for _, v := range variants {
+		if v.Type == model.VariantMedium {
+			t.Fatalf("%s reported as created", model.VariantMedium)
+		}
+	}
+}

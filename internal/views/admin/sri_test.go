@@ -6,6 +6,7 @@ package admin_test
 import (
 	"crypto/sha512"
 	"encoding/base64"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -244,4 +245,54 @@ func repoRoot(t *testing.T) string {
 	}
 	t.Fatal("could not locate the repository root")
 	return ""
+}
+
+// stylesheetTemplateDirs hold the admin and core templates that link
+// stylesheets from /static/dist. Themes are checked by their own tests.
+var stylesheetTemplateDirs = []string{"internal/views", "web/templates"}
+
+// TestBuiltStylesheetsAreCacheBusted does for stylesheets what
+// TestVendoredScriptsAreCacheBusted does for scripts. /static/dist is served
+// with a one-year max-age, so without a version on the URL a CSS fix (the
+// media picker's stacking above TinyMCE dialogs, for one) never reaches a
+// browser that cached the previous main.css. Every /static/dist stylesheet
+// link must go through utils.ScriptURL or the scriptURL template func.
+func TestBuiltStylesheetsAreCacheBusted(t *testing.T) {
+	root := repoRoot(t)
+	checked := 0
+	for _, dir := range stylesheetTemplateDirs {
+		walkErr := filepath.WalkDir(filepath.Join(root, dir), func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() || (filepath.Ext(path) != ".templ" && filepath.Ext(path) != ".html") {
+				return nil
+			}
+			source, err := os.ReadFile(path) // #nosec G304 -- repository templates
+			if err != nil {
+				return err
+			}
+			for _, line := range strings.Split(string(source), "\n") {
+				if !strings.Contains(line, "<link") || !strings.Contains(line, "/static/dist/") || !strings.Contains(line, ".css") {
+					continue
+				}
+				checked++
+				if !strings.Contains(line, "ScriptURL(") && !strings.Contains(line, "scriptURL ") {
+					rel, relErr := filepath.Rel(root, path)
+					if relErr != nil {
+						rel = path
+					}
+					t.Errorf("%s loads a stylesheet without cache busting, so a browser holding "+
+						"the previous build keeps it for a year:\n  %s", rel, strings.TrimSpace(line))
+				}
+			}
+			return nil
+		})
+		if walkErr != nil {
+			t.Fatal(walkErr)
+		}
+	}
+	if checked == 0 {
+		t.Fatal("found no /static/dist stylesheet links; the scan checks nothing")
+	}
 }

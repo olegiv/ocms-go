@@ -302,30 +302,34 @@ func (p *Processor) CreateVariant(sourcePath, uuid, filename string, config mode
 	}, nil
 }
 
-// CreateAllVariants creates all standard variants for an image.
-// It continues processing even if individual variants fail, returning
-// all successfully created variants along with any errors encountered.
+// CreateAllVariants creates all standard variants for an image. It keeps
+// going when a variant fails: it returns every variant it created together
+// with an error naming each one that failed, so callers can record the
+// successes and still report the failures. The error is nil only when every
+// variant was created or skipped as larger than the source allows.
 func (p *Processor) CreateAllVariants(sourcePath, uuid, filename string) ([]*VariantResult, error) {
 	var results []*VariantResult
-	var errs []string
+	var errs []error
 
 	for variantType, config := range model.ImageVariants {
 		result, err := p.CreateVariant(sourcePath, uuid, filename, config, variantType)
 		if err != nil {
-			errs = append(errs, fmt.Sprintf("%s: %v", variantType, err))
-			continue // Continue with other variants
+			errs = append(errs, fmt.Errorf("%s: %w", variantType, err))
+			continue
 		}
 		if result != nil {
 			results = append(results, result)
 		}
 	}
 
-	// Return results even if some variants failed
-	if len(errs) > 0 && len(results) == 0 {
-		return nil, fmt.Errorf("all variants failed: %s", strings.Join(errs, "; "))
+	switch {
+	case len(errs) == 0:
+		return results, nil
+	case len(results) == 0:
+		return nil, fmt.Errorf("all variants failed: %w", errors.Join(errs...))
+	default:
+		return results, fmt.Errorf("some variants failed: %w", errors.Join(errs...))
 	}
-
-	return results, nil
 }
 
 // GetImageDimensions returns the dimensions of an image file.

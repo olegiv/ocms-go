@@ -949,10 +949,15 @@ select.form-control {
 }
 
 // Editor Image Picker Modal
+// TinyMCE's file picker opens this modal from inside a TinyMCE dialog, which
+// stacks in .tox-tinymce-aux (z-index 1300 in TinyMCE 8's skin), so the picker
+// must sit above it. Stay below 9999: templUI popovers such as the size select
+// portal into a 9999 layer and must open above the picker. The "image picker
+// opens above TinyMCE dialogs" browser test checks both bounds.
 .editor-image-modal {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  z-index: 1400;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -975,7 +980,13 @@ select.form-control {
   box-shadow: $shadow-xl;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  // Scroll rather than clip: on a short screen the picker's sections exceed
+  // 90vh (.editor-image-modal-content, which holds the image grid, keeps a
+  // 300px min-height). The footer is sticky, so Insert stays visible, and the
+  // scroll padding (taller than the footer) keeps a field that focus or
+  // scrollIntoView brings into view above it instead of underneath.
+  overflow-y: auto;
+  scroll-padding-bottom: 5rem;
 }
 
 .editor-image-modal-header {
@@ -1135,6 +1146,8 @@ select.form-control {
 }
 
 .editor-image-modal-footer {
+  position: sticky;
+  bottom: 0;
   display: flex;
   justify-content: flex-end;
   gap: $spacing-3;

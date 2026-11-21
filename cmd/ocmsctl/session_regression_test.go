@@ -26,7 +26,7 @@ import (
 func TestPullSaysWhereItWritesAndStaysInside(t *testing.T) {
 	w := newWorld(t)
 	serverDB(t, filepath.Join(w.addSite(t), "data", "ocms.db"), "production")
-	t.Chdir(t.TempDir())
+	chdirTemp(t)
 	cwd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -60,7 +60,7 @@ func TestPullSaysWhereItWritesAndStaysInside(t *testing.T) {
 func TestPullAdvisesUpdatingOnlyAnOldServer(t *testing.T) {
 	w := newWorld(t)
 	w.addSite(t)
-	t.Chdir(t.TempDir())
+	chdirTemp(t)
 	originalExec := w.local.Exec
 	w.local.Exec = func(ctx context.Context, c sitectl.Cmd) error {
 		if c.Name == "ssh" && strings.Contains(strings.Join(c.Args, " "), "site paths") {

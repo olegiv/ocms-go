@@ -74,7 +74,7 @@ func TestPullSnapshotsTheLiteralDatabaseFilename(t *testing.T) {
 	serverDB(t, filepath.Join(dir, "data", "site .db"), "other database")
 	writeTree(t, dir, map[string]string{".env": "OCMS_DB_PATH=file:./data/site%2520.db\n"})
 
-	t.Chdir(t.TempDir())
+	chdirTemp(t)
 	args := []string{"pull", "root@server", "example_com", "--yes", "--port", "0", "--no-uploads", "--no-logs"}
 	if err := run(t.Context(), w.local, args, nil); err != nil {
 		t.Fatalf("%v\n%s", err, w.out)
@@ -95,33 +95,56 @@ func TestPullFollowsTheCheckoutConfiguration(t *testing.T) {
 	busy := strconv.Itoa(listener.Addr().(*net.TCPAddr).Port)
 
 	for _, tc := range []struct {
-		name    string
-		env     map[string]string // process environment
-		files   map[string]string
-		args    []string
-		want    string // database the snapshot lands in
-		failure string // or the error it fails with
+		name     string
+		portCase bool              // controls the port check itself; the others get --port 0
+		freePort bool              // .env names a port released just before the pull
+		env      map[string]string // process environment
+		files    map[string]string
+		args     []string
+		want     string // database the snapshot lands in
+		failure  string // or the error it fails with
 	}{
-		{name: "port from .env", files: map[string]string{".env": "OCMS_SERVER_PORT=" + busy + "\n"}, failure: "port " + busy},
-		{name: "port from the environment", env: map[string]string{"OCMS_SERVER_PORT": busy}, files: map[string]string{".env": "OCMS_SERVER_PORT=1\n"}, failure: "port " + busy},
-		{name: "--port 0 skips the check", files: map[string]string{".env": "OCMS_SERVER_PORT=" + busy + "\n"}, args: []string{"--port", "0"}, want: "data/ocms.db"},
+		{name: "port from .env", portCase: true, files: map[string]string{".env": "OCMS_SERVER_PORT=" + busy + "\n"}, failure: "port " + busy},
+		{name: "port from the environment", portCase: true, env: map[string]string{"OCMS_SERVER_PORT": busy}, files: map[string]string{".env": "OCMS_SERVER_PORT=1\n"}, failure: "port " + busy},
+		{name: "--port 0 skips the check", portCase: true, files: map[string]string{".env": "OCMS_SERVER_PORT=" + busy + "\n"}, args: []string{"--port", "0"}, want: "data/ocms.db"},
+		{name: "free port from .env", portCase: true, freePort: true, want: "data/ocms.db"},
 		{name: "database from .env", files: map[string]string{".env": "OCMS_DB_PATH=./db/dev.db\n"}, want: "db/dev.db"},
 		{name: "environment over .env", env: map[string]string{"OCMS_DB_PATH": "env.db"}, files: map[string]string{".env": "OCMS_DB_PATH=./db/dev.db\n"}, want: "env.db"},
 		{name: "--db over both", env: map[string]string{"OCMS_DB_PATH": "env.db"}, args: []string{"--db", "flag.db"}, want: "flag.db"},
 		{name: "OCMS_ENV_FILE", env: map[string]string{"OCMS_ENV_FILE": "conf/site.env"}, files: map[string]string{".env": "OCMS_DB_PATH=dot.db\n", "conf/site.env": "OCMS_DB_PATH=named.db\n"}, want: "named.db"},
 		{name: "missing OCMS_ENV_FILE", env: map[string]string{"OCMS_ENV_FILE": "conf/missing.env"}, failure: "missing.env"},
 		{name: "unreadable .env", files: map[string]string{".env": "OCMS_DB_PATH='unterminated\n"}, failure: "local configuration"},
-		{name: "not a port", files: map[string]string{".env": "OCMS_SERVER_PORT=web\n"}, failure: `OCMS_SERVER_PORT="web" is not a port`},
+		{name: "not a port", portCase: true, files: map[string]string{".env": "OCMS_SERVER_PORT=web\n"}, failure: `OCMS_SERVER_PORT="web" is not a port`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			w := newWorld(t)
 			serverDB(t, filepath.Join(w.addSite(t), "data", "ocms.db"), "production")
-			t.Chdir(t.TempDir())
+			chdirTemp(t)
 			writeTree(t, ".", tc.files)
 			for key, value := range tc.env {
 				w.environ[key] = value
 			}
-			args := append([]string{"pull", "root@server", "example_com", "--yes", "--no-uploads", "--no-logs"}, tc.args...)
+			freePort := ""
+			if tc.freePort {
+				// Taken and released right before the pull, so the check
+				// runs and finds the port free.
+				free, listenErr := net.Listen("tcp", "127.0.0.1:0")
+				if listenErr != nil {
+					t.Fatal(listenErr)
+				}
+				freePort = strconv.Itoa(free.Addr().(*net.TCPAddr).Port)
+				if closeErr := free.Close(); closeErr != nil {
+					t.Fatal(closeErr)
+				}
+				writeTree(t, ".", map[string]string{".env": "OCMS_SERVER_PORT=" + freePort + "\n"})
+			}
+			args := []string{"pull", "root@server", "example_com", "--yes", "--no-uploads", "--no-logs"}
+			if !tc.portCase {
+				// Without --port 0 the check would probe the default port
+				// (8080), where the developer's own server may be running.
+				args = append(args, "--port", "0")
+			}
+			args = append(args, tc.args...)
 			err := run(context.Background(), w.local, args, nil)
 			if tc.failure != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.failure) {
@@ -138,6 +161,9 @@ func TestPullFollowsTheCheckoutConfiguration(t *testing.T) {
 			if got := pageTitle(t, tc.want); got != "production" {
 				t.Errorf("%s holds %q", tc.want, got)
 			}
+			if want := "port      " + freePort + " must be free (.env)"; freePort != "" && !strings.Contains(w.out.String(), want) {
+				t.Errorf("pull did not check the .env port: output lacks %q\n%s", want, w.out)
+			}
 		})
 	}
 }
@@ -149,7 +175,7 @@ func TestPullUsesEachSidesConfiguredPaths(t *testing.T) {
 	dir := w.addSite(t)
 	shared := filepath.Join(filepath.Dir(dir), "shared-custom")
 	writeTree(t, dir, map[string]string{".env": "OCMS_UPLOADS_DIR=./media\nOCMS_CUSTOM_DIR=" + shared + "\n"})
-	t.Chdir(t.TempDir())
+	chdirTemp(t)
 	writeTree(t, ".", map[string]string{".env": "OCMS_UPLOADS_DIR=./local-media\nOCMS_CUSTOM_DIR=./lc\n", "local-media/kept.jpg": "x"})
 	// An older pull copied links; the mirror drops them before rsync,
 	// which would keep them.
@@ -198,7 +224,7 @@ func TestPullRefusesAnUploadsMirrorOverTheCheckout(t *testing.T) {
 		t.Run(uploads, func(t *testing.T) {
 			w := newWorld(t)
 			w.addSite(t)
-			t.Chdir(t.TempDir())
+			chdirTemp(t)
 			writeTree(t, ".", map[string]string{".env": "OCMS_UPLOADS_DIR=" + uploads + "\n"})
 			if err := os.Symlink(".", "linked"); err != nil { // linked/ is the checkout
 				t.Fatal(err)
@@ -220,7 +246,7 @@ func TestPullRefusesAnUploadsMirrorOverTheCheckout(t *testing.T) {
 func TestPullUsesOnlyUploadsDestinationsInsideTheCheckout(t *testing.T) {
 	w := newWorld(t)
 	w.addSite(t)
-	t.Chdir(t.TempDir())
+	chdirTemp(t)
 	if err := os.Symlink(t.TempDir(), "outside"); err != nil {
 		t.Fatal(err)
 	}
@@ -261,7 +287,7 @@ func TestPullRespectsTheDatabaseLockWithThePortCheckDisabled(t *testing.T) {
 	w := newWorld(t)
 	site := w.addSite(t)
 	serverDB(t, filepath.Join(site, "data", "ocms.db"), "production")
-	t.Chdir(t.TempDir())
+	chdirTemp(t)
 	if err := os.Mkdir("data", 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -301,7 +327,7 @@ func TestPullDetectsAnIPv6OnlyDevelopmentListener(t *testing.T) {
 	defer func() { _ = listener.Close() }()
 	port := strconv.Itoa(listener.Addr().(*net.TCPAddr).Port)
 	w := newWorld(t)
-	t.Chdir(t.TempDir())
+	chdirTemp(t)
 	args := []string{"pull", "root@server", "example_com", "--yes", "--port", port, "--no-uploads", "--no-logs"}
 	if err := run(t.Context(), w.local, args, nil); err == nil || !strings.Contains(err.Error(), "listening on port "+port) {
 		t.Fatalf("pull with an IPv6 listener on port %s: %v", port, err)
@@ -368,7 +394,7 @@ func TestPullCopiesOnlyFilesAndDirectories(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	t.Chdir(t.TempDir())
+	chdirTemp(t)
 	writeTree(t, ".", map[string]string{".env": "DEVELOPER_SECRET=1\n", "uploads/a.jpg": "local copy", "elsewhere/keep": "x"})
 	for link, target := range map[string]string{"uploads/stale.jpg": "../.env", "uploads/sub": "../elsewhere"} {
 		if err := os.Symlink(target, link); err != nil {
@@ -410,7 +436,7 @@ func TestPullCopiesOnlyFilesAndDirectories(t *testing.T) {
 func TestDeployTakesThemesFromTheCheckoutConfiguration(t *testing.T) {
 	w := newWorld(t)
 	dir := w.addSite(t)
-	t.Chdir(t.TempDir())
+	chdirTemp(t)
 	writeTree(t, ".", map[string]string{
 		".env":                               "OCMS_CUSTOM_DIR=./site-custom\n",
 		"site-custom/themes/mine/theme.json": "{}",

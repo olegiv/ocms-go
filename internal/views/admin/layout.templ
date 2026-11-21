@@ -44,8 +44,8 @@ templ AdminLayout(pc *PageContext) {
 				}
 			</title>
 			<link rel="icon" type="image/x-icon" href="/favicon.ico"/>
-			<link rel="stylesheet" href="/static/dist/main.css"/>
-			<link rel="stylesheet" href="/static/dist/admin-tw.css"/>
+			<link rel="stylesheet" href={ utils.ScriptURL("/static/dist/main.css") }/>
+			<link rel="stylesheet" href={ utils.ScriptURL("/static/dist/admin-tw.css") }/>
 		</head>
 		<body>
 			<div class="admin-layout" x-data="adminLayout" :class="{ 'sidebar-collapsed': sidebarCollapsed }">

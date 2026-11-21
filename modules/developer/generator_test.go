@@ -883,3 +883,49 @@ func TestMin(t *testing.T) {
 		}
 	}
 }
+
+// TestGenerateMediaRecordsOnlyWrittenVariants blocks the medium variant
+// directory: the generator must not record a variant it failed to write, and
+// every variant it records must have its file, because the media picker and
+// the API hand out URLs for recorded variants.
+func TestGenerateMediaRecordsOnlyWrittenVariants(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+	defer setupTempUploadDir(t)()
+	if err := os.MkdirAll("uploads", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join("uploads", "medium"), []byte("blocked"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	m := testModule(t, db)
+	ctx := context.Background()
+	q := store.New(db)
+	fixtures := createTestFixtures(t, db)
+	mediaIDs, err := m.generateMedia(ctx, fixtures.User.ID, fixtures.Language.Code)
+	if err != nil {
+		t.Fatalf("generateMedia: %v", err)
+	}
+	for _, id := range mediaIDs {
+		media, err := q.GetMediaByID(ctx, id)
+		if err != nil {
+			t.Fatalf("GetMediaByID(%d): %v", id, err)
+		}
+		variants, err := q.GetMediaVariants(ctx, id)
+		if err != nil {
+			t.Fatalf("GetMediaVariants(%d): %v", id, err)
+		}
+		if len(variants) == 0 {
+			t.Errorf("media %d has no variants recorded", id)
+		}
+		for _, v := range variants {
+			if v.Type == "medium" {
+				t.Errorf("media %d records a medium variant that could not be written", id)
+			}
+			if _, statErr := os.Stat(filepath.Join("uploads", v.Type, media.Uuid, media.Filename)); statErr != nil {
+				t.Errorf("media %d records %s without its file: %v", id, v.Type, statErr)
+			}
+		}
+	}
+}

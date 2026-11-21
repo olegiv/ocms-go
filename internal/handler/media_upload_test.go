@@ -17,6 +17,7 @@ import (
 	"image/draw"
 	"image/png"
 	"io"
+	"io/fs"
 	"log/slog"
 	"mime/multipart"
 	"net/http"
@@ -37,6 +38,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/testutil"
+	"github.com/olegiv/ocms-go/internal/testutil/repotree"
 	"github.com/olegiv/ocms-go/web"
 )
 
@@ -103,8 +105,11 @@ func TestMediaPickerUploadJSON(t *testing.T) {
 	}
 	item := response.Item
 	stored, err := h.queries.GetMediaByID(t.Context(), item.ID)
-	if err != nil || stored.UploadedBy != user.ID || stored.FolderID.Valid || stored.Width.Int64 != 1200 || stored.Height.Int64 != 800 {
-		t.Fatalf("stored image: %+v %v", stored, err)
+	if err != nil {
+		t.Fatalf("stored image: %v", err)
+	}
+	if stored.UploadedBy != user.ID || stored.FolderID.Valid || stored.Width.Int64 != 1200 || stored.Height.Int64 != 800 {
+		t.Fatalf("stored image: %+v", stored)
 	}
 	if item.Mimetype != model.MimeTypePNG || item.Thumbnail == "" || item.Filepath == "" || w.Header().Get("Location") != "" {
 		t.Fatalf("picker response: %+v, headers: %v", item, w.Header())
@@ -291,19 +296,22 @@ func TestAcceptsMediaUploadJSON(t *testing.T) {
 	}
 }
 
-func TestPickerThumbnailLookupErrors(t *testing.T) {
+func TestPickerVariantLookupErrors(t *testing.T) {
 	h, _ := pickerUploadFixture(t)
 	var logs bytes.Buffer
 	previous := slog.Default()
 	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
 	t.Cleanup(func() { slog.SetDefault(previous) })
 	media := store.Medium{ID: 99, Uuid: "icon", Filename: "icon.ico", MimeType: model.MimeTypeICO}
-	if item := h.pickerItem(t.Context(), media); item.Thumbnail != "" || item.Filepath == "" || logs.Len() != 0 {
-		t.Fatalf("no rows must silently retain original: %+v %s", item, logs.String())
+	originalOnly := func(item mediaAPIItem) bool {
+		return item.Thumbnail == "" && item.Small == "" && item.Medium == "" && item.Filepath != ""
+	}
+	if item := h.pickerItem(t.Context(), media); !originalOnly(item) || logs.Len() != 0 {
+		t.Fatalf("no variants must silently retain original: %+v %s", item, logs.String())
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if item := h.pickerItem(ctx, media); item.Thumbnail != "" || item.Filepath == "" {
+	if item := h.pickerItem(ctx, media); !originalOnly(item) {
 		t.Fatalf("lookup fault must retain original: %+v", item)
 	}
 	if logs.Len() != 0 {
@@ -312,11 +320,138 @@ func TestPickerThumbnailLookupErrors(t *testing.T) {
 	if _, err := h.db.Exec("ALTER TABLE media_variants RENAME TO unavailable_variants"); err != nil {
 		t.Fatal(err)
 	}
-	if item := h.pickerItem(t.Context(), media); item.Thumbnail != "" || item.Filepath == "" {
+	if item := h.pickerItem(t.Context(), media); !originalOnly(item) {
 		t.Fatalf("fault lost original: %+v", item)
 	}
-	if !strings.Contains(logs.String(), "level=ERROR") || !strings.Contains(logs.String(), "failed to get picker thumbnail") || !strings.Contains(logs.String(), "media_id=99") {
+	if !strings.Contains(logs.String(), "level=ERROR") || !strings.Contains(logs.String(), "failed to get picker variants") || !strings.Contains(logs.String(), "media_id=99") {
 		t.Fatalf("server fault missing diagnostic: %s", logs.String())
+	}
+}
+
+// TestMediaPickerListsOnlyRecordedVariants uploads real images and checks that
+// the picker API (the upload response and /admin/media/api) reports a "small"
+// or "medium" URL only when that variant file was written: a 1200x800 source
+// gets both, a 320x200 source only small, a 100x80 source neither. The raw
+// JSON is read, so renaming a key fails here too.
+func TestMediaPickerListsOnlyRecordedVariants(t *testing.T) {
+	h, user := pickerUploadFixture(t)
+	upload := func(name string, width, height int) (map[string]any, store.Medium) {
+		t.Helper()
+		w := httptest.NewRecorder()
+		h.Upload(w, withUser(pickerUploadRequest(t, "file", []string{name}, pickerPNG(t, width, height)), user))
+		if w.Code != http.StatusCreated {
+			t.Fatalf("upload %s: %d %s", name, w.Code, w.Body.String())
+		}
+		var response struct{ Item mediaAPIItem }
+		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+			t.Fatalf("upload %s: %v", name, err)
+		}
+		var raw struct{ Item map[string]any }
+		if err := json.Unmarshal(w.Body.Bytes(), &raw); err != nil {
+			t.Fatalf("upload %s: %v", name, err)
+		}
+		stored, err := h.queries.GetMediaByID(t.Context(), response.Item.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return raw.Item, stored
+	}
+	images := []struct {
+		name          string
+		width, height int
+		want          map[string]bool // variant key -> listed
+	}{
+		{"large.png", 1200, 800, map[string]bool{model.VariantSmall: true, model.VariantMedium: true}},
+		{"small.png", 320, 200, map[string]bool{model.VariantSmall: true, model.VariantMedium: false}},
+		{"tiny.png", 100, 80, map[string]bool{model.VariantSmall: false, model.VariantMedium: false}},
+	}
+	uploaded := make([]map[string]any, len(images))
+	stored := make([]store.Medium, len(images))
+	for i, image := range images {
+		uploaded[i], stored[i] = upload(image.name, image.width, image.height)
+	}
+
+	listed := httptest.NewRecorder()
+	h.API(listed, httptest.NewRequest(http.MethodGet, "/admin/media/api", nil))
+	if listed.Code != http.StatusOK {
+		t.Fatalf("list: %d %s", listed.Code, listed.Body.String())
+	}
+	var library struct{ Items []map[string]any }
+	if err := json.Unmarshal(listed.Body.Bytes(), &library); err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	listedByID := make(map[float64]map[string]any, len(library.Items))
+	for _, item := range library.Items {
+		if id, ok := item["id"].(float64); ok {
+			listedByID[id] = item
+		}
+	}
+
+	for i, image := range images {
+		m := stored[i]
+		listedItem := listedByID[float64(m.ID)]
+		if listedItem == nil {
+			t.Fatalf("list lacks %s: %s", image.name, listed.Body.String())
+		}
+		for variant, wantListed := range image.want {
+			file := filepath.Join(h.uploadDir, variant, m.Uuid, m.Filename)
+			_, statErr := os.Stat(file)
+			if wantListed && statErr != nil {
+				t.Fatalf("%s %s variant is missing: %v", image.name, variant, statErr)
+			}
+			if !wantListed && !errors.Is(statErr, os.ErrNotExist) {
+				t.Fatalf("%s unexpectedly has a %s file (%v); pick another fixture size", image.name, variant, statErr)
+			}
+			want := model.MediaURL(variant, m.Uuid, m.Filename)
+			for source, item := range map[string]map[string]any{"upload": uploaded[i], "list": listedItem} {
+				got, has := item[variant]
+				if has != wantListed || (wantListed && got != want) || item["thumbnail"] == nil || item["filepath"] == nil {
+					t.Fatalf("%s %s: %v, want %s listed: %v", image.name, source, item, variant, wantListed)
+				}
+			}
+		}
+	}
+}
+
+// TestMediaPickerDoesNotGuessVariantURLs flags any "/originals/" literal in
+// the .templ and .js sources under internal/views and web/static/js: the old
+// insert() rewrote it to guess a medium URL, which pointed at a missing file
+// for small images. Theme sources are not checked; a theme may link to an
+// original, which always exists. The walk must reach the picker's template.
+func TestMediaPickerDoesNotGuessVariantURLs(t *testing.T) {
+	root := repositoryRoot(t)
+	scanned := map[string]bool{}
+	for _, dir := range []string{"internal/views", "web/static/js"} {
+		walkErr := filepath.WalkDir(filepath.Join(root, dir), func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if repotree.Skip(root, path, d) {
+				return filepath.SkipDir
+			}
+			if d.IsDir() || (filepath.Ext(path) != ".templ" && filepath.Ext(path) != ".js") {
+				return nil
+			}
+			rel, err := filepath.Rel(root, path)
+			if err != nil {
+				return err
+			}
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			scanned[filepath.ToSlash(rel)] = true
+			if bytes.Contains(data, []byte("/originals/")) {
+				t.Errorf("%s builds a media URL from %q; use the variant URLs the media API returns", rel, "/originals/")
+			}
+			return nil
+		})
+		if walkErr != nil {
+			t.Fatal(walkErr)
+		}
+	}
+	if !scanned["internal/views/admin/pages.templ"] {
+		t.Fatalf("the scan did not read the picker's template; scanned %d files", len(scanned))
 	}
 }
 
@@ -411,8 +546,11 @@ func TestFeaturedICOEditorMessageAndAssignments(t *testing.T) {
 	}
 	update.Title = "Historical ICO"
 	updated, err := pages.updatePageGuarded(ctx, update, page.Slug, pageFormWrite{UserID: user.ID, BaseRevision: &page.Revision})
-	if err != nil || updated.FeaturedImageID != id {
-		t.Fatalf("historical admin ICO lost: %+v %v", updated, err)
+	if err != nil {
+		t.Fatalf("historical admin ICO lost: %v", err)
+	}
+	if updated.FeaturedImageID != id {
+		t.Fatalf("historical admin ICO lost: %+v", updated)
 	}
 }
 

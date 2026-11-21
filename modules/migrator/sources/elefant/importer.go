@@ -1,6 +1,7 @@
 // Copyright (c) 2025-2026 Oleg Ivanchenko
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+// Package elefant imports content from an Elefant CMS MySQL database.
 package elefant
 
 import (
@@ -737,12 +738,11 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, filesP
 				continue
 			}
 
-			// Best effort for a partial failure, but CreateAllVariants errors
-			// only when every variant failed — the signal that the whole
-			// library will have no thumbnails. See the Drupal source.
+			// Best effort: record the variants that were created and report
+			// the ones that failed. See the Drupal source.
 			variants, varErr := processor.CreateAllVariants(processResult.FilePath, fileUUID, file.Filename)
 			if varErr != nil {
-				result.AddError("%s: no resized variants could be created: %v", file.Filename, varErr)
+				result.AddError("%s: resized variants: %v", file.Filename, varErr)
 			}
 			for _, v := range variants {
 				if _, err := queries.CreateMediaVariant(ctx, store.CreateMediaVariantParams{
