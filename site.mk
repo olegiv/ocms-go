@@ -18,13 +18,12 @@
 #     BINARY_NAME ?= mysite
 #     include core/site.mk
 #
-# Overriding BINARY_NAME also requires exporting it for deploy-binary.sh, which
-# otherwise looks for bin/ocms-linux-amd64.
+# `make deploy` passes the BINARY_NAME-specific output path to Go ocmsctl.
 #
 # Provides: help, dev, run, stop, restart, build, build-prod, build-linux-amd64,
 # build-linux-arm64, build-darwin-arm64, build-all-platforms, assets, test, clean,
 # sync-modules,
-# clean-modules, migrate-up, migrate-down, migrate-status.
+# clean-modules, migrate-up, migrate-down, migrate-status, build-ctl, deploy, pull.
 #
 # Reads OCMS_SERVER_PORT, OCMS_DB_PATH, OCMS_CUSTOM_DIR and OCMS_UPLOADS_DIR out
 # of the site .env, which the targets that run, stop or migrate the server
@@ -36,13 +35,15 @@
 # tell oCMS's own modules from a site's copies. They abort rather than guess if
 # it is not one.
 #
-# Deploy wrappers stay in the site repo: they carry the host, instance id and
-# vhost path, which are the only genuinely site-specific values.
+# `make deploy` needs only the server and the site ids, which the site Makefile
+# sets before the include (DEPLOY_HOST, DEPLOY_SITES); the server knows each
+# site's directory and owner.
 
 .PHONY: help sync-modules clean-modules dev run stop restart build build-prod \
         build-linux-amd64 build-linux-arm64 build-darwin-arm64 build-all-platforms \
         assets clean \
-        test require-env-file require-db-path migrate-up migrate-down migrate-status
+        test require-env-file require-db-path migrate-up migrate-down migrate-status \
+        build-ctl deploy pull
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 SITE_DIR         ?= $(shell pwd)
@@ -153,8 +154,12 @@ server_port = $(call env_no_refs,$(or $(OCMS_SERVER_PORT),8080),OCMS_SERVER_PORT
 
 # Passed explicitly to anything that runs the server from inside CORE_DIR.
 # godotenv.Load does not overwrite variables already in the environment, so these
-# win over the .env while still being derived from it.
-site_env = OCMS_ENV_FILE="$(env_file)" OCMS_DB_PATH="$(db_path)" OCMS_CUSTOM_DIR="$(custom_dir)" OCMS_UPLOADS_DIR="$(uploads_dir)"$(if $(server_port), OCMS_SERVER_PORT="$(server_port)")
+# win over the .env while still being derived from it. ocmsctl deploy and pull
+# resolve the same settings the same way and get path_env alone: these values
+# are all they read, and a named OCMS_ENV_FILE that does not exist stops them,
+# while deploy and pull need no .env.
+path_env = OCMS_DB_PATH="$(db_path)" OCMS_CUSTOM_DIR="$(custom_dir)" OCMS_UPLOADS_DIR="$(uploads_dir)"$(if $(server_port), OCMS_SERVER_PORT="$(server_port)")
+site_env = OCMS_ENV_FILE="$(env_file)" $(path_env)
 
 # Self-documenting: scrapes the "## " descriptions off the target lines below.
 # The character class needs digits, or build-linux-amd64 and build-darwin-arm64
@@ -220,8 +225,8 @@ endef
 # success with failing tests inside it.
 #
 # This ADDS another site's modules; it does not evict them. One binary serves
-# every instance (scripts/deploy/ocmsctl and ocms@.service both exec
-# /opt/ocms/bin/ocms, and a site's deploy-binary.sh pushes it to all of them), so
+# every instance (each ocms@.service executes /opt/ocms/bin/ocms, and
+# Go ocmsctl deploy replaces that shared binary), so
 # that binary must carry the UNION of every site's modules. Evicting another
 # site's would build a binary without them and ship it to the instance that
 # needs them. Registry.InitAll migrates every registered module regardless of
@@ -244,7 +249,7 @@ endef
 # The union exists ONLY in this tree: a build sees its own site plus whatever
 # earlier syncs left behind, and nothing else. After a fresh clone or a
 # `git clean -fdx` here, a binary built from one site omits every other site's
-# modules — and deploy-binary.sh ships it to every instance. Re-run
+# modules — and make deploy replaces the binary shared by every instance. Re-run
 # `make sync-modules` from each site that owns modules first. Giving each
 # instance its own binary path is the structural fix; see docs/custom-modules.md.
 #
@@ -414,6 +419,32 @@ build-linux-arm64: ## Cross-build for Linux ARM64
 build-all-platforms: build-linux-amd64 build-linux-arm64 build-darwin-arm64 ## Cross-build every platform
 	@echo "All platform builds complete!"
 	@ls -lh "$(build_dir)/$(BINARY_NAME)"-*
+
+# ── Deploy ───────────────────────────────────────────────────────────────────
+# ocmsctl (cmd/ocmsctl in core; scripts/deploy/README.md) runs this Makefile's
+# build-linux-$(SERVER_ARCH), so the binary carries the site's modules, uploads
+# it, and has the server install it and restart the sites behind a health check.
+#
+#     DEPLOY_HOST  ?= root@server.example.com
+#     DEPLOY_SITES ?= example_com
+#     include core/site.mk
+#
+# DEPLOY_OPTS=--themes also replaces the sites' themes with the site's own
+# (themes/ in its custom directory, custom/themes by default).
+SERVER_ARCH ?= amd64
+
+build-ctl: ## Build ocmsctl, the deployment tool
+	@mkdir -p "$(build_dir)"
+	@cd "$(CORE_DIR)" && $(GO) build -trimpath -o "$(build_dir)/ocmsctl" ./cmd/ocmsctl
+
+deploy: build-ctl ## Build, upload and install; restart DEPLOY_SITES on DEPLOY_HOST
+	@[ -n "$(DEPLOY_HOST)" ] && [ -n "$(DEPLOY_SITES)" ] || { echo "deploy: set DEPLOY_HOST and DEPLOY_SITES" >&2; exit 1; }
+	@$(path_env) "$(build_dir)/ocmsctl" deploy $(DEPLOY_HOST) $(DEPLOY_SITES) --arch $(SERVER_ARCH) \
+		--binary "$(build_dir)/$(BINARY_NAME)-linux-$(SERVER_ARCH)" $(DEPLOY_OPTS)
+
+pull: build-ctl ## Copy a scrubbed production snapshot of SITE into this site
+	@[ -n "$(DEPLOY_HOST)" ] && [ -n "$(SITE)" ] || { echo "pull: set DEPLOY_HOST and SITE=<site id>" >&2; exit 1; }
+	@$(path_env) "$(build_dir)/ocmsctl" pull $(DEPLOY_HOST) $(SITE) --port $(server_port) --db "$(db_path)" $(PULL_OPTS)
 
 assets: ## Compile SCSS and copy JS dependencies
 	@$(with_core_lock) \

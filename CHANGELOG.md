@@ -9,6 +9,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `ocmsctl`, a deployment tool written in Go (`cmd/ocmsctl`,
+  `internal/sitectl`), replaces the shell scripts in `scripts/deploy`. One
+  program builds, uploads and calls itself on the server over ssh; the
+  server side installs releases, restarts sites behind a health check,
+  provisions sites, backs them up and monitors them. `make server-setup`,
+  `make deploy` and `make pull` wrap it, in the core Makefile and in
+  `site.mk` (server setup runs from the core checkout). See
+  `docs/deploy-ubuntu-plesk.md`.
+  - Deploys keep the last three binaries as releases under
+    `/opt/ocms/releases`; `ocmsctl rollback` returns to an earlier one.
+  - A failed deploy prints the last log lines of each failed site.
+  - `ocmsctl pull` copies production to development from an online
+    snapshot; production is no longer stopped. It writes where the
+    checkout's own server reads (environment, `OCMS_ENV_FILE` or `.env`),
+    port included, and copies directories and regular files only; the
+    uploads mirror compares content and refuses a directory that would
+    delete the checkout.
+  - Backups, `pull`, `deploy --themes` and `logs --errors` follow the
+    paths a site's `.env` sets (`OCMS_DB_PATH`, `OCMS_UPLOADS_DIR`,
+    `OCMS_CUSTOM_DIR`, `OCMS_ERROR_LOG_PATH`), read as the site user.
+    On the server, `pull`'s rsync also reads as the site user.
+  - `deploy --themes` verifies the binary on the server before it replaces
+    the themes, and restarts the sites once.
+  - A site user must not be root, and `rollback --to` takes only an
+    installed release. The first deploy over a legacy binary names it as
+    the release to roll back to.
+  - Without an alert hook, `check` prints failed backups for cron mail, and
+    the backup cron line prints one line when a backup fails; a hook that
+    keeps failing is reported once; a failed backup's alert says why.
+    `pull` prints the local paths it writes and their source.
+  - `ocmsctl check` alerts through cron `MAILTO` or an executable
+    `/etc/ocms/alert` hook. A unit state it cannot read counts as down
+    rather than stopped; its own failures (registry, state, time limit)
+    reach the hook once as `_server MONITOR FAILED`; the hook gets 30
+    seconds, and events it does not take are kept and retried by the next
+    check. One check runs at a time.
+  - `ocmsctl init` creates an empty site registry; without one, commands
+    for every site fail instead of finding none.
+  - `ocmsctl status` exits 1 while a site is down.
+  - `ocmsctl backup` fails, keeps the earlier copies and calls the alert
+    hook when a site's directory or database is missing or its content
+    cannot be read. Archives appear only once complete, and expiry removes
+    only the tool's own archives.
+  - Sites run under systemd only; the PID-file mode of the shell `ocmsctl`
+    is not carried over.
+  The legacy deployment scripts, their Make target and script-specific
+  tests have been removed. Deployment assets are embedded from
+  `cmd/ocmsctl/templates`; build, CI and Fly scripts are unchanged.
 - Upload images inside Featured Image, Open Graph, content-editor and theme
   pickers without leaving the form or losing unsaved changes (#211).
 

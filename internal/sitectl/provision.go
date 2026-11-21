@@ -1,0 +1,415 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package sitectl
+
+import (
+	"bytes"
+	"context"
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"io"
+	"io/fs"
+	"os"
+	"os/user"
+	"path/filepath"
+	"regexp"
+	"strconv"
+	"strings"
+	"syscall"
+	"text/template"
+)
+
+var domainRe = regexp.MustCompile(`^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$`)
+
+// SiteSpec is what `site add` takes.
+type SiteSpec struct {
+	Domain string
+	User   string
+	Group  string // default App.DefaultGroup
+	Port   int    // 0 picks the first free port from App.BasePort
+	Dir    string // default <SitesBase>/<domain>/<Name>
+}
+
+// siteVars is what the site templates see. Secret and HexSecret return a new
+// random value on every call.
+type siteVars struct {
+	Site
+	Domain string
+	Group  string
+	Unit   string
+	Date   string
+}
+
+func (siteVars) Secret() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(b), nil
+}
+
+func (siteVars) HexSecret() (string, error) {
+	b := make([]byte, 24)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
+func render(name, text string, vars siteVars) ([]byte, error) {
+	tmpl, err := template.New(name).Option("missingkey=error").Parse(text)
+	if err != nil {
+		return nil, err
+	}
+	var out bytes.Buffer
+	if err := tmpl.Execute(&out, vars); err != nil {
+		return nil, err
+	}
+	return out.Bytes(), nil
+}
+
+// lookupIDs resolves a user and a group name to numeric ids.
+func lookupIDs(userName, groupName string) (uid, gid int, err error) {
+	u, err := user.Lookup(userName)
+	if err != nil {
+		return 0, 0, err
+	}
+	g, err := user.LookupGroup(groupName)
+	if err != nil {
+		return 0, 0, err
+	}
+	if uid, err = strconv.Atoi(u.Uid); err != nil {
+		return 0, 0, err
+	}
+	gid, err = strconv.Atoi(g.Gid)
+	return uid, gid, err
+}
+
+// AddSite provisions a site: its directories, .env with generated secrets,
+// systemd drop-in and registry entry. It starts nothing.
+func (a *App) AddSite(ctx context.Context, spec SiteSpec) error {
+	if !domainRe.MatchString(spec.Domain) {
+		return fmt.Errorf("invalid domain %q", spec.Domain)
+	}
+	if spec.Group == "" {
+		spec.Group = a.DefaultGroup
+	}
+	uid, gid, err := lookupIDs(spec.User, spec.Group)
+	if err != nil {
+		return err
+	}
+	if uid == 0 {
+		// Site operations drop root's rights to the site user's.
+		return fmt.Errorf("user %s has uid 0: a site needs a user of its own", spec.User)
+	}
+	base := filepath.Join(a.SitesBase, spec.Domain)
+	dir := filepath.Join(base, a.Name)
+	if spec.Dir != "" {
+		dir = filepath.Clean(spec.Dir)
+	}
+	if !strings.HasPrefix(dir, base+string(filepath.Separator)) {
+		return fmt.Errorf("site directory must be under %s", base)
+	}
+	resolvedBase, err := filepath.EvalSymlinks(base)
+	if err != nil {
+		return fmt.Errorf("vhost directory: %w", err)
+	}
+	parent, err := filepath.EvalSymlinks(filepath.Dir(dir))
+	if err != nil {
+		return fmt.Errorf("parent directory: %w", err)
+	}
+	rel, err := filepath.Rel(resolvedBase, parent)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("site directory must resolve under %s", resolvedBase)
+	}
+	dir = filepath.Join(parent, filepath.Base(dir))
+	// Canonical paths are embedded in the registry, systemd and logrotate
+	// configuration. Reject control characters and configuration syntax even
+	// when the operator's original path was an ordinary symlink name.
+	if err := checkArgs(dir); err != nil {
+		return fmt.Errorf("site directory: %w", err)
+	}
+	baseInfo, err := os.Stat(resolvedBase)
+	if err != nil {
+		return err
+	}
+	vhost, err := os.OpenRoot(resolvedBase)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = vhost.Close() }()
+	openedInfo, err := vhost.Stat(".")
+	if err != nil {
+		return err
+	}
+	if !os.SameFile(baseInfo, openedInfo) {
+		return errors.New("vhost directory changed while opening it")
+	}
+	relativeDir, err := filepath.Rel(resolvedBase, dir)
+	if err != nil {
+		return err
+	}
+	if _, err := vhost.Lstat(relativeDir); err == nil {
+		return fmt.Errorf("%s already exists; remove it to provision the site again", dir)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+
+	sites, err := a.Sites()
+	if err != nil {
+		return err
+	}
+	site := Site{ID: strings.NewReplacer(".", "_", "-", "_").Replace(spec.Domain), Dir: dir, User: spec.User, Port: spec.Port}
+	used := map[int]bool{}
+	for _, other := range sites {
+		if other.ID == site.ID {
+			return fmt.Errorf("site %s is already registered", site.ID)
+		}
+		used[other.Port] = true
+	}
+	if site.Port == 0 {
+		for site.Port = a.BasePort; site.Port <= 65535 && used[site.Port]; site.Port++ {
+		}
+	} else if used[site.Port] {
+		return fmt.Errorf("port %d belongs to another site", site.Port)
+	}
+	if site.Port < 1 || site.Port > 65535 {
+		return fmt.Errorf("no usable port for site %s: %d is outside 1–65535", site.ID, site.Port)
+	}
+
+	vars := siteVars{Site: site, Domain: spec.Domain, Group: spec.Group, Unit: a.unit(site.ID), Date: a.Now().UTC().Format("2006-01-02T15:04:05Z")}
+	env, err := render("env", a.EnvTemplate, vars)
+	if err != nil {
+		return err
+	}
+	dropIn, err := render("drop-in", a.DropInTemplate, vars)
+	if err != nil {
+		return err
+	}
+	proxy, err := render("proxy", a.ProxyTemplate, vars)
+	if err != nil {
+		return err
+	}
+
+	if err := a.createSiteTree(vhost, relativeDir, env, uid, gid); err != nil {
+		return err
+	}
+
+	dropInDir := filepath.Join(a.SystemdDir, a.unit(site.ID)+".service.d")
+	if err := os.MkdirAll(dropInDir, 0o755); err != nil {
+		return err
+	}
+	if err := writeFileAtomic(filepath.Join(dropInDir, "instance.conf"), dropIn, 0o644); err != nil {
+		return err
+	}
+	if err := a.systemctl(ctx, "daemon-reload"); err != nil {
+		return err
+	}
+	if err := a.register(site); err != nil {
+		return err
+	}
+	if err := a.writeLogrotate(); err != nil {
+		return err
+	}
+
+	a.logf("Site %s provisioned: %s, user %s:%s, port %d, unit %s", site.ID, dir, spec.User, spec.Group, site.Port, a.unit(site.ID))
+	a.logf("Review %s, then: systemctl enable --now %s\n", filepath.Join(dir, ".env"), a.unit(site.ID))
+	_, _ = a.Stdout.Write(proxy)
+	return nil
+}
+
+// createSiteTree confines creation to the opened vhost. The new directory
+// stays private to the caller until every descendant has its final owner;
+// the last ownership/mode changes use the directory descriptor itself.
+func (a *App) createSiteTree(vhost *os.Root, dir string, env []byte, uid, gid int) error {
+	if err := vhost.Mkdir(dir, 0o700); err != nil {
+		return err
+	}
+	created, err := vhost.Lstat(dir)
+	if err != nil {
+		return err
+	}
+	stat, ok := created.Sys().(*syscall.Stat_t)
+	if !created.IsDir() || created.Mode().Perm()&0o077 != 0 || !ok || int(stat.Uid) != os.Geteuid() {
+		return errors.New("new site directory is not private to the caller")
+	}
+	root, err := vhost.OpenRoot(dir)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = root.Close() }()
+	directory, err := root.Open(".")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = directory.Close() }()
+	opened, err := directory.Stat()
+	if err != nil {
+		return err
+	}
+	if !os.SameFile(created, opened) {
+		return errors.New("new site directory changed while opening it")
+	}
+	entries, err := directory.ReadDir(1)
+	if len(entries) != 0 || !errors.Is(err, io.EOF) {
+		return errors.New("new site directory is not empty")
+	}
+	// The defaults: a new site's .env comes from EnvTemplate.
+	modes := map[string]os.FileMode{
+		filepath.Dir(a.DB.Default):                    0o755,
+		a.Uploads.Default:                             0o755,
+		filepath.Join(a.Custom.Default, a.ThemesPath): 0o755,
+		a.LogsPath: 0o755,
+		"backups":  0o700,
+	}
+	for sub := range modes {
+		if sub == "" || sub == "." {
+			continue
+		}
+		if err := root.MkdirAll(sub, 0o700); err != nil {
+			return err
+		}
+	}
+	if err := root.WriteFile(".env", env, 0o600); err != nil {
+		return err
+	}
+	if err := fs.WalkDir(root.FS(), ".", func(path string, entry fs.DirEntry, err error) error {
+		if err != nil || path == "." {
+			return err
+		}
+		file, err := root.Open(path)
+		if err != nil {
+			return err
+		}
+		mode := os.FileMode(0o600)
+		if entry.IsDir() {
+			mode = modes[path]
+			if mode == 0 {
+				mode = 0o755 // intermediate directory
+			}
+		}
+		return errors.Join(file.Chmod(mode), file.Chown(uid, gid), file.Close())
+	}); err != nil {
+		return err
+	}
+	if err := directory.Chown(uid, gid); err != nil {
+		return err
+	}
+	return directory.Chmod(0o750)
+}
+
+// RemoveSite stops and unregisters a site. Its directory is left alone.
+func (a *App) RemoveSite(ctx context.Context, site Site) error {
+	if err := a.systemctl(ctx, "disable", "--now", a.unit(site.ID)); err != nil {
+		return err
+	}
+	if err := os.RemoveAll(filepath.Join(a.SystemdDir, a.unit(site.ID)+".service.d")); err != nil {
+		return err
+	}
+	if err := a.systemctl(ctx, "daemon-reload"); err != nil {
+		return err
+	}
+	if err := a.unregister(site.ID); err != nil {
+		return err
+	}
+	if err := a.writeLogrotate(); err != nil {
+		return err
+	}
+	a.logf("Site %s removed from systemd and the registry. Its data is still in %s", site.ID, site.Dir)
+	return nil
+}
+
+// Init prepares a server: directories, the systemd template unit, cron jobs
+// for backups and monitoring, and log rotation. It is safe to run again; it
+// does not replace an existing cron file.
+func (a *App) Init(ctx context.Context) error {
+	for _, dir := range []string{a.binDir(), a.releasesDir(), a.ConfDir} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return err
+		}
+	}
+	if err := writeFileAtomic(filepath.Join(a.SystemdDir, a.Name+"@.service"), a.Unit, 0o644); err != nil {
+		return err
+	}
+	// An empty registry: commands for every site then find none, rather
+	// than no registry, which they report.
+	if err := createFile(a.registry(), []byte(registryHeader), 0o644); err != nil {
+		return err
+	}
+	if err := a.systemctl(ctx, "daemon-reload"); err != nil {
+		return err
+	}
+	if _, err := os.Stat(a.CronFile); errors.Is(err, os.ErrNotExist) {
+		// A failed backup prints one line, outside its log: cron mails
+		// it whatever the alert hook and the monitor's state do.
+		cron := fmt.Sprintf("# Nightly backups and a health check every five minutes.\n"+
+			"# The check prints only when a site's state changes, and a failed backup\n"+
+			"# prints one line; set MAILTO to be told.\n"+
+			"SHELL=/bin/sh\n"+
+			"0 3 * * * root %[1]s backup --all >> /var/log/%[2]s-backup.log 2>&1 || echo \"%[1]s backup failed; see /var/log/%[2]s-backup.log\"\n"+
+			"*/5 * * * * root %[1]s check --all\n", a.ctl(), a.Name)
+		if err := writeFileAtomic(a.CronFile, []byte(cron), 0o644); err != nil {
+			return err
+		}
+	} else if err := a.checkCron(); err != nil {
+		return err
+	}
+	if err := a.writeLogrotate(); err != nil {
+		return err
+	}
+	a.logf("Server ready: %s, unit %s@.service, %s, %s", a.Root, a.Name, a.CronFile, a.LogrotateFile)
+	return nil
+}
+
+// checkCron warns when the cron file, which Init leaves as it is, runs the
+// backup without the fallback that has cron mail a failed one.
+func (a *App) checkCron() error {
+	data, err := os.ReadFile(a.CronFile)
+	if err != nil {
+		return err
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.Contains(line, a.ctl()+" backup") && !strings.HasPrefix(strings.TrimSpace(line), "#") && !strings.Contains(line, "||") {
+			a.logf("warning: %s runs the backup without `|| echo ...`: cron will not mail a failed backup (see the deploy guide)", a.CronFile)
+		}
+	}
+	return nil
+}
+
+// writeLogrotate regenerates the logrotate configuration from the registry.
+// copytruncate, because systemd keeps the log file open across a rotation.
+func (a *App) writeLogrotate() error {
+	sites, err := a.Sites()
+	if err != nil {
+		return err
+	}
+	var out strings.Builder
+	out.WriteString("# Generated from " + a.registry() + "; do not edit.\n")
+	const options = "    rotate 30\n    compress\n    delaycompress\n    missingok\n    notifempty\n"
+	for _, site := range sites {
+		fmt.Fprintf(&out, "\n%s/*.log {\n    su %s %s\n    daily\n%s    copytruncate\n}\n", filepath.Join(site.Dir, a.LogsPath), site.User, a.groupOf(site.Dir), options)
+	}
+	fmt.Fprintf(&out, "\n/var/log/%s-backup.log {\n    weekly\n%s}\n", a.Name, options)
+	return writeFileAtomic(a.LogrotateFile, []byte(out.String()), 0o644)
+}
+
+// groupOf returns the name of the group that owns path.
+func (a *App) groupOf(path string) string {
+	info, err := os.Stat(path)
+	if err != nil {
+		return a.DefaultGroup
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return a.DefaultGroup
+	}
+	group, err := user.LookupGroupId(strconv.FormatUint(uint64(stat.Gid), 10))
+	if err != nil {
+		return a.DefaultGroup
+	}
+	return group.Name
+}

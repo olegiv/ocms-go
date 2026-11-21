@@ -1,4 +1,5 @@
-.PHONY: run stop restart build build-prod build-linux-amd64 build-linux-arm64 build-darwin-arm64 build-all-platforms test coverage coverage-html clean clean-db migrate-up migrate-down migrate-status migrate-create assets dev sqlc templ deploy-binary commit-prepare commit-do code-quality security-audit commit-prepare-local commit-do-local code-quality-local security-audit-local install-hooks install-git-guard install-test-gate check-no-absolute-paths
+.PHONY: build-ctl deploy server-setup pull
+.PHONY: run stop restart build build-prod build-linux-amd64 build-linux-arm64 build-darwin-arm64 build-all-platforms test coverage coverage-html clean clean-db migrate-up migrate-down migrate-status migrate-create assets dev sqlc templ commit-prepare commit-do code-quality security-audit commit-prepare-local commit-do-local code-quality-local security-audit-local install-hooks install-git-guard install-test-gate check-no-absolute-paths
 
 # Build variables
 BINARY_NAME=ocms
@@ -87,14 +88,14 @@ build-prod:
 # Build for Linux AMD64
 build-linux-amd64:
 	@echo "Building $(BINARY_NAME) $(VERSION) for Linux AMD64..."
-	@mkdir -p $(BUILD_DIR)
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -ldflags="-s -w $(LDFLAGS_VERSION)" -trimpath -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 $(MAIN_DIR)
+	@mkdir -p "$(BUILD_DIR)"
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -ldflags="-s -w $(LDFLAGS_VERSION)" -trimpath -o "$(BUILD_DIR)/$(BINARY_NAME)-linux-amd64" $(MAIN_DIR)
 
 # Build for Linux ARM64
 build-linux-arm64:
 	@echo "Building $(BINARY_NAME) $(VERSION) for Linux ARM64..."
-	@mkdir -p $(BUILD_DIR)
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GO) build -ldflags="-s -w $(LDFLAGS_VERSION)" -trimpath -o $(BUILD_DIR)/$(BINARY_NAME)-linux-arm64 $(MAIN_DIR)
+	@mkdir -p "$(BUILD_DIR)"
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GO) build -ldflags="-s -w $(LDFLAGS_VERSION)" -trimpath -o "$(BUILD_DIR)/$(BINARY_NAME)-linux-arm64" $(MAIN_DIR)
 
 # Build for macOS ARM64 (Apple Silicon)
 build-darwin-arm64:
@@ -156,10 +157,29 @@ templ:
 	templ generate
 	@echo "Templ files generated"
 
-# Deploy binary only to remote server
-# Usage: make deploy-binary SERVER=server.example.com INSTANCES="site1 site2"
-deploy-binary:
-	./scripts/deploy/deploy-binary.sh $(SERVER) $(INSTANCES) $(DEPLOY_OPTS)
+# ocmsctl, the deployment tool (cmd/ocmsctl; see scripts/deploy/README.md):
+# one build for this machine and one for the server.
+SERVER_ARCH ?= amd64
+
+build-ctl:
+	@mkdir -p "$(BUILD_DIR)"
+	$(GO) build -trimpath -o "$(BUILD_DIR)/ocmsctl" ./cmd/ocmsctl
+	CGO_ENABLED=0 GOOS=linux GOARCH=$(SERVER_ARCH) $(GO) build -ldflags="-s -w" -trimpath -o "$(BUILD_DIR)/ocmsctl-linux-$(SERVER_ARCH)" ./cmd/ocmsctl
+
+# Build, upload, install and restart the sites behind a health check.
+# Usage: make deploy HOST=root@server.example.com SITES="site1 site2" [DEPLOY_OPTS=--themes]
+deploy: build-ctl
+	"$(BUILD_DIR)/ocmsctl" deploy $(HOST) $(SITES) --arch $(SERVER_ARCH) --binary "$(BUILD_DIR)/$(BINARY_NAME)-linux-$(SERVER_ARCH)" $(DEPLOY_OPTS)
+
+# Install or update ocmsctl on a server and prepare it (unit, cron, logrotate).
+# Usage: make server-setup HOST=root@server.example.com
+server-setup: build-ctl
+	"$(BUILD_DIR)/ocmsctl" bootstrap $(HOST) --arch $(SERVER_ARCH) --ctl "$(BUILD_DIR)/ocmsctl-linux-$(SERVER_ARCH)"
+
+# Copy a scrubbed production snapshot into this checkout.
+# Usage: make pull HOST=root@server.example.com SITE=site1 [PULL_OPTS=--no-logs]
+pull: build-ctl
+	"$(BUILD_DIR)/ocmsctl" pull $(HOST) $(SITE) $(PULL_OPTS)
 
 # Prepare and execute commit workflow (Codex/Claude-compatible)
 commit-prepare:

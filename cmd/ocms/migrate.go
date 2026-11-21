@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/olegiv/ocms-go/internal/dbfile"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
@@ -57,6 +58,13 @@ func runMigrate(args []string) error {
 		}
 	}
 	slog.Info("running migrations", "command", command, "db", *dbPath)
+	lock, err := dbfile.LockDSN(*dbPath)
+	if err != nil {
+		return fmt.Errorf("locking database: %w", err)
+	}
+	if lock != nil {
+		defer func() { _ = lock.Close() }()
+	}
 	db, err := store.NewDB(*dbPath)
 	if err != nil {
 		return fmt.Errorf("opening %s: %w", *dbPath, err)
@@ -79,7 +87,7 @@ func dbPathFlag(fs *flag.FlagSet) *string {
 // mistyped path would otherwise become. purpose names what was to be done.
 func requireDatabase(dbPath, purpose string) error {
 	target := dbPath
-	if path, ok := sqliteFilePathFromDSN(target); ok {
+	if path, ok := dbfile.Path(target); ok {
 		target = path // a file: URI names its file without the scheme and query
 	}
 	if _, err := os.Stat(target); err != nil {

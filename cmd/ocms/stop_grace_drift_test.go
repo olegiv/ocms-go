@@ -16,7 +16,7 @@ import (
 )
 
 // TestStopGracePeriodsCoverTheDrain fails when a shipped deployment (Fly,
-// Docker Compose, the systemd unit or ocmsctl) gives the app less time to
+// Docker Compose or the systemd unit) gives the app less time to
 // stop than the request drain (shutdownTimeout), the wait for handlers still
 // running (handlerDrainTimeout), a margin for the "Server stopped" event,
 // which can wait out the database's 5-second busy timeout, the shared
@@ -26,13 +26,12 @@ import (
 // It also fails when a deployment stops the app with a signal it does not
 // catch, or when the container entrypoint does not exec the app, which would
 // leave the shell as PID 1 to swallow the signal. Fly's default kill_timeout
-// is 5 seconds, Docker's stop grace period 10, and the unit and ocmsctl
-// allowed 30, so all of them killed the app mid-drain (review of the
-// 2026-10-17 audit fixes).
+// is 5 seconds, Docker's stop grace period 10, and the unit allowed 30,
+// so all of them killed the app mid-drain (review of the 2026-10-17 audit fixes).
 //
 // Bug state: lower kill_timeout in fly.toml, stop_grace_period in
-// docker-compose.yml, TimeoutStopSec in scripts/deploy/ocms@.service or the
-// wait in scripts/deploy/ocmsctl below 54 seconds and this fails.
+// docker-compose.yml or TimeoutStopSec in the embedded ocmsctl unit
+// below 54 seconds and this fails. Go ocmsctl delegates stops to systemd.
 func TestStopGracePeriodsCoverTheDrain(t *testing.T) {
 	need := shutdownTimeout + handlerDrainTimeout + 5*time.Second + cleanupTimeout + eventLogCloseTimeout + time.Second
 	root := filepath.Join("..", "..")
@@ -100,7 +99,7 @@ func TestStopGracePeriodsCoverTheDrain(t *testing.T) {
 	}
 	check("docker-compose.yml ocms stop_grace_period", composeGrace, service.StopSignal)
 
-	unit := read("scripts/deploy/ocms@.service")
+	unit := read("cmd/ocmsctl/templates/ocms@.service")
 	unitValue := func(key string) string {
 		m := regexp.MustCompile(`(?m)^` + key + `=(\S+)\s*$`).FindStringSubmatch(unit)
 		if m == nil {
@@ -110,21 +109,9 @@ func TestStopGracePeriodsCoverTheDrain(t *testing.T) {
 	}
 	stopSec, err := strconv.Atoi(unitValue("TimeoutStopSec"))
 	if err != nil {
-		t.Errorf("scripts/deploy/ocms@.service sets no TimeoutStopSec in seconds; systemd's default of 90 seconds is not pinned")
+		t.Errorf("cmd/ocmsctl/templates/ocms@.service sets no TimeoutStopSec in seconds; systemd's default of 90 seconds is not pinned")
 	}
-	check("scripts/deploy/ocms@.service TimeoutStopSec", time.Duration(stopSec)*time.Second, unitValue("KillSignal"))
-
-	ctl := read("scripts/deploy/ocmsctl")
-	wait := regexp.MustCompile(`is_pid_running "\$pid" && \[ \$waited -lt (\d+) \]`).FindStringSubmatch(ctl)
-	if wait == nil {
-		t.Fatal("scripts/deploy/ocmsctl has no graceful-stop wait loop; the script changed and this test is vacuous")
-	}
-	waitSec, _ := strconv.Atoi(wait[1])
-	signal := regexp.MustCompile(`signal_site_process (SIG\w+) "\$pid"`).FindStringSubmatch(ctl)
-	if signal == nil {
-		t.Fatal("scripts/deploy/ocmsctl sends no stop signal; the script changed and this test is vacuous")
-	}
-	check("scripts/deploy/ocmsctl", time.Duration(waitSec)*time.Second, signal[1])
+	check("cmd/ocmsctl/templates/ocms@.service TimeoutStopSec", time.Duration(stopSec)*time.Second, unitValue("KillSignal"))
 
 	if !regexp.MustCompile(`(?m)^\s*exec su-exec ocms "\$@"`).MatchString(read("docker-entrypoint.sh")) {
 		t.Error(`docker-entrypoint.sh does not exec su-exec ocms "$@"; without exec the shell stays PID 1 and the stop signal never reaches the app`)

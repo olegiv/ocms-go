@@ -4,10 +4,9 @@
 # oCMS Multi-Instance Systemd Template Service
 #
 # Installation:
-#   sudo cp ocms@.service /etc/systemd/system/
-#   sudo systemctl daemon-reload
+#   make server-setup HOST=root@server.example.com
 #
-# Per-instance overrides are created by setup-site.sh at:
+# Per-instance overrides are created by ocmsctl site add at:
 #   /etc/systemd/system/ocms@<site_id>.service.d/instance.conf
 #
 # Usage:
@@ -27,7 +26,7 @@ Type=simple
 
 # Per-instance User, Group, WorkingDirectory, EnvironmentFile,
 # and ReadWritePaths are set via drop-in overrides created by
-# setup-site.sh at:
+# ocmsctl site add at:
 #   /etc/systemd/system/ocms@%i.service.d/instance.conf
 
 # Application binary (shared across all instances)
