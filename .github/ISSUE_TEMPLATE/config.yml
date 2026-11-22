@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Usage and setup questions
+    url: https://github.com/olegiv/ocms-go/discussions
+    about: Ask for help using or deploying oCMS.
+  - name: Report a security vulnerability
+    url: https://github.com/olegiv/ocms-go/security/policy
+    about: Follow the security policy to report a vulnerability privately.

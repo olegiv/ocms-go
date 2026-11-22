@@ -5,6 +5,7 @@ Thank you for your interest in contributing to oCMS! This document provides guid
 ## Code of Conduct
 
 Please be respectful and constructive in all interactions. We welcome contributors of all experience levels.
+See the [Code of Conduct](CODE_OF_CONDUCT.md) for community standards and how to report a concern privately.
 
 ## How to Contribute
 
@@ -134,4 +135,4 @@ By contributing to oCMS, you agree that your contributions will be licensed unde
 
 ## Questions?
 
-Open an issue for questions about contributing. We're happy to help!
+Ask questions about contributing in [GitHub Discussions](https://github.com/olegiv/ocms-go/discussions). We're happy to help!

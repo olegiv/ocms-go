@@ -1,0 +1,56 @@
+name: Bug report
+description: Report something in oCMS that is not working as expected.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check [existing issues](https://github.com/olegiv/ocms-go/issues) for a matching report. Report vulnerabilities privately using the [security policy](https://github.com/olegiv/ocms-go/security/policy).
+
+  - type: input
+    id: version
+    attributes:
+      label: oCMS version
+      description: Run `./ocms -version`, enter the commit SHA for a source build, or enter “Live demo”.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install-method
+    attributes:
+      label: Install method
+      options:
+        - Release binary
+        - Docker
+        - Built from source
+        - Live demo
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Start from the relevant admin screen, public page, or API endpoint. Include any settings or example data needed to see the problem.
+    validations:
+      required: true
+
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+      description: Describe what you expected to happen and what happened instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include the OS and any relevant browser, theme, module, or Go version.
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Logs or screenshots
+      description: Share relevant output or screenshots. Remove credentials, tokens, and personal data before posting.
