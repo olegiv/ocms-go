@@ -102,6 +102,10 @@ jobs:
       - name: Vet
         run: go vet ./...
 
+      # The templ pin and shared tooling drift tests read this submodule.
+      - name: Check out the shared Claude tooling
+        run: git submodule update --init .claude/shared
+
       - name: Ensure production-copy test tools are installed
         run: |
           if ! command -v sqlite3 || ! command -v rsync; then
@@ -113,6 +117,7 @@ jobs:
         run: go test ./...
         env:
           OCMS_SESSION_SECRET: test-secret-key-32-bytes-long!!!
+          OCMS_REQUIRE_SHARED_TOOLING: "1"
 
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
