@@ -7,139 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+## [0.33.0] - 2026-11-22 - Go deployment and media tools
 
-- `ocmsctl`, a deployment tool written in Go (`cmd/ocmsctl`,
-  `internal/sitectl`), replaces the shell scripts in `scripts/deploy`. One
-  program builds, uploads and calls itself on the server over ssh; the
-  server side installs releases, restarts sites behind a health check,
-  provisions sites, backs them up and monitors them. `make server-setup`,
-  `make deploy` and `make pull` wrap it, in the core Makefile and in
-  `site.mk` (server setup runs from the core checkout). See
-  `docs/deploy-ubuntu-plesk.md`.
-  - Deploys keep the last three binaries as releases under
-    `/opt/ocms/releases`; `ocmsctl rollback` returns to an earlier one.
-  - A failed deploy prints the last log lines of each failed site.
-  - `ocmsctl pull` copies production to development from an online
-    snapshot; production is no longer stopped. It writes where the
-    checkout's own server reads (environment, `OCMS_ENV_FILE` or `.env`),
-    port included, and copies directories and regular files only; the
-    uploads mirror compares content and refuses a directory that would
-    delete the checkout.
-  - Backups, `pull`, `deploy --themes` and `logs --errors` follow the
-    paths a site's `.env` sets (`OCMS_DB_PATH`, `OCMS_UPLOADS_DIR`,
-    `OCMS_CUSTOM_DIR`, `OCMS_ERROR_LOG_PATH`), read as the site user.
-    On the server, `pull`'s rsync also reads as the site user.
-  - `deploy --themes` verifies the binary on the server before it replaces
-    the themes, and restarts the sites once.
-  - A site user must not be root, and `rollback --to` takes only an
-    installed release. The first deploy over a legacy binary names it as
-    the release to roll back to.
-  - Without an alert hook, `check` prints failed backups for cron mail, and
-    the backup cron line prints one line when a backup fails; a hook that
-    keeps failing is reported once; a failed backup's alert says why.
-    `pull` prints the local paths it writes and their source.
-  - `ocmsctl check` alerts through cron `MAILTO` or an executable
-    `/etc/ocms/alert` hook. A unit state it cannot read counts as down
-    rather than stopped; its own failures (registry, state, time limit)
-    reach the hook once as `_server MONITOR FAILED`; the hook gets 30
-    seconds, and events it does not take are kept and retried by the next
-    check. One check runs at a time.
-  - `ocmsctl init` creates an empty site registry; without one, commands
-    for every site fail instead of finding none.
-  - `ocmsctl status` exits 1 while a site is down.
-  - `ocmsctl backup` fails, keeps the earlier copies and calls the alert
-    hook when a site's directory or database is missing or its content
-    cannot be read. Archives appear only once complete, and expiry removes
-    only the tool's own archives.
-  - Sites run under systemd only; the PID-file mode of the shell `ocmsctl`
-    is not carried over.
-  The legacy deployment scripts, their Make target and script-specific
-  tests have been removed. Deployment assets are embedded from
-  `cmd/ocmsctl/templates`; build, CI and Fly scripts are unchanged.
-- Upload images inside Featured Image, Open Graph, content-editor and theme
-  pickers without leaving the form or losing unsaved changes (#211).
+### Go deployment
 
-### Changed
+- **Deploy with `ocmsctl`.** The Go tool replaces the shell deployment scripts. It verifies uploaded binaries, restarts sites, and checks their health. Successful deployments retain the latest three releases for rollback, and failed health checks show recent site logs. [#221](https://github.com/olegiv/ocms-go/pull/221)
+- **Back up, monitor, and copy sites.** Backup and monitoring failures reach cron mail or an alert hook. `ocmsctl pull` copies a scrubbed snapshot for development while the production site keeps serving.
+- **Upgrade existing deployments.** Move shell-based deployments to Go `ocmsctl` and systemd. The existing site registry and directories are compatible. [Deployment migration guide](https://github.com/olegiv/ocms-go/blob/0489c49f05a264305b25d43481460393263f44cf/docs/deploy-ubuntu-plesk.md#moving-from-the-shell-scripts)
 
-- Return `422 validation_error` (field `file`) from `POST /api/v2/media` for
-  corrupt, undecodable or over-limit images instead of `500`.
-- Stop showing internal error text when an admin media upload or variant
-  regeneration fails. Server faults show a generic message (HTMX `500`);
-  problems the editor can fix, such as a corrupt image, show a specific one
-  (HTMX `400`). Regenerating variants for an ICO now returns `400` instead of
-  `500`.
-- Refuse ICO when a featured image is assigned or changed in the admin editor,
-  REST v2 or a version restore, matching the AI draft rules. An unchanged ICO
-  featured image is kept on edit and restore, but an AI-editable page cannot be
-  published with it. Theme and favicon ICO use is unaffected.
-- Update TinyMCE to 8.10.2 and Sass to 1.108.2.
-- Update templ to 0.3.1100. It sanitizes every URL-valued attribute
-  (`src`, `href`, `action` and similar), allowing only relative URLs and
-  the http(s), mailto, tel and ftp(s) schemes, validates dynamic attribute
-  names and escapes JavaScript template literals. Regenerate custom
-  modules' templ views with templ 0.3.1100: code generated by older
-  versions no longer compiles. A custom view that renders its own `data:`
-  image must mark it trusted with `templ.SafeURL`.
-- Check the site logo (`site_logo`) when it is saved or imported. It must
-  be an http(s) URL, a site path starting with `/`, or a base64 PNG, JPEG,
-  GIF, WebP, AVIF or SVG data URI. The header of templ themes such as
-  `default` shows the site name instead of a stored logo that fails the
-  check. HTML themes still cannot show a `data:` logo; use an uploaded
-  image.
-- Check `site_url` when it is saved in the site settings or imported. It
-  must be an http(s) origin without a path, query or fragment, such as
-  `https://example.com`, and is stored without a trailing slash. A stored
-  value with a path shows an error on the next settings save until it is
-  corrected; an import skips such a value with a notice.
-- goose stays at 3.29.0: 3.30.0 requires modernc.org/libc 1.80.2, newer
-  than the 1.80.1 that modernc.org/sqlite 1.62.0 is built against.
-- Move `golang.org/x/crypto` to the tagged 0.59.0 release, which still
-  omits the unused OpenPGP package.
+### Media tools
 
-### Fixed
+- **Upload directly from the picker.** Add and select an image from Featured Image, Open Graph, TinyMCE, or theme settings while keeping unsaved edits. [#217](https://github.com/olegiv/ocms-go/pull/217)
+- **Pick and insert images in TinyMCE.** The picker opens above TinyMCE dialogs and keeps **Insert** visible on short screens. **Small** and **Medium** use their matching variants when available and fall back to the original image. [#238](https://github.com/olegiv/ocms-go/pull/238)
+- **Use generated variants in REST v2 and MCP.** Clients must treat `thumbnail`, `medium`, and `large` URLs as optional. `POST /api/v2/media` returns `422 validation_error` for corrupt images and images that exceed decoding limits. [#217](https://github.com/olegiv/ocms-go/pull/217), [#238](https://github.com/olegiv/ocms-go/pull/238)
 
-- REST v2 stores a page's `canonical_url` without surrounding whitespace,
-  as the admin editor does, so the page's canonical link is not blocked.
-- Log failed admin page renders and failed site logo or custom CSS
-  lookups instead of dropping the error.
-- The media picker opened from a TinyMCE dialog (Insert → Image… or
-  Insert → Media… → Advanced) now appears above that dialog, so its images
-  can be selected (#233).
-- The editor's media picker keeps its Insert button on screen on short
-  displays: the picker scrolls and its footer stays put.
-- Inserting a small image (under 400 wide and under 300 high) at the
-  default **Medium** size uses the original instead of a missing medium
-  variant, which showed as a broken image. The picker's API
-  (`/admin/media/api` and the picker upload response) now reports a
-  `medium` URL when that variant exists.
-- The editor's **Small** size inserts the `small` variant (fit within
-  400x300) instead of the 150x150 cropped thumbnail, and the original when
-  the image has no `small` variant. The picker's API also reports `small`.
-- REST v2 media responses (and the MCP tools built on them) list the
-  `thumbnail`, `medium` and `large` URLs only for variants that exist. They
-  were listed for every image, so a small source or an ICO returned URLs
-  that 404; API clients must treat these fields as optional.
-- A partially failed variant generation is reported instead of dropped:
-  uploads log it as an error, regeneration records the variants it created
-  before returning the error, and imports report it per file.
-- The developer module's test data records only the image variants whose
-  files were written.
-- Admin pages, the login page, core page layouts and the API docs load their
-  `/static/dist` stylesheets with a per-build version, as scripts already
-  did. `/static/dist` is cached for a year, so a stylesheet change (such as
-  the media picker fixes above) did not reach browsers holding the old file.
+### Other changes
 
-### Security
+- Source builds require Go 1.27.4, which includes security fixes for `net/http` and the build toolchain. Unsafe menu URL schemes are blocked during import and rendering. [#215](https://github.com/olegiv/ocms-go/pull/215), [#218](https://github.com/olegiv/ocms-go/pull/218)
+- Site settings validate `site_logo` on save and import and require `site_url` to be an HTTP(S) origin. Regenerate custom module views with templ 0.3.1100 before rebuilding. [#218](https://github.com/olegiv/ocms-go/pull/218)
+- Added GitHub issue and pull request templates, a Code of Conduct, and an accessibility statement. [#239](https://github.com/olegiv/ocms-go/pull/239)
 
-- Require **Go 1.27.4** for source builds and pin the Docker builder to
-  `golang:1.27.4-alpine`. This release fixes security issues in `net/http`
-  and the Go build toolchain. Rebuild and redeploy existing binaries to
-  include the standard-library fixes.
-- Refuse menu links with a scheme menus do not allow, such as
-  `javascript:` or `data:`, when importing content, and never render one
-  from an existing menu item. The menu editor already refused them;
-  relative links keep working.
+### Thanks
+
+Thanks to [@c-nv-s](https://github.com/c-nv-s) for requesting in-picker uploads and reporting that the media picker opened behind TinyMCE dialogs. [#211](https://github.com/olegiv/ocms-go/issues/211), [#233](https://github.com/olegiv/ocms-go/issues/233)
 
 ## [0.32.0] - 2026-11-10 - MCP authoring and editorial review
 
@@ -2445,7 +2335,8 @@ structural dependency.
 - **Import/Export**: JSON/ZIP with conflict resolution
 - **Caching**: In-memory + Redis support
 
-[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.32.0...HEAD
+[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.33.0...HEAD
+[0.33.0]: https://github.com/olegiv/ocms-go/compare/v0.32.0...v0.33.0
 [0.32.0]: https://github.com/olegiv/ocms-go/compare/v0.31.0...v0.32.0
 [0.31.0]: https://github.com/olegiv/ocms-go/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/olegiv/ocms-go/compare/v0.29.1...v0.30.0
