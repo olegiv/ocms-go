@@ -1,0 +1,28 @@
+name: Feature request
+description: Suggest an improvement to oCMS.
+body:
+  - type: markdown
+    attributes:
+      value: Check [existing issues](https://github.com/olegiv/ocms-go/issues) for a matching request so related feedback stays in one place.
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: What are you trying to do?
+      description: Describe the workflow and where you get stuck today.
+    validations:
+      required: true
+
+  - type: textarea
+    id: outcome
+    attributes:
+      label: What would you like oCMS to do?
+      description: Describe the outcome that would improve your workflow. An example is welcome.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives or workarounds
+      description: Share what you have tried and where it falls short.
